@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.16.0",
+  "version": "1.16.1",
   "name": "LightTab - Minimal New Tab",
   "short_name": "LightTab",
   "description": "极简新标签页：时钟问候（含中国农历）、月历、聚合搜索、AI 模板发射台、图标分组网格、待办与壁纸。本地优先存储，块可自由拖拽布局，内置必应每日壁纸库，可选多设备云同步（HTTPS 加密），支持书签与 JSON 备份。",
