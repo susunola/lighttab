@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LightTab</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="wallpaper" aria-hidden="true"><div class="wp-layer wp-overlay"></div><div class="wp-layer wp-grain"></div></div>
+
+  <header id="topbar">
+    <div id="date-chip" class="chip"></div>
+    <nav class="top-actions" aria-label="actions">
+      <button class="icon-btn" id="btn-wall" title="壁纸" aria-label="壁纸">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="m21 17-5-5-9 9"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-set" title="设置" aria-label="设置">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 4.3 17l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.7 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7.1 4.3l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1A2 2 0 1 1 19.7 7l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+      </button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <!-- 左侧 widget 列 -->
+    <aside class="left">
+      <section class="widget wclock" aria-label="时钟">
+        <div class="clock-row">
+          <span class="clock-hhmm" id="clock-hhmm">--:--</span>
+          <span class="clock-sec" id="clock-sec">--</span>
+        </div>
+        <div class="clock-date" id="clock-date"></div>
+        <div class="clock-lunar" id="clock-lunar"></div>
+        <div class="clock-greet" id="clock-greet"></div>
+      </section>
+
+      <section class="widget wtodo" id="todo-widget" aria-label="待办">
+        <div class="w-head">
+          <span class="w-title">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg>
+            待办
+          </span>
+          <span class="w-count" id="todo-count">0</span>
+        </div>
+        <form class="todo-add" id="todo-form" autocomplete="off">
+          <input id="todo-input" type="text" placeholder="添加一件事…" maxlength="60" aria-label="待办内容">
+          <button type="submit" class="todo-submit" aria-label="添加">+</button>
+        </form>
+        <ul class="todo-list" id="todo-list"></ul>
+      </section>
+    </aside>
+
+    <!-- 右侧：搜索 + 图标网格 -->
+    <section class="right">
+      <div id="search" class="search" role="search">
+        <button id="engine-btn" class="engine-btn" aria-haspopup="listbox" aria-expanded="false">
+          <span class="eng-dot" aria-hidden="true"></span>
+          <span class="eng-name">搜索</span>
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <form id="search-form" autocomplete="off">
+          <input id="q" name="q" type="text" placeholder="搜索或输入网址" aria-label="搜索" spellcheck="false" autocomplete="off" autofocus>
+        </form>
+        <div id="tpl-chip" class="tpl-chip" hidden></div>
+        <button id="tpl-open" class="tpl-trigger" title="AI 模板 ( / )" aria-label="AI 模板调色板">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+        </button>
+        <button id="search-go" class="engine-go" title="搜索" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+        <ul id="engine-list" class="engine-list" role="listbox" hidden></ul>
+        <!-- AI 模板调色板（/ 唤起）：选用模板 → 输入内容 → Enter 多目标发射 -->
+        <div id="palette" class="palette" hidden>
+          <div class="palette-head">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2Z"/></svg>
+            <input id="palette-q" type="text" placeholder="搜索模板…" aria-label="搜索模板" autocomplete="off" spellcheck="false">
+            <button id="palette-close" class="icon-btn close-btn" aria-label="关闭">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <ul id="palette-list" class="palette-list"></ul>
+          <div id="palette-empty" class="palette-empty">没有匹配的模板 —— 到「设置 → 模板」新建一个</div>
+          <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> 选择 · <kbd>Enter</kbd> 选用 · <kbd>Esc</kbd> 关闭</span><span>设置 → 模板 可增改</span></div>
+        </div>
+      </div>
+
+      <div id="grid-wrap">
+        <div id="group-bar" class="group-bar" hidden></div>
+        <div id="grid" class="grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <button class="add-float" id="add-float" title="添加快捷方式" aria-label="添加快捷方式">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+
+  <div id="context-menu" class="menu" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- 新增/编辑 弹窗 -->
+  <div class="modal" id="modal-site" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <span id="site-modal-title">添加快捷方式</span>
+        <button class="icon-btn close-btn" data-close aria-label="关闭">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form id="site-form" class="modal-body">
+        <label>
+          <span>名称</span>
+          <input id="f-title" name="title" type="text" maxlength="32" placeholder="例如 腾讯云" required>
+        </label>
+        <label>
+          <span>网址</span>
+          <input id="f-url" name="url" type="text" placeholder="https://cloud.tencent.com" required>
+        </label>
+        <label id="f-group-row" hidden>
+          <span>分组</span>
+          <select id="f-group"></select>
+        </label>
+        <p class="form-tip">知名站点自动匹配内置品牌图标；未收录站点显示首字图标。拖拽卡片可重新排序。</p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" data-close>取消</button>
+          <button type="submit" class="btn primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 壁纸/设置 弹窗 -->
+  <div class="modal" id="modal-set" hidden>
+    <div class="modal-card wide">
+      <div class="modal-head">
+        <div class="tabs">
+          <button class="tab active" data-tab="wall">壁纸</button>
+          <button class="tab" data-tab="gen">常规</button>
+          <button class="tab" data-tab="prompt">模板</button>
+        </div>
+        <button class="icon-btn close-btn" data-close aria-label="关闭">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="tab-pane" data-pane="wall">
+          <div class="swatches" id="swatches"></div>
+          <div class="upload-row">
+            <label class="btn ghost file-btn">
+              <input id="f-upload" type="file" accept="image/*" hidden>
+              上传自定义图片
+            </label>
+            <button class="btn ghost" id="btn-reset-wall" type="button">重置为渐变</button>
+          </div>
+          <p class="form-tip">支持 JPG / PNG / WebP / GIF；最大 4MB；仅保存在本地浏览器。</p>
+        </div>
+        <div class="tab-pane" data-pane="gen" hidden>
+          <label>
+            <span>显示名称（问候语用）</span>
+            <input id="f-name" type="text" maxlength="20" placeholder="留空则不显示名字">
+          </label>
+          <label>
+            <span>默认搜索引擎</span>
+            <select id="f-engine"></select>
+          </label>
+          <div class="data-zone">
+            <span class="data-label">数据管理</span>
+            <div class="data-actions">
+              <button type="button" class="btn ghost sm" id="btn-export">导出数据</button>
+              <button type="button" class="btn ghost sm" id="btn-import">导入数据</button>
+              <button type="button" class="btn ghost sm" id="btn-import-bookmarks">从书签导入</button>
+              <input id="f-import" type="file" accept=".json,application/json" hidden>
+            </div>
+            <p class="data-tip">备份/恢复全部数据（快捷方式、待办、设置、壁纸）。导出文件可跨浏览器迁移。</p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn ghost" id="btn-reset-all">恢复默认数据</button>
+            <button type="button" class="btn primary" data-close>完成</button>
+          </div>
+          <p class="form-tip ver-line">LightTab v1.10.0 · 极简新标签页 · 数据仅保存在本地</p>
+        </div>
+        <div class="tab-pane" data-pane="prompt" hidden>
+          <div class="ptoolbar">
+            <span class="data-label">Prompt 模板 · AI 发射台</span>
+            <button type="button" class="btn ghost sm" id="btn-prompt-add">＋ 新建模板</button>
+          </div>
+          <p class="form-tip">主界面按 <b>/</b> 打开模板面板：选用模板 → 输入内容 → Enter 一次性发射到多个 AI。<code>{q}</code> 是内容插槽；不含 <code>{q}</code> 的模板作为固定指令、选中即发射。</p>
+          <div id="prompt-manage" class="prompt-manage"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn primary" data-close>完成</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/icondb.js"></script>
+  <script src="js/lunar.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
