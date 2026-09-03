@@ -1,5 +1,5 @@
-/* LightTab - 极简新标签页 v1.1
-   布局：左 widget 列 + 右大图标网格（iTab 式） */
+/* LightTab - minimal new tab
+   Layout: a left widget column plus a large icon grid on the right (iTab style). */
 
 :root {
   --ink: rgba(255, 255, 255, 0.96);
@@ -42,11 +42,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 input, select { font: inherit; }
 ul { margin: 0; padding: 0; list-style: none; }
 
-/* 键盘焦点环（输入框用自身 border 高亮，故排除） */
+/* Keyboard focus ring (inputs highlight via their own border, so they are excluded). */
 :focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; }
 
-/* ====== 壁纸层 ====== */
+/* ====== Wallpaper layers ====== */
 #wallpaper {
   position: fixed; inset: 0; z-index: -1;
   background: #0b0f1a;
@@ -61,7 +61,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
     radial-gradient(1200px 600px at 20% 0%, rgba(56, 189, 248, 0.10), transparent 60%),
     linear-gradient(180deg, rgba(8, 12, 22, 0.18) 0%, rgba(8, 12, 22, 0.42) 100%);
 }
-/* 浅色壁纸：加深遮罩保证前景文字可读 */
+/* Light wallpapers: strengthen the scrim so foreground text stays readable. */
 #wallpaper.bg-light .wp-overlay {
   background:
     radial-gradient(1200px 600px at 20% 0%, rgba(56, 189, 248, 0.06), transparent 60%),
@@ -74,7 +74,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>");
 }
 
-/* ====== 顶栏 ====== */
+/* ====== Top bar ====== */
 #topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 20px 28px 0;
@@ -112,7 +112,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .icon-btn:hover { background: var(--glass-2); color: var(--ink); }
 .icon-btn:active { transform: scale(0.96); }
 
-/* ====== 两栏布局 ====== */
+/* ====== Two-column layout ====== */
 .layout {
   display: flex;
   align-items: flex-start;
@@ -131,7 +131,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .right { flex: 1 1 auto; min-width: 0; }
 
-/* ====== Widget 卡片 ====== */
+/* ====== Widget cards ====== */
 .widget {
   background: var(--glass);
   border: 1px solid var(--line);
@@ -142,7 +142,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   padding: 20px 20px 18px;
 }
 
-/* 时间 widget */
+/* Clock widget */
 .wclock .clock-row {
   display: flex; align-items: baseline; gap: 8px;
 }
@@ -180,7 +180,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink-3);
 }
 
-/* 待办 widget */
+/* To-do widget */
 .w-head {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 12px;
@@ -293,7 +293,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink-3);
 }
 
-/* 日历 widget（纯本地月历 + 农历日） */
+/* Calendar widget (local month view + lunar day labels) */
 .wcal .cal-nav {
   display: flex; align-items: center; gap: 4px;
 }
@@ -350,7 +350,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .cal-cell.today i { color: var(--accent); }
 .cal-cell.empty { cursor: default; }
 
-/* ====== 搜索 ====== */
+/* ====== Search ====== */
 .search {
   position: relative;
   z-index: 5;
@@ -405,7 +405,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .engine-go:hover { color: var(--accent); background: rgba(125,211,252,0.08); }
 
-/* 浮层公共视觉（引擎下拉 / 模板调色板 / 右键菜单） */
+/* Shared overlay styling (engine dropdown / template palette / context menu) */
 .engine-list, .palette, .menu {
   background: rgba(18, 24, 40, 0.96);
   border: 1px solid var(--line-2);
@@ -414,7 +414,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   -webkit-backdrop-filter: blur(22px);
 }
 
-/* 引擎下拉 */
+/* Engine dropdown */
 .engine-list {
   position: absolute;
   top: calc(100% + 8px);
@@ -444,7 +444,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
-/* ====== 图标网格 ====== */
+/* ====== Icon grid ====== */
 #grid-wrap { margin-top: clamp(22px, 3.5vh, 34px); }
 .group-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
@@ -561,7 +561,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .card-actions .mini:hover { background: rgba(0,0,0,0.6); color: #fff; }
 .card-actions .mini.del:hover { color: var(--danger); }
 
-/* 右下浮动添加 */
+/* Floating add button, bottom right */
 .add-float {
   position: fixed;
   right: 30px; bottom: 30px;
@@ -577,7 +577,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .add-float:hover { transform: scale(1.06); filter: brightness(1.08); }
 .add-float:active { transform: scale(0.95); }
 
-/* ====== 菜单 ====== */
+/* ====== Menus ====== */
 .menu {
   position: fixed;
   z-index: 80;
@@ -619,7 +619,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .toast button { color: var(--accent); font-size: 13px; }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 10px); } }
 
-/* ====== 弹窗 ====== */
+/* ====== Modals ====== */
 .modal {
   position: fixed; inset: 0;
   display: flex; align-items: center; justify-content: center;
@@ -716,7 +716,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .btn.ghost:hover { background: rgba(255,255,255,0.10); color: var(--ink); }
 .file-btn { position: relative; display: inline-flex; cursor: pointer; }
 
-/* ====== 壁纸 swatches ====== */
+/* ====== Wallpaper swatches ====== */
 .swatches {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -755,7 +755,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   margin: 0;
 }
 
-/* ====== 壁纸库（必应每日壁纸） ====== */
+/* ====== Wallpaper library (Bing daily images) ====== */
 .wall-lib { margin-top: 16px; }
 .wall-lib-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -794,7 +794,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .wall-lib-tip { margin-top: 2px; }
 
-/* ====== 响应式 ====== */
+/* ====== Responsive ====== */
 @media (max-width: 1024px) {
   .layout { flex-direction: column; padding: 16px 20px 90px; }
   .left {
@@ -823,12 +823,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   * { animation: none !important; transition: none !important; }
 }
 @media (hover: none) {
-  /* 触屏/键盘无 hover：删除操作常显 */
+  /* Touch / keyboard have no hover, so keep the delete action visible. */
   .todo-item .t-del { display: inline-flex; }
   .card-actions { display: flex; }
 }
 
-/* 数据管理区（设置-常规） */
+/* Data management block (Settings -> General) */
 .data-zone {
   margin-top: 16px;
   padding-top: 14px;
@@ -851,7 +851,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 
-/* ====== AI 模板（v1.8）：选中 chip / 调色板 / 触发按钮 ====== */
+/* ====== AI templates (v1.8): active chip / palette / trigger button ====== */
 .tpl-chip {
   flex: none;
   display: inline-flex; align-items: center; gap: 6px;
@@ -893,7 +893,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .tpl-trigger:hover { color: var(--accent-ai); background: rgba(167, 139, 250, 0.08); }
 
-/* 调色板（锚在搜索框下方） */
+/* Palette (anchored under the search box) */
 .palette {
   position: absolute;
   top: calc(100% + 10px);
@@ -1005,7 +1005,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink-2);
 }
 
-/* ====== 发射动效签名：星火飞散 ====== */
+/* ====== Launch animation signature: scattering sparks ====== */
 .spark {
   position: fixed;
   width: 6px; height: 6px;
@@ -1022,7 +1022,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   to { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.2); }
 }
 
-/* ====== 模板管理（设置 → 模板） ====== */
+/* ====== Template manager (Settings -> Templates) ====== */
 .ptoolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
 .ptoolbar .data-label { margin: 0; }
 .prompt-manage { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
@@ -1126,7 +1126,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .wb-grid input:focus { border-color: rgba(125, 211, 252, 0.55); }
 
-/* ====== 云同步设置面板 ====== */
+/* ====== Cloud sync settings panel ====== */
 .sync-verify-tip {
   margin: 0 0 10px;
   padding: 9px 11px;
@@ -1182,7 +1182,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   50% { opacity: 0.35; }
 }
 
-/* ====== 自由画布布局（块自由拖拽移动，桌面 >1024px 生效） ====== */
+/* ====== Free canvas layout (draggable blocks, desktop >1024px only) ====== */
 .layout.canvas {
   display: block;
   position: relative;
@@ -1190,7 +1190,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   margin: 0 auto;
   padding: 0;
 }
-/* 中间容器（左列/右列）在画布模式下让位，让块直接成为画布的绝对定位子元素 */
+/* In canvas mode the intermediate columns step aside so blocks become direct absolutely-positioned children. */
 .layout.canvas > .left,
 .layout.canvas > .right { display: contents; }
 .layout.canvas .widget,
@@ -1200,7 +1200,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   margin: 0;
   max-width: none;
 }
-/* 拖拽手柄：块 hover 时浮现，悬浮在块顶部中央 */
+/* Drag handle: appears on block hover, floating at the top centre of the block. */
 .drag-handle {
   position: absolute;
   top: 7px; left: 50%;
@@ -1223,9 +1223,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .layout.canvas #grid-wrap:hover .drag-handle { opacity: .95; }
 .drag-handle:hover { color: var(--ink); background: rgba(10, 14, 24, 0.8); }
 .drag-handle:active { cursor: grabbing; }
-/* 搜索块顶部中央是输入框 → 手柄悬浮到块上方 */
+/* The search block has its input at the top centre, so its handle floats above the block. */
 .layout.canvas #search .drag-handle { top: -12px; }
-/* 拖拽中的块 */
+/* Block being dragged */
 .layout.canvas .block-dragging {
   z-index: 50;
   cursor: grabbing;
@@ -1234,7 +1234,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   transition: none;
 }
 
-/* ====== 画布模式：卡片可自由拖拽 + 自动对齐 ====== */
+/* ====== Canvas mode: cards drag freely and snap to the grid ====== */
 .layout.canvas #grid {
   display: block;
   position: relative;
@@ -1258,7 +1258,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
 }
-/* 卡片拖拽手柄：左上角小六点 grip，仅画布模式显示 */
+/* Card drag handle: a small six-dot grip in the top-left, canvas mode only. */
 .layout.canvas #grid .card .card-drag-handle {
   position: absolute;
   top: 5px; left: 5px;

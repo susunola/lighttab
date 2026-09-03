@@ -1,16 +1,17 @@
 /**
- * LightTab · 中国农历换算（纯本地、零依赖、零网络）
- *（版本号统一由 manifest.json 承载，文件头不再维护）
+ * LightTab - Chinese lunar calendar conversion (pure local, zero dependencies, zero network)
+ * (The version number lives solely in manifest.json; file headers no longer track it.)
  *
- * 数据源：1900–2100 农历数据表（lunarInfo），算法为通用公历→农历换算。
- * 对外暴露 window.LT_LUNAR = { toLunar, monthName, dayName, ganzhiYear, animalYear }。
- * 覆盖范围 1900-01-31 ~ 2100-12-31，超出返回 null（页面仅用于当前日期，足够）。
+ * Source: the 1900-2100 lunar data table (lunarInfo); the algorithm is a standard Gregorian -> lunar conversion.
+ * Exposes window.LT_LUNAR = { toLunar, monthName, dayName, ganzhiYear, animalYear,
+ *                            monthNameEn, dayNameEn, animalYearEn }.
+ * Range 1900-01-31 to 2100-12-31; anything outside returns null (the page only ever renders the current date).
  */
 (function () {
   'use strict';
 
-  // 1900–2100 农历数据表：每项低 4 位=闰月月份(0=无闰月)，其余位标记大月(30天)/小月(29天)，
-  // 0x10000 位标记闰月是大月(30)还是小月(29)。
+  // 1900-2100 lunar data table. The low 4 bits hold the leap month (0 = none); the remaining bits mark each
+  // month as long (30 days) or short (29 days), and bit 0x10000 marks whether the leap month itself is long or short.
   var lunarInfo = [
     0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2, // 1900-1909
     0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255, 0x0b540, 0x0d6a0, 0x0ada2, 0x095b0, 0x14977, // 1910-1919
@@ -39,45 +40,46 @@
   var Zhi = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
   var Animals = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
   var AnimalsEn = ['Rat', 'Ox', 'Tiger', 'Rabbit', 'Dragon', 'Snake', 'Horse', 'Goat', 'Monkey', 'Rooster', 'Dog', 'Pig'];
-  // 月名：正月…十月、冬月(11)、腊月(12)——已含「月」字
+  // Lunar month names. The trailing "month" character is already baked into each string; indexes 10
+  // and 11 use the traditional winter-month and last-month names rather than plain numerals.
   var MonthNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月'];
   var nStr1 = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 
-  // 某农历年总天数
+  // Total number of days in a given lunar year.
   function lYearDays(y) {
     var i, sum = 348;
     for (i = 0x8000; i > 0x8; i >>= 1) sum += (lunarInfo[y - 1900] & i) ? 1 : 0;
     return sum + leapDays(y);
   }
-  // 闰哪个月（0 = 无闰月）
+  // Which month is the leap month (0 = no leap month).
   function leapMonth(y) {
     return lunarInfo[y - 1900] & 0xf;
   }
-  // 闰月天数（无闰月返回 0）
+  // Days in the leap month (0 when there is none).
   function leapDays(y) {
     if (leapMonth(y)) return (lunarInfo[y - 1900] & 0x10000) ? 30 : 29;
     return 0;
   }
-  // 某农历年第 m 月天数（m 从 1 起）
+  // Days in month m of a given lunar year (m is 1-based).
   function monthDays(y, m) {
     return (lunarInfo[y - 1900] & (0x10000 >> m)) ? 30 : 29;
   }
 
   /**
-   * 公历 → 农历
-   * @param {number} y 公历年
-   * @param {number} m 公历月（1-12）
-   * @param {number} d 公历日
+   * Gregorian -> lunar.
+   * @param {number} y Gregorian year
+   * @param {number} m Gregorian month (1-12)
+   * @param {number} d Gregorian day
    * @returns {{year,month,day,isLeap}|null}
    */
   function toLunar(y, m, d) {
     if (y < 1900 || y > 2100) return null;
-    // 1900-01-31 = 农历 1900 正月初一
+    // 1900-01-31 is lunar new year's day of 1900.
     var offset = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(1900, 0, 31)) / 86400000);
     if (offset < 0) return null;
 
     var i, temp = 0, ly;
-    // 先定位农历年：从 1900 起逐年减去天数
+    // Locate the lunar year first: walk forward from 1900, subtracting each year's length.
     for (i = 1900; i < 2100 && offset > 0; i++) {
       temp = lYearDays(i);
       offset -= temp;
@@ -87,16 +89,16 @@
 
     var isLeap = false;
     var leap = leapMonth(ly);
-    // 再定位农历月与日
+    // Then locate the lunar month and day.
     for (i = 1; i < 13 && offset > 0; i++) {
-      if (leap > 0 && i === leap + 1 && !isLeap) { // 进入闰月
+      if (leap > 0 && i === leap + 1 && !isLeap) { // entering the leap month
         --i;
         isLeap = true;
         temp = leapDays(ly);
       } else {
         temp = monthDays(ly, i);
       }
-      if (isLeap && i === leap + 1) isLeap = false; // 解除闰月标记
+      if (isLeap && i === leap + 1) isLeap = false; // leaving the leap month
       offset -= temp;
     }
     if (offset === 0 && leap > 0 && i === leap + 1) {
@@ -108,11 +110,11 @@
     return { year: ly, month: i, day: offset + 1, isLeap: isLeap };
   }
 
-  // 农历月名（含「月」字，如「八月」；闰月前加「闰」）
+  // Lunar month name (already suffixed); leap months get the leap prefix.
   function monthName(lunarMonth, isLeap) {
     return (isLeap ? '闰' : '') + (MonthNames[lunarMonth - 1] || '');
   }
-  // 农历日名：初一…初十、十一…十九、二十、廿一…廿九、三十
+  // Lunar day name across the traditional prefix ranges: 1-10, 11-19, 20, 21-29, 30.
   function dayName(lunarDay) {
     if (lunarDay < 1 || lunarDay > 30) return '';
     if (lunarDay <= 10) return '初' + nStr1[lunarDay];
@@ -121,34 +123,34 @@
     if (lunarDay < 30) return '廿' + nStr1[lunarDay - 20];
     return '三十';
   }
-  // 干支纪年（以农历年为准，春节后切换）
+  // Sexagenary (ganzhi) year, keyed to the lunar year so it flips at Chinese New Year.
   function ganzhiYear(lunarYear) {
     return Gan[(lunarYear - 4) % 10] + Zhi[(lunarYear - 4) % 12];
   }
-  // 生肖（以农历年为准）
+  // Zodiac animal, also keyed to the lunar year.
   function animalYear(lunarYear) {
     return Animals[(lunarYear - 4) % 12];
   }
 
-  // ---------- 英文变体（供英文界面显示） ----------
-  // 序数：1st / 2nd / 3rd / 4th …
+  // ---------- English variants (used by the English UI) ----------
+  // Ordinals: 1st / 2nd / 3rd / 4th ...
   function ord(n) {
     var s = ['th', 'st', 'nd', 'rd'];
     var v = n % 100;
     var suffix = (v >= 11 && v <= 13) ? 'th' : (s[n % 10] || 'th');
     return n + suffix;
   }
-  // 农历月名英文：8th month / leap 8th month
+  // Lunar month in English: 8th month / leap 8th month
   function monthNameEn(lunarMonth, isLeap) {
     if (lunarMonth < 1 || lunarMonth > 12) return '';
     return (isLeap ? 'leap ' : '') + ord(lunarMonth) + ' month';
   }
-  // 农历日英文：1st … 30th
+  // Lunar day in English: 1st ... 30th
   function dayNameEn(lunarDay) {
     if (lunarDay < 1 || lunarDay > 30) return '';
     return ord(lunarDay);
   }
-  // 生肖英文
+  // Zodiac animal in English
   function animalYearEn(lunarYear) {
     return AnimalsEn[(lunarYear - 4) % 12];
   }

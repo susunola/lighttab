@@ -1,10 +1,10 @@
 /* LightTab - i18n.js
-   中英文双语：纯本地字典 + t(key, vars) 插值。
-   对外暴露 window.LT_I18N = { t, setLang, getLang, applyStatic }。
-   - t(key, vars)：按当前语言取词，{name} 插值
-   - setLang(lang)：切换语言并刷一遍静态 DOM（[data-i18n]/[data-i18n-ph]/[data-i18n-title]/[data-i18n-aria]）
-   - getLang()：当前语言（'zh' | 'en'）
-   加载顺序：icondb → lunar → i18n → sync → app，确保所有模块都能用。
+   Bilingual (zh / en): a pure local dictionary plus t(key, vars) interpolation.
+   Exposes window.LT_I18N = { t, setLang, getLang, applyStatic, DICT }.
+   - t(key, vars)   look up the current language, interpolating {name} placeholders
+   - setLang(lang)  switch language and re-apply every static DOM hook
+   ([data-i18n] / -ph / -title / -aria / -html)
+   - getLang()      current language ('zh' | 'en')
 */
 (function () {
   'use strict';
@@ -13,7 +13,7 @@
   let lang = 'zh';
 
   const DICT = {
-    // ---------- 问候 / 日期 ----------
+    // ---------- Greeting / date ----------
     'greet.morning':   { zh: '早上好', en: 'Good morning' },
     'greet.noon':      { zh: '中午好', en: 'Good afternoon' },
     'greet.afternoon': { zh: '下午好', en: 'Good afternoon' },
@@ -25,23 +25,23 @@
     'chip.evening':    { zh: '晚上', en: 'Evening' },
     'chip.night':      { zh: '夜深了', en: 'Night' },
 
-    // ---------- 顶部图标按钮 ----------
+    // ---------- Top icon buttons ----------
     'top.wallpaper': { zh: '壁纸', en: 'Wallpaper' },
     'top.settings':  { zh: '设置', en: 'Settings' },
 
-    // ---------- Widget 标题 ----------
+    // ---------- Widget titles ----------
     'widget.clock':    { zh: '时钟', en: 'Clock' },
     'widget.calendar': { zh: '日历', en: 'Calendar' },
     'widget.todo':     { zh: '待办', en: 'To-dos' },
 
-    // ---------- 待办 ----------
+    // ---------- To-dos ----------
     'todo.placeholder': { zh: '添加一件事…', en: 'Add a task…' },
     'todo.aria':        { zh: '待办内容', en: 'To-do item' },
     'todo.add':         { zh: '添加', en: 'Add' },
     'todo.empty':       { zh: '今天要做点什么？', en: 'What needs doing today?' },
     'todo.del':         { zh: '删除', en: 'Delete' },
 
-    // ---------- 日历 ----------
+    // ---------- Calendar ----------
     'cal.prev': { zh: '上月', en: 'Previous month' },
     'cal.next': { zh: '下月', en: 'Next month' },
     'cal.d0': { zh: '日', en: 'Su' },
@@ -52,12 +52,12 @@
     'cal.d5': { zh: '五', en: 'Fr' },
     'cal.d6': { zh: '六', en: 'Sa' },
 
-    // ---------- 搜索 ----------
+    // ---------- Search ----------
     'search.label':     { zh: '搜索', en: 'Search' },
     'search.placeholder': { zh: '搜索或输入网址', en: 'Search or enter a URL' },
     'search.placeholder_engine': { zh: '使用 {engine} 搜索，或输入网址回车', en: 'Search with {engine}, or enter a URL' },
 
-    // ---------- AI 模板调色板 ----------
+    // ---------- AI template palette ----------
     'tpl.title':   { zh: 'AI 模板 ( / )', en: 'AI templates ( / )' },
     'tpl.aria':    { zh: 'AI 模板调色板', en: 'AI template palette' },
     'tpl.cancel':  { zh: '取消模板', en: 'Cancel template' },
@@ -71,7 +71,7 @@
     'palette.foot_close':  { zh: '关闭', en: 'close' },
     'palette.foot_edit': { zh: '设置 → 模板 可增改', en: 'Manage in Settings → Templates' },
 
-    // ---------- 引擎名称 ----------
+    // ---------- Search engine names ----------
     'eng.baidu':    { zh: '百度', en: 'Baidu' },
     'eng.bing':     { zh: '必应', en: 'Bing' },
     'eng.google':   { zh: '谷歌', en: 'Google' },
@@ -82,7 +82,7 @@
     'eng.openai':   { zh: 'ChatGPT', en: 'ChatGPT' },
     'eng.wbai':     { zh: 'WorkBuddy', en: 'WorkBuddy' },
 
-    // ---------- 壁纸 ----------
+    // ---------- Wallpapers ----------
     'wp.midnight': { zh: '暮色蓝', en: 'Dusk Blue' },
     'wp.aurora':   { zh: '极光', en: 'Aurora' },
     'wp.violet':   { zh: '暗夜紫', en: 'Night Violet' },
@@ -91,7 +91,7 @@
     'wp.rose':     { zh: '暮红', en: 'Dusk Red' },
     'wp.custom':   { zh: '自定义', en: 'Custom' },
 
-    // ---------- 卡片 / 右键菜单 ----------
+    // ---------- Card / context menu ----------
     'card.edit': { zh: '编辑', en: 'Edit' },
     'card.del':  { zh: '删除', en: 'Delete' },
     'ctx.open':  { zh: '在新标签页打开', en: 'Open in new tab' },
@@ -99,18 +99,18 @@
     'ctx.edit':  { zh: '编辑', en: 'Edit' },
     'ctx.del':   { zh: '删除', en: 'Delete' },
 
-    // ---------- 网格空态 ----------
+    // ---------- Grid empty states ----------
     'grid.empty':      { zh: '暂无快捷方式，点右下角 ＋ 添加', en: 'No shortcuts yet — click ＋ to add' },
     'grid.empty_view': { zh: '该视图暂无快捷方式，点右下角 ＋ 添加', en: 'No shortcuts in this view — click ＋ to add' },
 
-    // ---------- 分组 ----------
+    // ---------- Groups ----------
     'group.new':       { zh: '＋ 新建分组', en: '＋ New group' },
     'group.all':       { zh: '全部', en: 'All' },
     'group.ungrouped': { zh: '未分组', en: 'Ungrouped' },
     'group.del':       { zh: '删除分组', en: 'Delete group' },
     'group.name_ph':   { zh: '分组名称', en: 'Group name' },
 
-    // ---------- 站点弹窗 ----------
+    // ---------- Shortcut modal ----------
     'site.add':    { zh: '添加快捷方式', en: 'Add shortcut' },
     'site.edit':   { zh: '编辑快捷方式', en: 'Edit shortcut' },
     'site.name':   { zh: '名称', en: 'Name' },
@@ -122,14 +122,14 @@
     'site.cancel': { zh: '取消', en: 'Cancel' },
     'site.save':   { zh: '保存', en: 'Save' },
 
-    // ---------- 设置弹窗 tabs ----------
+    // ---------- Settings modal tabs ----------
     'set.wall':    { zh: '壁纸', en: 'Wallpaper' },
     'set.general': { zh: '常规', en: 'General' },
     'set.prompt':  { zh: '模板', en: 'Templates' },
     'set.sync':    { zh: '同步', en: 'Sync' },
     'set.close':   { zh: '关闭', en: 'Close' },
 
-    // ---------- 壁纸 tab ----------
+    // ---------- Wallpaper tab ----------
     'wall.lib_title': { zh: '壁纸库 · 必应每日', en: 'Wallpaper library · Bing Daily' },
     'wall.fetch':     { zh: '获取最新', en: 'Get latest' },
     'wall.lib_tip':   { zh: '精选必应每日壁纸，点击即可应用；需联网获取（图片来源见版权信息）。', en: 'Curated Bing daily wallpapers; click to apply. Requires network (see credits).' },
@@ -140,7 +140,7 @@
     'wall.got':       { zh: '已获取 {n} 张必应每日壁纸 · 点击应用（图片来源见版权信息）', en: 'Got {n} Bing daily wallpapers · click to apply (see credits)' },
     'wall.fail':      { zh: '壁纸库加载失败：{err}（需联网）', en: 'Wallpaper library failed to load: {err} (requires network)' },
 
-    // ---------- 常规 tab ----------
+    // ---------- General tab ----------
     'gen.name':     { zh: '显示名称（问候语用）', en: 'Display name (used in greeting)' },
     'gen.name_ph':  { zh: '留空则不显示名字', en: 'Leave empty to hide the name' },
     'gen.engine':   { zh: '默认搜索引擎', en: 'Default search engine' },
@@ -154,7 +154,7 @@
     'gen.done':     { zh: '完成', en: 'Done' },
     'gen.version':  { zh: 'LightTab v1.18.0 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.18.0 · Minimal new tab · Local-first, optional cloud sync' },
 
-    // ---------- 模板 tab ----------
+    // ---------- Templates tab ----------
     'prompt.title':  { zh: 'Prompt 模板 · AI 发射台', en: 'Prompt templates · AI launcher' },
     'prompt.add':    { zh: '＋ 新建模板', en: '＋ New template' },
     'prompt.help':   { zh: '主界面按 <b>/</b> 打开模板面板：选用模板 → 输入内容 → Enter 一次性发射到多个 AI。<code>{q}</code> 是内容插槽；不含 <code>{q}</code> 的模板作为固定指令、选中即发射。', en: 'Press <b>/</b> to open the template panel: pick a template → type → Enter to launch to multiple AIs. <code>{q}</code> is the content slot; templates without <code>{q}</code> act as fixed commands and fire on selection.' },
@@ -173,7 +173,7 @@
     'prompt.cancel':     { zh: '取消', en: 'Cancel' },
     'prompt.save':       { zh: '保存', en: 'Save' },
 
-    // ---------- Toast / 提示 ----------
+    // ---------- Toasts / notices ----------
     'toast.wall_applied':  { zh: '已应用壁纸', en: 'Wallpaper applied' },
     'toast.wall_reset':    { zh: '已恢复默认渐变', en: 'Default gradient restored' },
     'toast.copied':        { zh: '已复制到剪贴板', en: 'Copied to clipboard' },

@@ -3,7 +3,7 @@
   "version": "1.18.0",
   "name": "LightTab - Minimal New Tab",
   "short_name": "LightTab",
-  "description": "极简新标签页：时钟问候（含中国农历）、月历、聚合搜索、AI 模板发射台、图标分组网格、待办与壁纸。本地优先存储，块可自由拖拽布局，内置必应每日壁纸库，可选多设备云同步（HTTPS 加密），支持书签与 JSON 备份。",
+  "description": "Minimal new tab: clock and greeting (with the Chinese lunar calendar), month view, one-box search, AI prompt launcher, grouped icon grid, to-dos and wallpapers. Local-first storage, free-canvas drag layout, a built-in Bing daily wallpaper library, optional multi-device cloud sync over HTTPS, plus bookmark and JSON backup. English / Chinese UI.",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },

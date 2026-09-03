@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -12,19 +12,19 @@
   <header id="topbar">
     <div id="date-chip" class="chip"></div>
     <nav class="top-actions" aria-label="actions">
-      <button class="icon-btn" id="btn-wall" data-i18n-title="top.wallpaper" data-i18n-aria="top.wallpaper" title="壁纸" aria-label="壁纸">
+      <button class="icon-btn" id="btn-wall" data-i18n-title="top.wallpaper" data-i18n-aria="top.wallpaper" title="Wallpaper" aria-label="Wallpaper">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="m21 17-5-5-9 9"/></svg>
       </button>
-      <button class="icon-btn" id="btn-set" data-i18n-title="top.settings" data-i18n-aria="top.settings" title="设置" aria-label="设置">
+      <button class="icon-btn" id="btn-set" data-i18n-title="top.settings" data-i18n-aria="top.settings" title="Settings" aria-label="Settings">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 4.3 17l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.7 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7.1 4.3l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1A2 2 0 1 1 19.7 7l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
       </button>
     </nav>
   </header>
 
   <main class="layout">
-    <!-- 左侧 widget 列 -->
+    <!-- Left widget column -->
     <aside class="left">
-      <section class="widget wclock" data-i18n-aria="widget.clock" aria-label="时钟">
+      <section class="widget wclock" data-i18n-aria="widget.clock" aria-label="Clock">
         <div class="clock-row">
           <span class="clock-hhmm" id="clock-hhmm">--:--</span>
           <span class="clock-sec" id="clock-sec">--</span>
@@ -34,71 +34,71 @@
         <div class="clock-greet" id="clock-greet"></div>
       </section>
 
-      <section class="widget wcal" data-i18n-aria="widget.calendar" aria-label="日历">
+      <section class="widget wcal" data-i18n-aria="widget.calendar" aria-label="Calendar">
         <div class="w-head">
           <span class="w-title">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span data-i18n="widget.calendar">日历</span>
+            <span data-i18n="widget.calendar">Calendar</span>
           </span>
           <div class="cal-nav">
-            <button id="cal-prev" class="cal-nav-btn" data-i18n-aria="cal.prev" aria-label="上月">‹</button>
+            <button id="cal-prev" class="cal-nav-btn" data-i18n-aria="cal.prev" aria-label="Previous month">‹</button>
             <span id="cal-title" class="cal-title"></span>
-            <button id="cal-next" class="cal-nav-btn" data-i18n-aria="cal.next" aria-label="下月">›</button>
+            <button id="cal-next" class="cal-nav-btn" data-i18n-aria="cal.next" aria-label="Next month">›</button>
           </div>
         </div>
         <div class="cal-week" aria-hidden="true">
-          <span data-i18n="cal.d0">日</span><span data-i18n="cal.d1">一</span><span data-i18n="cal.d2">二</span><span data-i18n="cal.d3">三</span><span data-i18n="cal.d4">四</span><span data-i18n="cal.d5">五</span><span data-i18n="cal.d6">六</span>
+          <span data-i18n="cal.d0">Su</span><span data-i18n="cal.d1">Mo</span><span data-i18n="cal.d2">Tu</span><span data-i18n="cal.d3">We</span><span data-i18n="cal.d4">Th</span><span data-i18n="cal.d5">Fr</span><span data-i18n="cal.d6">Sa</span>
         </div>
         <div class="cal-grid" id="cal-grid"></div>
       </section>
 
-      <section class="widget wtodo" id="todo-widget" data-i18n-aria="widget.todo" aria-label="待办">
+      <section class="widget wtodo" id="todo-widget" data-i18n-aria="widget.todo" aria-label="To-dos">
         <div class="w-head">
           <span class="w-title">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg>
-            <span data-i18n="widget.todo">待办</span>
+            <span data-i18n="widget.todo">To-dos</span>
           </span>
           <span class="w-count" id="todo-count">0</span>
         </div>
         <form class="todo-add" id="todo-form" autocomplete="off">
-          <input id="todo-input" type="text" data-i18n-ph="todo.placeholder" data-i18n-aria="todo.aria" placeholder="添加一件事…" maxlength="60" aria-label="待办内容">
-          <button type="submit" class="todo-submit" data-i18n-aria="todo.add" aria-label="添加">+</button>
+          <input id="todo-input" type="text" data-i18n-ph="todo.placeholder" data-i18n-aria="todo.aria" placeholder="Add a task…" maxlength="60" aria-label="To-do item">
+          <button type="submit" class="todo-submit" data-i18n-aria="todo.add" aria-label="Add">+</button>
         </form>
         <ul class="todo-list" id="todo-list"></ul>
       </section>
     </aside>
 
-    <!-- 右侧：搜索 + 图标网格 -->
+    <!-- Right: search + icon grid -->
     <section class="right">
       <div id="search" class="search" role="search">
         <button id="engine-btn" class="engine-btn" aria-haspopup="listbox" aria-expanded="false">
           <span class="eng-dot" aria-hidden="true"></span>
-          <span class="eng-name">搜索</span>
+          <span class="eng-name">Search</span>
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <form id="search-form" autocomplete="off">
-          <input id="q" name="q" type="text" data-i18n-ph="search.placeholder" data-i18n-aria="search.label" placeholder="搜索或输入网址" aria-label="搜索" spellcheck="false" autocomplete="off" autofocus>
+          <input id="q" name="q" type="text" data-i18n-ph="search.placeholder" data-i18n-aria="search.label" placeholder="Search or enter a URL" aria-label="Search" spellcheck="false" autocomplete="off" autofocus>
         </form>
         <div id="tpl-chip" class="tpl-chip" hidden></div>
-        <button id="tpl-open" class="tpl-trigger" data-i18n-title="tpl.title" data-i18n-aria="tpl.aria" title="AI 模板 ( / )" aria-label="AI 模板调色板">
+        <button id="tpl-open" class="tpl-trigger" data-i18n-title="tpl.title" data-i18n-aria="tpl.aria" title="AI templates ( / )" aria-label="AI template palette">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
         </button>
-        <button id="search-go" class="engine-go" data-i18n-title="search.label" data-i18n-aria="search.label" title="搜索" aria-label="搜索">
+        <button id="search-go" class="engine-go" data-i18n-title="search.label" data-i18n-aria="search.label" title="Search" aria-label="Search">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
         <ul id="engine-list" class="engine-list" role="listbox" hidden></ul>
-        <!-- AI 模板调色板（/ 唤起）：选用模板 → 输入内容 → Enter 多目标发射 -->
+        <!-- AI template palette (opened with "/"): pick a template -> type content -> Enter launches to every target -->
         <div id="palette" class="palette" hidden>
           <div class="palette-head">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2Z"/></svg>
-            <input id="palette-q" type="text" data-i18n-ph="palette.search_ph" data-i18n-aria="palette.search_ph" placeholder="搜索模板…" aria-label="搜索模板" autocomplete="off" spellcheck="false">
-            <button id="palette-close" class="icon-btn close-btn" data-i18n-aria="set.close" aria-label="关闭">
+            <input id="palette-q" type="text" data-i18n-ph="palette.search_ph" data-i18n-aria="palette.search_ph" placeholder="Search templates…" aria-label="Search templates" autocomplete="off" spellcheck="false">
+            <button id="palette-close" class="icon-btn close-btn" data-i18n-aria="set.close" aria-label="Close">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
           <ul id="palette-list" class="palette-list"></ul>
-          <div id="palette-empty" class="palette-empty" data-i18n="palette.empty">没有匹配的模板 —— 到「设置 → 模板」新建一个</div>
-          <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> <span data-i18n="palette.foot_select">选择</span> · <kbd>Enter</kbd> <span data-i18n="palette.foot_use">选用</span> · <kbd>Esc</kbd> <span data-i18n="palette.foot_close">关闭</span></span><span data-i18n="palette.foot_edit">设置 → 模板 可增改</span></div>
+          <div id="palette-empty" class="palette-empty" data-i18n="palette.empty">No matching templates — create one in Settings → Templates</div>
+          <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> <span data-i18n="palette.foot_select">select</span> · <kbd>Enter</kbd> <span data-i18n="palette.foot_use">use</span> · <kbd>Esc</kbd> <span data-i18n="palette.foot_close">close</span></span><span data-i18n="palette.foot_edit">Manage in Settings → Templates</span></div>
         </div>
       </div>
 
@@ -109,55 +109,55 @@
     </section>
   </main>
 
-  <button class="add-float" id="add-float" data-i18n-title="site.add" data-i18n-aria="site.add" title="添加快捷方式" aria-label="添加快捷方式">
+  <button class="add-float" id="add-float" data-i18n-title="site.add" data-i18n-aria="site.add" title="Add shortcut" aria-label="Add shortcut">
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
   </button>
 
   <div id="context-menu" class="menu" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
-  <!-- 新增/编辑 弹窗 -->
+  <!-- Add / edit shortcut modal -->
   <div class="modal" id="modal-site" hidden>
     <div class="modal-card">
       <div class="modal-head">
-        <span id="site-modal-title">添加快捷方式</span>
-        <button class="icon-btn close-btn" data-close data-i18n-aria="set.close" aria-label="关闭">
+        <span id="site-modal-title">Add shortcut</span>
+        <button class="icon-btn close-btn" data-close data-i18n-aria="set.close" aria-label="Close">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <form id="site-form" class="modal-body">
         <label>
-          <span data-i18n="site.name">名称</span>
-          <input id="f-title" name="title" type="text" maxlength="32" data-i18n-ph="site.name_ph" placeholder="例如 腾讯云" required>
+          <span data-i18n="site.name">Name</span>
+          <input id="f-title" name="title" type="text" maxlength="32" data-i18n-ph="site.name_ph" placeholder="e.g. GitHub" required>
         </label>
         <label>
-          <span data-i18n="site.url">网址</span>
-          <input id="f-url" name="url" type="text" data-i18n-ph="site.url_ph" placeholder="https://cloud.tencent.com" required>
+          <span data-i18n="site.url">URL</span>
+          <input id="f-url" name="url" type="text" data-i18n-ph="site.url_ph" placeholder="https://github.com" required>
         </label>
         <label id="f-group-row" hidden>
-          <span data-i18n="site.group">分组</span>
+          <span data-i18n="site.group">Group</span>
           <select id="f-group"></select>
         </label>
-        <p class="form-tip" data-i18n="site.tip">知名站点自动匹配内置品牌图标；未收录站点显示首字图标。拖拽卡片可重新排序。</p>
+        <p class="form-tip" data-i18n="site.tip">Known sites get brand icons automatically; others show an initial. Drag cards to reorder.</p>
         <div class="modal-actions">
-          <button type="button" class="btn ghost" data-close data-i18n="site.cancel">取消</button>
-          <button type="submit" class="btn primary" data-i18n="site.save">保存</button>
+          <button type="button" class="btn ghost" data-close data-i18n="site.cancel">Cancel</button>
+          <button type="submit" class="btn primary" data-i18n="site.save">Save</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- 壁纸/设置 弹窗 -->
+  <!-- Wallpaper / settings modal -->
   <div class="modal" id="modal-set" hidden>
     <div class="modal-card wide">
       <div class="modal-head">
         <div class="tabs">
-          <button class="tab active" data-tab="wall" data-i18n="set.wall">壁纸</button>
-          <button class="tab" data-tab="gen" data-i18n="set.general">常规</button>
-          <button class="tab" data-tab="prompt" data-i18n="set.prompt">模板</button>
-          <button class="tab" data-tab="sync" data-i18n="set.sync">同步</button>
+          <button class="tab active" data-tab="wall" data-i18n="set.wall">Wallpaper</button>
+          <button class="tab" data-tab="gen" data-i18n="set.general">General</button>
+          <button class="tab" data-tab="prompt" data-i18n="set.prompt">Templates</button>
+          <button class="tab" data-tab="sync" data-i18n="set.sync">Sync</button>
         </div>
-        <button class="icon-btn close-btn" data-close data-i18n-aria="set.close" aria-label="关闭">
+        <button class="icon-btn close-btn" data-close data-i18n-aria="set.close" aria-label="Close">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -166,62 +166,62 @@
           <div class="swatches" id="swatches"></div>
           <div class="wall-lib">
             <div class="wall-lib-head">
-              <span class="wall-lib-title" data-i18n="wall.lib_title">壁纸库 · 必应每日</span>
-              <button type="button" class="btn ghost sm" id="btn-wall-fetch" data-i18n="wall.fetch">获取最新</button>
+              <span class="wall-lib-title" data-i18n="wall.lib_title">Wallpaper library · Bing Daily</span>
+              <button type="button" class="btn ghost sm" id="btn-wall-fetch" data-i18n="wall.fetch">Get latest</button>
             </div>
             <div class="wall-lib-grid" id="wall-lib-grid"></div>
-            <p class="form-tip wall-lib-tip" id="wall-lib-tip" data-i18n="wall.lib_tip">精选必应每日壁纸，点击即可应用；需联网获取（图片来源见版权信息）。</p>
+            <p class="form-tip wall-lib-tip" id="wall-lib-tip" data-i18n="wall.lib_tip">Curated Bing daily wallpapers; click to apply. Requires network (see credits).</p>
           </div>
           <div class="upload-row">
             <label class="btn ghost file-btn">
               <input id="f-upload" type="file" accept="image/*" hidden>
-              <span data-i18n="wall.upload">上传自定义图片</span>
+              <span data-i18n="wall.upload">Upload custom image</span>
             </label>
-            <button class="btn ghost" id="btn-reset-wall" type="button" data-i18n="wall.reset">重置为渐变</button>
+            <button class="btn ghost" id="btn-reset-wall" type="button" data-i18n="wall.reset">Reset to gradient</button>
           </div>
-          <p class="form-tip" data-i18n="wall.format_tip">支持 JPG / PNG / WebP / GIF；最大 4MB；仅保存在本地浏览器。</p>
+          <p class="form-tip" data-i18n="wall.format_tip">Supports JPG / PNG / WebP / GIF; max 4MB; stored locally only.</p>
         </div>
         <div class="tab-pane" data-pane="gen" hidden>
           <label>
-            <span data-i18n="gen.name">显示名称（问候语用）</span>
-            <input id="f-name" type="text" maxlength="20" data-i18n-ph="gen.name_ph" placeholder="留空则不显示名字">
+            <span data-i18n="gen.name">Display name (used in greeting)</span>
+            <input id="f-name" type="text" maxlength="20" data-i18n-ph="gen.name_ph" placeholder="Leave empty to hide the name">
           </label>
           <label>
-            <span data-i18n="gen.engine">默认搜索引擎</span>
+            <span data-i18n="gen.engine">Default search engine</span>
             <select id="f-engine"></select>
           </label>
           <label>
-            <span data-i18n="gen.lang">语言</span>
+            <span data-i18n="gen.lang">Language</span>
             <select id="f-lang">
               <option value="zh">中文</option>
               <option value="en">English</option>
             </select>
           </label>
           <div class="data-zone">
-            <span class="data-label" data-i18n="gen.data">数据管理</span>
+            <span class="data-label" data-i18n="gen.data">Data management</span>
             <div class="data-actions">
-              <button type="button" class="btn ghost sm" id="btn-export" data-i18n="gen.export">导出数据</button>
-              <button type="button" class="btn ghost sm" id="btn-import" data-i18n="gen.import">导入数据</button>
-              <button type="button" class="btn ghost sm" id="btn-import-bookmarks" data-i18n="gen.import_bookmarks">从书签导入</button>
+              <button type="button" class="btn ghost sm" id="btn-export" data-i18n="gen.export">Export data</button>
+              <button type="button" class="btn ghost sm" id="btn-import" data-i18n="gen.import">Import data</button>
+              <button type="button" class="btn ghost sm" id="btn-import-bookmarks" data-i18n="gen.import_bookmarks">Import from bookmarks</button>
               <input id="f-import" type="file" accept=".json,application/json" hidden>
             </div>
-            <p class="data-tip" data-i18n="gen.data_tip">备份/恢复全部数据（快捷方式、待办、设置、壁纸）。导出文件可跨浏览器迁移。</p>
+            <p class="data-tip" data-i18n="gen.data_tip">Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.</p>
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn ghost" id="btn-reset-all" data-i18n="gen.reset">恢复默认数据</button>
-            <button type="button" class="btn primary" data-close data-i18n="gen.done">完成</button>
+            <button type="button" class="btn ghost" id="btn-reset-all" data-i18n="gen.reset">Reset to defaults</button>
+            <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
           </div>
-          <p class="form-tip ver-line" data-i18n="gen.version">LightTab v1.18.0 · 极简新标签页 · 本地优先，可选云同步</p>
+          <p class="form-tip ver-line" data-i18n="gen.version">LightTab v1.18.0 · Minimal new tab · Local-first, optional cloud sync</p>
         </div>
         <div class="tab-pane" data-pane="prompt" hidden>
           <div class="ptoolbar">
-            <span class="data-label" data-i18n="prompt.title">Prompt 模板 · AI 发射台</span>
-            <button type="button" class="btn ghost sm" id="btn-prompt-add" data-i18n="prompt.add">＋ 新建模板</button>
+            <span class="data-label" data-i18n="prompt.title">Prompt templates · AI launcher</span>
+            <button type="button" class="btn ghost sm" id="btn-prompt-add" data-i18n="prompt.add">＋ New template</button>
           </div>
-          <p class="form-tip" data-i18n-html="prompt.help">主界面按 <b>/</b> 打开模板面板：选用模板 → 输入内容 → Enter 一次性发射到多个 AI。<code>{q}</code> 是内容插槽；不含 <code>{q}</code> 的模板作为固定指令、选中即发射。</p>
+          <p class="form-tip" data-i18n-html="prompt.help">Press <b>/</b> to open the template panel: pick a template → type → Enter to launch to multiple AIs. <code>{q}</code> is the content slot; templates without <code>{q}</code> act as fixed commands and fire on selection.</p>
           <div id="prompt-manage" class="prompt-manage"></div>
           <div class="modal-actions">
-            <button type="button" class="btn primary" data-close data-i18n="gen.done">完成</button>
+            <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
           </div>
         </div>
         <div class="tab-pane" data-pane="sync" hidden>

@@ -1,52 +1,56 @@
 /* LightTab - app.js
-   单文件逻辑：存储 / 壁纸 / 时钟 / 搜索 / 图标网格 / 设置 / 拖拽
-   使用原生 HTML5 drag and drop，零外部依赖。
+   Single-file logic: storage / wallpaper / clock / search / icon grid / settings / drag & drop.
+   Uses native HTML5 drag and drop. Zero external dependencies.
 */
 (() => {
   'use strict';
 
-  // ---------- 国际化（js/i18n.js 暴露 window.LT_I18N，本文件在其后加载） ----------
+  // ---------- i18n (js/i18n.js exposes window.LT_I18N; this file loads after it) ----------
   const t = (k, v) => (window.LT_I18N ? window.LT_I18N.t(k, v) : k);
   const lang = () => (window.LT_I18N ? window.LT_I18N.getLang() : 'zh');
   const isEn = () => lang() === 'en';
   function engName(e) { return t('eng.' + e.id) || e.name; }
 
-  // ---------- 常量 ----------
+  // ---------- Constants ----------
+  // ENGINES: `id` is the stable key used for storage and for the i18n lookup `eng.<id>`.
+  // `name` is only an English fallback for when the i18n layer is unavailable.
   const ENGINES = [
-    { id: 'baidu',    name: '百度',   url: 'https://www.baidu.com/s?wd={q}',                            color: '#2932e1' },
-    { id: 'bing',     name: '必应',   url: 'https://www.bing.com/search?q={q}',                          color: '#008373' },
-    { id: 'google',   name: '谷歌',   url: 'https://www.google.com/search?q={q}',                        color: '#4285F4' },
-    { id: 'sogou',    name: '搜狗',   url: 'https://www.sogou.com/web?query={q}',                        color: '#fb6f19' },
+    { id: 'baidu',    name: 'Baidu',  url: 'https://www.baidu.com/s?wd={q}',                            color: '#2932e1' },
+    { id: 'bing',     name: 'Bing',   url: 'https://www.bing.com/search?q={q}',                          color: '#008373' },
+    { id: 'google',   name: 'Google', url: 'https://www.google.com/search?q={q}',                        color: '#4285F4' },
+    { id: 'sogou',    name: 'Sogou',  url: 'https://www.sogou.com/web?query={q}',                        color: '#fb6f19' },
     { id: 'github',   name: 'GitHub', url: 'https://github.com/search?q={q}&type=repositories',          color: '#1f2937' },
     { id: 'bilibili', name: 'B 站',   url: 'https://search.bilibili.com/all?keyword={q}',                color: '#fb7299' },
-    // AI 对话：豆包 / ChatGPT 由通用注入脚本（js/inject-ai.js）自动填词并发送。
-    // 明文不进 URL：扩展模式经 lt.pending.<nonce> 传递（URL 仅带 lt_auto=1&lt_k=<nonce>），预览模式退回 ?q= 明文
-    { id: 'doubao',   name: '豆包 AI', url: 'https://www.doubao.com/chat/',                       color: '#3d8cff', ai: true, injected: true },
+    // AI chats: Doubao / ChatGPT are auto-filled and submitted by the content script (js/inject-ai.js).
+    // The prompt never travels in the URL: in extension mode it goes through lt.pending.<nonce>
+    // (the URL only carries lt_auto=1&lt_k=<nonce>); preview mode falls back to a plaintext ?q=.
+    { id: 'doubao',   name: 'Doubao AI', url: 'https://www.doubao.com/chat/',                      color: '#3d8cff', ai: true, injected: true },
     { id: 'openai',   name: 'ChatGPT', url: 'https://chatgpt.com/',                               color: '#10a37f', ai: true, injected: true },
-    // WorkBuddy 走官方 task 深链协议（workbuddy://task?action=start&prompt=...），拉起客户端并把 prompt 预填进新建任务草稿
+    // WorkBuddy uses the official task deep link (workbuddy://task?action=start&prompt=...):
+    // it launches the desktop client and pre-fills the prompt into a new task draft.
     { id: 'wbai',     name: 'WorkBuddy', url: 'workbuddy://task?action=start&prompt={q}',        color: '#22d3ee', ai: true, deeplink: true }
   ];
 
   const WALLPAPERS = [
-    { id: 'midnight', name: '暮色蓝', css: 'linear-gradient(135deg,#0b1426 0%,#152a4f 45%,#1c3d6e 100%)' },
-    { id: 'aurora',   name: '极光',   css: 'linear-gradient(135deg,#0f1c3a 0%,#1e3a6e 50%,#2d5f8f 100%)' },
-    { id: 'violet',   name: '暗夜紫', css: 'linear-gradient(135deg,#0f0a26 0%,#2b1b54 50%,#432e7a 100%)' },
-    { id: 'teal',     name: '青黛',   css: 'linear-gradient(135deg,#0a1e25 0%,#0e3239 50%,#15525b 100%)' },
-    { id: 'graphite', name: '石墨',   css: 'linear-gradient(135deg,#0e1117 0%,#1f242e 50%,#2a3038 100%)' },
-    { id: 'rose',     name: '暮红',   css: 'linear-gradient(135deg,#1a0f1a 0%,#3d1b2e 50%,#5a2540 100%)' }
+    { id: 'midnight', name: 'Dusk Blue',    css: 'linear-gradient(135deg,#0b1426 0%,#152a4f 45%,#1c3d6e 100%)' },
+    { id: 'aurora',   name: 'Aurora',       css: 'linear-gradient(135deg,#0f1c3a 0%,#1e3a6e 50%,#2d5f8f 100%)' },
+    { id: 'violet',   name: 'Night Violet', css: 'linear-gradient(135deg,#0f0a26 0%,#2b1b54 50%,#432e7a 100%)' },
+    { id: 'teal',     name: 'Teal',         css: 'linear-gradient(135deg,#0a1e25 0%,#0e3239 50%,#15525b 100%)' },
+    { id: 'graphite', name: 'Graphite',     css: 'linear-gradient(135deg,#0e1117 0%,#1f242e 50%,#2a3038 100%)' },
+    { id: 'rose',     name: 'Dusk Red',     css: 'linear-gradient(135deg,#1a0f1a 0%,#3d1b2e 50%,#5a2540 100%)' }
   ];
 
   const DEFAULT_SITES = [
-    { id: nid(), title: '腾讯云',     url: 'https://cloud.tencent.com', color: '#0052D9' },
+    { id: nid(), title: 'GitHub',         url: 'https://github.com',            color: '#181717' },
     { id: nid(), title: 'GitHub',     url: 'https://github.com',         color: '#1f2937' },
     { id: nid(), title: 'ChatGPT',    url: 'https://chatgpt.com',        color: '#10a37f' },
     { id: nid(), title: 'Gmail',      url: 'https://mail.google.com',    color: '#EA4335' },
-    { id: nid(), title: '腾讯文档',   url: 'https://docs.qq.com',        color: '#1A6CFF' },
-    { id: nid(), title: '企业微信',   url: 'https://work.weixin.qq.com', color: '#FF6F00' },
-    { id: nid(), title: '知乎',       url: 'https://www.zhihu.com',      color: '#056DE8' },
-    { id: nid(), title: '哔哩哔哩',   url: 'https://www.bilibili.com',   color: '#FB7299' },
-    { id: nid(), title: '微信读书',   url: 'https://weread.qq.com',      color: '#3D7EFF' },
-    { id: nid(), title: '微博',       url: 'https://weibo.com',          color: '#E6162D' }
+    { id: nid(), title: 'X',              url: 'https://x.com',                 color: '#000000' },
+    { id: nid(), title: 'Reddit',         url: 'https://www.reddit.com',        color: '#FF4500' },
+    { id: nid(), title: 'Wikipedia',      url: 'https://en.wikipedia.org',      color: '#000000' },
+    { id: nid(), title: 'Notion',         url: 'https://www.notion.so',         color: '#000000' },
+    { id: nid(), title: 'Figma',          url: 'https://www.figma.com',         color: '#F24E1E' },
+    { id: nid(), title: 'Stack Overflow', url: 'https://stackoverflow.com',     color: '#F58025' }
   ];
 
   const DEFAULT_SETTINGS = {
@@ -54,25 +58,32 @@
     name: '',
     lang: 'zh',
     wallpaper: WALLPAPERS[0],
-    // 分组：{ id, name } 数组；为空 = 不启用分组（分组栏隐藏，站点弹窗不出现分组下拉）
+    // Groups: array of { id, name }. Empty = grouping disabled (group bar hidden, and the
+    // shortcut dialog does not show the group dropdown).
     groups: [],
-    // 自由画布布局：{ wclock/wcal/wtodo/search/grid: {x,y,w} }；null = 用默认两栏流式
+    // Free canvas layout: { wclock/wcal/wtodo/search/grid: {x,y,w} }.
+    // null = fall back to the default two-column flow layout.
     layout: null
   };
 
-  // 内置 Prompt 模板：name 展示名 / tmpl 含 {q}（用户输入插槽）/ hint 选中后输入框占位 / targets 发射目标引擎
-  // wb 仅当 targets 含 'wbai' 时生效：WorkBuddy 深链附加参数（expertId/model/mode/cwd）
+  // Built-in prompt templates.
+  //   name    display name
+  //   tmpl    prompt body; {q} is the slot for whatever the user types
+  //   hint    input placeholder shown once the template is selected
+  //   targets which engines to launch to
+  //   wb      only applies when targets includes 'wbai' - extra WorkBuddy deep-link
+  //           parameters (expertId / model / mode / cwd)
   const DEFAULT_PROMPTS = [
-    { id: nid(), name: '翻译成中文', tmpl: '请把下面的内容翻译成地道、通顺的中文，保留原有语气与格式：\n\n{q}', hint: '粘贴要翻译的外文内容…', targets: ['doubao', 'openai'] },
-    { id: nid(), name: '翻译成英文', tmpl: 'Please translate the following into natural, fluent English, preserving tone and formatting:\n\n{q}', hint: '粘贴要翻译的中文内容…', targets: ['doubao', 'openai'] },
-    { id: nid(), name: '中文润色', tmpl: '你是资深中文编辑。请润色下面的文字，使其更简洁、有力、通顺，并简要说明主要改动：\n\n{q}', hint: '粘贴要润色的文字…', targets: ['doubao', 'openai'] },
-    { id: nid(), name: '代码解释', tmpl: '请逐段解释下面的代码在做什么，指出潜在问题与改进建议：\n\n{q}', hint: '粘贴代码…', targets: ['doubao', 'openai'] },
-    { id: nid(), name: '周报整理', tmpl: '请把下面的工作记录整理成结构化周报，分「本周完成 / 进行中 / 风险 / 下周计划」四部分：\n\n{q}', hint: '粘贴本周工作流水…', targets: ['doubao', 'openai'] },
-    { id: nid(), name: '总结要点', tmpl: '请把下面的内容提炼成要点列表，每条一行、按重要性排序，用中文输出：\n\n{q}', hint: '粘贴长文/会议记录…', targets: ['doubao', 'openai'] },
-    { id: nid(), name: 'WorkBuddy 任务', tmpl: '请帮我完成以下任务：先给出执行计划，再逐步实施；涉及外部事实时给出依据：\n\n{q}', hint: '描述你想让 WorkBuddy 干的任务…', targets: ['wbai'] }
+    { id: nid(), name: 'Translate to English', tmpl: 'Please translate the following into natural, fluent English, preserving the original tone and formatting:\n\n{q}', hint: 'Paste the text to translate…', targets: ['doubao', 'openai'] },
+    { id: nid(), name: 'Translate to Chinese', tmpl: 'Please translate the following into natural, fluent Chinese, preserving the original tone and formatting:\n\n{q}', hint: 'Paste the text to translate…', targets: ['doubao', 'openai'] },
+    { id: nid(), name: 'Polish writing', tmpl: 'You are a senior editor. Polish the text below so it reads tighter and clearer, then briefly list the main changes you made:\n\n{q}', hint: 'Paste the text to polish…', targets: ['doubao', 'openai'] },
+    { id: nid(), name: 'Explain code', tmpl: 'Explain what the code below does, section by section. Call out potential bugs and concrete improvements:\n\n{q}', hint: 'Paste code…', targets: ['doubao', 'openai'] },
+    { id: nid(), name: 'Weekly report', tmpl: 'Turn the raw work log below into a structured weekly report with four sections: Done / In progress / Risks / Next week:\n\n{q}', hint: 'Paste your work log for the week…', targets: ['doubao', 'openai'] },
+    { id: nid(), name: 'Summarize', tmpl: 'Condense the content below into a bullet list — one point per line, ordered by importance:\n\n{q}', hint: 'Paste a long article or meeting notes…', targets: ['doubao', 'openai'] },
+    { id: nid(), name: 'WorkBuddy task', tmpl: 'Help me complete the following task. First outline a plan, then execute it step by step; cite evidence for any external facts:\n\n{q}', hint: 'Describe the task for WorkBuddy…', targets: ['wbai'] }
   ];
 
-  // ---------- 工具 ----------
+  // ---------- Utilities ----------
   function nid() { return 's_' + Math.random().toString(36).slice(2, 10); }
   function hostnameOf(url) {
     try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
@@ -110,18 +121,20 @@
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
     ));
   }
-  // 输入是否像 URL：带 scheme 直认；裸域名可带路径/查询/锚点（github.com/susunola），含空格的搜索词不误判
+  // Does the input look like a URL? An explicit scheme always counts; a bare domain may carry a
+  // path/query/hash (github.com/susunola). Search phrases containing spaces are never misread as URLs.
   function looksLikeUrl(q) {
     return /^https?:\/\//i.test(q) || /^[^\s]+\.[a-z]{2,}([/?#]\S*)?$/i.test(q);
   }
-  // 壁纸 URL 白名单（防 CSS 注入）：仅允许 data:image/ 与 https:，且拒绝引号/反斜杠/换行
+  // Wallpaper URL allow-list (guards against CSS injection): only data:image/ and https: are accepted,
+  // and quotes / backslashes / newlines are rejected outright.
   function sanitizeWallpaperUrl(v) {
     if (typeof v !== 'string' || !v) return null;
     if (/['"\\\r\n]/.test(v)) return null;
     if (/^data:image\//i.test(v) || /^https:/i.test(v)) return v;
     return null;
   }
-  // 焦点是否落在文本输入类元素上（输入框 / 多行框 / 下拉 / 可编辑区）
+  // Whether focus currently sits in a text-entry element (input / textarea / select / contenteditable).
   function isTypingTarget(el) {
     if (!el) return false;
     const tag = el.tagName;
@@ -158,7 +171,7 @@
     if (isEn()) return `${EN_MONTHS_S[d.getMonth()]} ${d.getDate()}`;
     return `${d.getMonth() + 1}月${d.getDate()}日`;
   }
-  // 农历（依赖 js/lunar.js 的 window.LT_LUNAR，缺失时静默降级为空）
+  // Chinese lunar date (needs window.LT_LUNAR from js/lunar.js; degrades silently to '' when absent).
   function lunarLine(d) {
     if (!window.LT_LUNAR) return '';
     const lu = window.LT_LUNAR.toLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
@@ -177,15 +190,16 @@
   }
   function pad2(n) { return String(n).padStart(2, '0'); }
 
-  // ---------- Store（chrome.storage.local + localStorage 降级） ----------
-  // 数据模型 schema 版本：结构变更（新增/改名/重解释字段）时 +1，并同步 migrateSchema()
+  // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
+  // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
   const SCHEMA_VERSION = 3;
   const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', schema: 'lt.schema' };
-  // 临时 prompt 通道 key 前缀：非ce 传参（lt.pending.<nonce> = {p, t}），跨标签页传给注入脚本，读后即删
+  // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
+  // to the content script across tabs without ever putting it in the URL.
   const PENDING_PREFIX = 'lt.pending.';
-  const PENDING_TTL = 30 * 60 * 1000; // 30 分钟未消费视为孤儿
+  const PENDING_TTL = 30 * 60 * 1000; // unconsumed for 30 minutes = orphaned
   const hasChromeStorage = !!(window.chrome && chrome.storage && chrome.storage.local);
-  // 各 key 的友好提示：保存失败时给用户可理解的反馈（存 i18n key，运行时按当前语言取词）
+  // Friendly per-key message shown when a write fails. Stores i18n keys, resolved at render time.
   const KEY_TIPS = {
     [K.wallpaper]: 'store.wallpaper',
     [K.settings]: 'store.settings',
@@ -213,11 +227,11 @@
       try {
         if (hasChromeStorage) await chrome.storage.local.set({ [key]: val });
         else localStorage.setItem(key, JSON.stringify(val));
-        // 云同步：业务 key 写入后标记 dirty（未登录时 sync 模块内部直接忽略）
+        // Cloud sync: mark dirty after writing a data key (the sync module ignores this while logged out).
         if (window.LT_SYNC) window.LT_SYNC.onLocalWrite(key);
       } catch (err) {
-        console.warn('[LightTab] 保存失败', key, err);
-        // 存储写失败不阻塞主流程，但必须让用户知道（壁纸 dataURL 最易触顶配额）
+        console.warn('[LightTab] save failed', key, err);
+        // A failed write must not block the main flow, but the user has to know (wallpaper dataURLs hit the quota first).
         const tip = t(KEY_TIPS[key] || 'store.generic');
         try { showToast(tip, null, null, 4200); } catch {}
       }
@@ -229,8 +243,8 @@
     try { return JSON.parse(v); } catch { return undefined; }
   }
 
-  // ---------- 状态 ----------
-  // 分组视图（仅本次会话，不持久化）：VIEW_ALL 全部 / VIEW_NONE 未分组 / 其它 = 分组 id
+  // ---------- State ----------
+  // Group view (session only, never persisted): VIEW_ALL = all / VIEW_NONE = ungrouped / anything else = a group id.
   const VIEW_ALL = '__all__';
   const VIEW_NONE = '__ungrouped__';
   const state = {
@@ -242,10 +256,10 @@
     view: VIEW_ALL
   };
   let currentEngine = ENGINES[0];
-  let activePrompt = null; // 已选用待发射的模板对象（不持久化，仅本次会话）
+  let activePrompt = null; // template picked and waiting to launch (session only, not persisted)
   let clockTimer = null;
 
-  // ---------- 壁纸 ----------
+  // ---------- Wallpaper ----------
   function applyWallpaper(wp) {
     const el = document.getElementById('wallpaper');
     el.classList.toggle('bg-light', !!(wp && wp.type === 'image' && wp.light));
@@ -258,17 +272,17 @@
     } else if (wp.type === 'gradient' && wp.value) {
       el.style.background = wp.value;
     } else {
-      // 含非法 image URL 时也落到默认渐变
+      // An invalid image URL also falls back to the default gradient.
       el.style.background = WALLPAPERS[0].css;
     }
   }
   function pickWallpaperFromData(data) {
-    // 导入/读取路径统一过白名单：非法 image URL 回退默认渐变
+    // Both the import and read paths go through the allow-list; an invalid image URL falls back to the gradient.
     if (data && data.type === 'image' && sanitizeWallpaperUrl(data.value)) {
       return { ...data, value: sanitizeWallpaperUrl(data.value) };
     }
     if (data && data.type === 'gradient' && data.value) return data;
-    // 兼容旧版：未保存 → 渐变默认
+    // Legacy compatibility: nothing saved -> fall back to the default gradient.
     return { type: 'gradient', value: WALLPAPERS[0].css };
   }
   async function setWallpaper(wp) {
@@ -277,12 +291,13 @@
     await Store.set(K.wallpaper, wp);
   }
 
-  // ---------- 壁纸库（必应每日壁纸，经后端代理绕 CORS） ----------
-  // 后端地址与 sync.js 共用 window.LT_API_BASE（sync.js 先加载并定义；此处兜底常量防御顺序变化）
+  // ---------- Wallpaper library (Bing daily images, proxied by the backend to work around CORS) ----------
+  // The backend origin is shared with sync.js via window.LT_API_BASE (sync.js loads first and defines it);
+  // the literal here is a defensive fallback in case the load order ever changes.
   const WALL_LIB_BASE = window.LT_API_BASE || 'https://lighttab.atomwangnus.com';
   let wallLibImages = null;
 
-  // 渐变 swatch 渲染（顶层函数，供 bindSettings 与壁纸库应用后复用）
+  // Gradient swatch rendering (top level so bindSettings and the wallpaper library can both reuse it).
   function renderSwatches() {
     const swEl = document.getElementById('swatches');
     if (!swEl) return;
@@ -350,7 +365,7 @@
     });
   }
 
-  // ---------- 时钟 / 问候 ----------
+  // ---------- Clock / greeting ----------
   function startClock() {
     const hhmmEl = document.getElementById('clock-hhmm');
     const secEl = document.getElementById('clock-sec');
@@ -365,7 +380,7 @@
       const hh = d.getHours();
       const mm = d.getMinutes();
       const ss = pad2(d.getSeconds());
-      // 秒节点每秒更新；时分/问候/日期 chip 只在对应周期变化时才写 DOM
+      // Seconds tick every second; hh:mm, greeting and the date chip only touch the DOM when their own period rolls over.
       secEl.textContent = ss;
       if (hh * 60 + mm !== lastMinute) {
         lastMinute = hh * 60 + mm;
@@ -390,7 +405,7 @@
     clockTimer = setInterval(tick, 1000);
   }
 
-  // ---------- 引擎 ----------
+  // ---------- Search engines ----------
   function setEngine(id) {
     const e = ENGINES.find(x => x.id === id) || ENGINES[0];
     currentEngine = e;
@@ -420,7 +435,7 @@
       </li>
     `).join('');
   }
-  // 打开结果页：默认当前标签内跳转（不留空白新标签）；按住 ⌘/Ctrl 则新标签打开
+  // Open the result page: navigate in the current tab by default (no stray blank tabs); hold Cmd/Ctrl for a new tab.
   function openResult(url, ev) {
     if (ev && (ev.metaKey || ev.ctrlKey)) {
       window.open(url, '_blank', 'noopener');
@@ -430,7 +445,7 @@
   }
   function submitSearch(rawQuery, ev) {
     const q = (rawQuery || '').trim();
-    // 已选用模板：输入内容 → 按模板多目标发射（不走普通搜索）
+    // A template is active: the typed text launches to the template targets instead of running a plain search.
     if (activePrompt) {
       if (!q) { showToast(t('ai.enter'), null, null, 3000); document.getElementById('q').focus(); return; }
       launchPrompt(activePrompt, q, ev);
@@ -438,7 +453,7 @@
     }
     if (!q) return;
 
-    // AI 引擎：WorkBuddy 深链拉起并预填草稿；豆包 / ChatGPT 走 nonce 通道自动发送
+    // AI engines: WorkBuddy opens via deep link with a pre-filled draft; Doubao / ChatGPT auto-send through the nonce channel.
     if (currentEngine.ai) {
       if (currentEngine.deeplink) {
         window.open(deepLinkUrl(currentEngine, q, null), '_blank');
@@ -446,7 +461,7 @@
         return;
       }
       if (currentEngine.injected) {
-        launchPrompt(null, q, ev); // 单引擎直发，沿用当前标签跳转语义
+        launchPrompt(null, q, ev); // single engine: keep the same-tab navigation semantics
         return;
       }
       if (!currentEngine.copyOnly) {
@@ -466,20 +481,22 @@
     openResult(u, ev);
   }
 
-  // ---------- AI 发射（v1.8）：nonce 传递通道 + 多目标并发 ----------
-  // 传递链路：newtab 把 prompt 写入 lt.pending.<nonce>（TTL 30 分钟）→ URL 只带 lt_k=<nonce>
-  // → 目标站 content script（inject-ai.js）读扩展 storage 取词 → 发送后清 URL。
-  // 不设"读后即删"：多目标并发共用一个 nonce，删了会互相踩；防重放靠发送后清 URL + 启动时清理过期孤儿。
+  // ---------- AI launch: nonce channel + concurrent multi-target ----------
+  // Flow: newtab writes the prompt to lt.pending.<nonce> (TTL 30 min) -> the URL only carries lt_k=<nonce>
+  // -> the content script on the target site (inject-ai.js) reads it back from extension storage
+  // -> the URL is cleaned after sending. Deliberately NOT read-once: concurrent targets share one
+  // nonce, so deleting on read would break siblings. Replay protection is the post-send URL cleanup
+  // plus the TTL orphan sweep on boot.
   function sweepPending() {
     const now = Date.now();
     const drop = [];
-    // raw 可能已是对象（chrome.storage 反序列化结果）也可能是 JSON 字符串（localStorage）
+    // raw may already be an object (chrome.storage deserializes for us) or a JSON string (localStorage).
     const collect = (pairs) => {
       for (const [k, raw] of pairs) {
         try {
           const rec = typeof raw === 'string' ? JSON.parse(raw) : raw;
           if (!rec || typeof rec.p !== 'string' || (now - (rec.t || 0)) > PENDING_TTL) drop.push(k);
-        } catch (_) { drop.push(k); } // 结构损坏的残留一并清掉
+        } catch (_) { drop.push(k); } // structurally corrupted leftovers get swept too
       }
     };
     if (hasChromeStorage) {
@@ -505,17 +522,17 @@
       else localStorage.setItem(PENDING_PREFIX + nonce, JSON.stringify({ p: promptText, t: Date.now() }));
       return nonce;
     } catch (err) {
-      console.warn('[LightTab] 写 pending 失败，退回明文 URL', err);
+      console.warn('[LightTab] failed to write pending, falling back to a plaintext URL', err);
       return null;
     }
   }
-  // 注入型引擎 URL：扩展模式带 nonce（不落明文）；无 storage 时退回 ?q= 明文（预览模式）
+  // URL for injected engines: extension mode carries a nonce (no plaintext); without storage it falls back to a plaintext ?q= (preview mode).
   function injectedUrl(e, text, nonce) {
     if (!e || !e.url) return null;
     if (nonce) return e.url + '?lt_auto=1&lt_k=' + encodeURIComponent(nonce);
     return e.url + '?q=' + encodeURIComponent(text) + '&lt_auto=1';
   }
-  // WorkBuddy 深链：prompt 预填 + 可选附加参数（expertId/model/mode/cwd）；官方对 prompt 有长度上限
+  // WorkBuddy deep link: pre-filled prompt + optional extra params (expertId/model/mode/cwd). The official protocol caps prompt length.
   function deepLinkUrl(e, text, wb) {
     const cap = String(text || '').slice(0, 7500);
     let u = (e.url || '').replace('{q}', encodeURIComponent(cap));
@@ -529,8 +546,8 @@
     }
     return u;
   }
-  // 发射入口：tpl 为模板对象（含 tmpl/targets/wb）或 null（= 当前引擎直发 content）
-  // 深链目标（workbuddy://）必须留在用户手势内同步 window.open，先发；网页目标走 storage nonce + 并发开标签
+  // Launch entry point: tpl is a template object (tmpl/targets/wb), or null to send the content straight to the current engine.
+  // Deep-link targets (workbuddy://) must call window.open synchronously inside the user gesture, so they go first; web targets then use the storage nonce and open concurrently.
   async function launchPrompt(tpl, content, ev) {
     let text;
     if (tpl) {
@@ -554,7 +571,7 @@
     if (webs.length) {
       const nonce = hasChromeStorage ? await putPending(text) : null;
       if (webs.length === 1) {
-        // 单目标：沿用 openResult 语义（当前标签内跳转 / ⌘ 新标签）
+        // Single target: keep openResult semantics (same tab, or new tab with Cmd/Ctrl).
         const u = injectedUrl(webs[0], text, nonce);
         if (u) { openResult(u, ev); webN++; }
       } else {
@@ -582,7 +599,7 @@
     clearActiveTemplate();
   }
 
-  // ---------- 发射动效签名：星火飞散（LightTab 视觉识别符） ----------
+  // ---------- Launch animation signature: scattering sparks (the LightTab visual signature) ----------
   function sparkFx() {
     const anchor = document.getElementById('search');
     if (!anchor) return;
@@ -606,12 +623,12 @@
     }
   }
 
-  // ---------- Prompt 模板 UI：选中态 / / 调色板 ----------
+  // ---------- Prompt template UI: active chip + the "/" palette ----------
   function clearActiveTemplate() {
     activePrompt = null;
     const chip = document.getElementById('tpl-chip');
     if (chip) chip.hidden = true;
-    setEngine(currentEngine.id); // 恢复默认占位文案
+    setEngine(currentEngine.id); // restore the default placeholder text
     const q = document.getElementById('q');
     if (q) q.value = '';
   }
@@ -635,7 +652,7 @@
   function chooseTemplate(p) {
     if (!p) return;
     closePalette(false);
-    // 无 {q} 插槽 = 固定指令模板：选中即发射，不需要用户再输入
+    // No {q} slot = fixed-command template: it fires on selection, no further input needed.
     if (p.tmpl.indexOf('{q}') === -1) { launchPrompt(p, ''); return; }
     activePrompt = p;
     renderTemplateChip(p);
@@ -644,14 +661,14 @@
     q.value = '';
     q.focus();
   }
-  // 调色板：/ 唤起，过滤 + 键盘选择
+  // Palette: opened with "/", supports filtering and keyboard selection.
   let palItems = [], palIdx = 0;
   function paletteRows() {
     const inp = document.getElementById('palette-q');
     const kw = (inp ? inp.value : '').trim().toLowerCase();
     const src = state.prompts.filter(p => p && typeof p.tmpl === 'string');
     if (!kw) {
-      // 无关键词：最近使用过的浮顶（lastUsedAt 降序，稳定排序保证未用过的保持原序）
+      // No query: recently used float to the top (lastUsedAt desc; the sort is stable so unused ones keep their original order).
       return src.slice().sort((a, b) => (b.lastUsedAt || 0) - (a.lastUsedAt || 0));
     }
     return src.filter(p =>
@@ -718,7 +735,7 @@
       if (p.hidden) openPalette(); else closePalette();
     });
   }
-  // 模板管理（设置 → 模板）：行列表 + 内联编辑器
+  // Template manager (Settings -> Templates): row list + inline editor.
   let promptEditingId = null;
   async function savePrompts() {
     await Store.set(K.prompts, state.prompts);
@@ -836,8 +853,8 @@
     showToast(t(id === 'new' ? 'toast.prompt_added' : 'toast.prompt_saved'));
   }
 
-  // ---------- 图标网格 ----------
-  // 快捷方式是否属于当前视图（全部 / 未分组 / 指定分组）
+  // ---------- Icon grid ----------
+  // Whether a shortcut belongs to the current view (all / ungrouped / a specific group).
   function inView(it) {
     if (state.view === VIEW_ALL) return true;
     if (state.view === VIEW_NONE) return !(it.group || '');
@@ -855,19 +872,19 @@
     }
     grid.innerHTML = list.map(it => cardHtml(it)).join('');
     bindCardEvents();
-    // 画布模式：渲染后立即把 (col, row) 应用到卡片上，并补上新卡的初始坐标
+    // Canvas mode: right after rendering, apply (col, row) to the cards and assign coordinates to any new ones.
     if (canvasRoot() && canvasRoot().classList.contains('canvas') && canvasEligible()) {
       applyCardCanvas();
     }
   }
-  // ---------- 图标渲染（全本地，零网络请求） ----------
-  // 匹配链：完整 host → 剥 www host → 收录品牌主域尾缀（如 zh.wikipedia.org → wikipedia.org 未收录则跳过）
-  // → 品牌色文字块兜底。ICONDB 见 js/icondb.js（simple-icons CC0 品牌 path + 品牌色）
+  // ---------- Icon rendering (fully local, zero network requests) ----------
+  // Match chain: full host -> host without "www." -> known brand apex-domain suffix
+  // -> otherwise a brand-coloured letter tile. See js/icondb.js (simple-icons CC0 paths + brand colours).
   const iconCache = new Map(); // hostname → icon | null
   function iconFor(url) {
     let host = hostnameOf(url);
     if (!host) return null;
-    // ICONDB 运行期只读，按 hostname 缓存匹配结果，避免每次渲染全表扫后缀
+    // ICONDB is read-only at runtime, so cache lookups per hostname instead of scanning every suffix on each render.
     if (iconCache.has(host)) return iconCache.get(host);
     const I = window.LT_ICONDB || {};
     let res = I[host] || null;
@@ -887,7 +904,7 @@
     const bg = icon ? icon.c : (it.color || pickColor(host));
     const ink = inkOn(bg);
     const safeTitle = escapeHtml(it.title);
-    // 文字兜底：中文标题取首字，否则取主机名首字母（大写）
+    // Letter fallback: CJK titles use their first character, otherwise the first letter of the hostname, uppercased.
     let letter = (it.title || '').trim().charAt(0);
     if (!/[\u4e00-\u9fa5]/.test(letter)) {
       const h = hostnameOf(it.url);
@@ -937,7 +954,7 @@
     let dragId = null;
     document.querySelectorAll('#grid a.card').forEach(a => {
       a.addEventListener('dragstart', e => {
-        // 链接拖到地址栏也会打开 → 屏蔽默认链接拖拽影响视觉
+        // Dragging a link onto the address bar would open it, so suppress the default link-drag visuals.
         if (e.target.closest('.card-actions')) { e.preventDefault(); return; }
         dragId = a.dataset.id;
         a.classList.add('dragging');
@@ -960,9 +977,9 @@
         e.preventDefault();
         if (!dragId || dragId === a.dataset.id) return;
         const rect = a.getBoundingClientRect();
-        // 网格为横向多列布局：按水平中点判断插入目标卡片之前还是之后
+        // The grid flows horizontally across columns, so use the horizontal midpoint to pick insert-before vs insert-after.
         const before = (e.clientX - rect.left) < rect.width / 2;
-        // 拖拽只在「当前视图可见」的卡片间发生：先对可见子集重排
+        // Reordering only happens between cards visible in the current view, so reorder the visible subset first.
         const scope = state.items.filter(inView);
         const fromIdx = scope.findIndex(x => x.id === dragId);
         const toIdx0 = scope.findIndex(x => x.id === a.dataset.id);
@@ -972,10 +989,10 @@
         if (!before) toIdx += 1;
         scope.splice(toIdx, 0, moved);
         if (state.view === VIEW_ALL) {
-          // 全部视图：可见子集即全集，直接写回
+          // "All" view: the visible subset is the whole set, so write it straight back.
           state.items = scope;
         } else {
-          // 分组/未分组视图：把可见槽位按新顺序重排，隐藏项锚定原位置不动
+          // Group / ungrouped view: rewrite the visible slots in the new order and leave hidden items anchored in place.
           let k = 0;
           state.items = state.items.map(it => inView(it) ? scope[k++] : it);
         }
@@ -991,7 +1008,7 @@
     const removed = state.items.splice(idx, 1)[0];
     await Store.set(K.items, state.items);
     syncUI();
-    // 撤销：闭包各自绑定删除时刻的 item 与索引，互不覆盖（连删多次也能各自正确恢复原位）
+    // Undo: each closure captures the item and index at deletion time, so repeated deletes each restore correctly.
     showToast(t('toast.deleted'), t('toast.undo'), async () => {
       state.items.splice(Math.min(idx, state.items.length), 0, removed);
       await Store.set(K.items, state.items);
@@ -999,7 +1016,7 @@
     }, 5000);
   }
 
-  // ---------- 右键菜单 ----------
+  // ---------- Context menu ----------
   let menuEl;
   function openContextMenu(x, y, items) {
     if (!menuEl) menuEl = document.getElementById('context-menu');
@@ -1030,8 +1047,8 @@
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeContextMenu(); });
 
-  // ---------- 弹窗（站点） ----------
-  // 分组下拉：无分组时整行隐藏；有分组时选中「编辑项的归属 / 当前视图分组」
+  // ---------- Modal (shortcut) ----------
+  // Group dropdown: the whole row hides when there are no groups; otherwise it preselects the item's own group or the current view's group.
   function fillGroupSelect(sel) {
     sel.innerHTML = `<option value="">${t('group.ungrouped')}</option>` +
       state.settings.groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
@@ -1057,7 +1074,7 @@
     }
     if (!row.hidden) {
       fillGroupSelect(sel);
-      // 预选：编辑→沿用原分组；新增→若当前正查看某分组则归入该组，否则未分组
+      // Preselect: editing keeps the original group; adding uses the currently viewed group, or ungrouped.
       let cur = '';
       if (id) {
         cur = (state.items.find(x => x.id === id) || {}).group || '';
@@ -1094,8 +1111,8 @@
     });
   }
 
-  // ---------- 分组 ----------
-  // 网格 + 分组栏统一刷新（增删改拖后调用）
+  // ---------- Groups ----------
+  // Refresh grid and group bar together (called after any add / edit / delete / drag).
   function syncUI() {
     renderGrid();
     renderGroupBar();
@@ -1103,9 +1120,9 @@
   function groupCount(fn) { return state.items.filter(fn).length; }
   function renderGroupBar() {
     const bar = document.getElementById('group-bar');
-    bar.hidden = false; // 分组栏常驻可见（无分组时仅保留「＋ 新建分组」入口）
+    bar.hidden = false; // the group bar is always visible (with no groups it only shows the "new group" entry)
     const gs = state.settings.groups;
-    // 无分组：仅保留「＋ 新建分组」入口（保证第一个分组可达）
+    // No groups yet: keep only the "new group" entry so the first group is always reachable.
     if (!gs.length) {
       bar.innerHTML = `<button type="button" class="gchip add" data-g="add">${t('group.new')}</button>`;
       return;
@@ -1123,7 +1140,7 @@
     }
     bar.innerHTML = html;
   }
-  // 分组栏交互：事件委托一次绑定（重渲染不重复）
+  // Group bar interaction: bound once via event delegation (re-renders do not rebind).
   function bindGroupBar() {
     const bar = document.getElementById('group-bar');
     bar.addEventListener('click', async e => {
@@ -1138,7 +1155,7 @@
     });
     bar.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.target.blur(); } });
   }
-  // ＋ 新建分组：chip 就地变成输入框，回车确认 / Esc 取消 / 失焦提交
+  // New group: the chip turns into an inline input - Enter confirms, Esc cancels, blur submits.
   function startAddGroup(btn) {
     const input = document.createElement('input');
     input.className = 'gchip-input';
@@ -1160,7 +1177,7 @@
       }
       state.settings.groups.push({ id: nid(), name });
       await Store.set(K.settings, state.settings);
-      // 建组后直接进入该组视图，方便立刻往里加
+      // Jump straight into the new group so items can be added to it right away.
       state.view = state.settings.groups[state.settings.groups.length - 1].id;
       syncUI();
     };
@@ -1170,7 +1187,7 @@
     });
     input.addEventListener('blur', commit);
   }
-  // 删除分组：组内快捷方式移到「未分组」，数据不丢
+  // Delete a group: its shortcuts move to "ungrouped" - no data is lost.
   async function deleteGroup(id) {
     const g = state.settings.groups.find(x => x.id === id);
     if (!g) return;
@@ -1185,7 +1202,7 @@
     showToast(t('toast.group_deleted', { name: g.name }));
   }
 
-  // ---------- 数据导出 / 导入 ----------
+  // ---------- Data export / import ----------
   function exportPayload() {
     return {
       app: 'LightTab',
@@ -1214,7 +1231,7 @@
       setTimeout(() => URL.revokeObjectURL(url), 5000);
       showToast(t('toast.export_ok'));
     } catch (err) {
-      console.warn('[LightTab] 导出失败', err);
+      console.warn('[LightTab] export failed', err);
       showToast(t('toast.export_fail'));
     }
   }
@@ -1233,7 +1250,7 @@
       prompts: data.prompts,
       schema: data.schema || 1
     });
-    // 导入字段逐一校验兜底，保证任意来源的 JSON 都不会打崩页面
+    // Validate every imported field so JSON from any source can never break the page.
     state.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), migrated.settings || {});
     if (!ENGINES.some(x => x.id === state.settings.engine)) state.settings.engine = 'baidu';
     if (!Array.isArray(state.settings.groups)) state.settings.groups = [];
@@ -1248,7 +1265,7 @@
     state.todos = Array.isArray(migrated.todos)
       ? migrated.todos.filter(it => it && typeof it.text === 'string').map(it => ({ id: it.id || nid(), text: it.text, done: !!it.done }))
       : [];
-    // 模板：逐条校验（tmpl 必须字符串；targets 只保留已知引擎），坏项剔除
+    // Templates: validate one by one (tmpl must be a string; targets keep only known engines) and drop bad entries.
     const validTarget = id => ENGINES.some(x => x.id === id);
     state.prompts = Array.isArray(migrated.prompts)
       ? migrated.prompts
@@ -1271,22 +1288,23 @@
     Store.set(K.schema, SCHEMA_VERSION);
     applyWallpaper(state.wallpaper);
     setEngine(state.settings.engine);
-    startClock(); // 刷新问候/名字（时钟文本按小时节流，导入跨小时段必须强制刷新）
+    startClock(); // refresh greeting/name (clock text is throttled per hour, so an import must force a redraw)
     document.getElementById('modal-set').hidden = true;
     syncUI();
     renderTodos();
     showToast(t('toast.import_done', { items: state.items.length, todos: state.todos.length }));
-    reinitCanvas(); // 导入可能带入/清空 layout 坐标，重新同步画布
+    reinitCanvas(); // an import may bring in or clear layout coordinates, so resync the canvas
   }
-  // 从书签导入：走 optional_permissions（bookmarks），首次点击时请求授权
+  // Import from bookmarks: uses the optional "bookmarks" permission, requested on first click.
   async function importBookmarks() {
-    // 仅判断预览模式（无扩展 API）；chrome.bookmarks 未授权时本就不存在，走下方权限请求分支
+    // Only detect preview mode (no extension APIs here). chrome.bookmarks simply does not exist until the
+    // permission is granted, which is handled by the request branch below.
     if (!window.chrome || !chrome.permissions) {
       showToast(t('toast.bookmarks_unavailable'));
       return;
     }
     let granted = true;
-    // 已授权时 chrome.bookmarks 存在；未授权先请求（用户手势内发起）
+    // chrome.bookmarks exists once granted; otherwise request it first, inside the user gesture.
     if (!chrome.bookmarks) {
       try { granted = await chrome.permissions.request({ permissions: ['bookmarks'] }); } catch { granted = false; }
     }
@@ -1321,7 +1339,7 @@
     showToast(t('toast.bookmarks_done', { n: hits.length }) + (dup ? t('toast.bookmarks_dup_suffix', { n: dup }) : '') + (targetGroup ? t('toast.bookmarks_group') : ''));
   }
 
-  // ---------- 弹窗（设置 / 壁纸） ----------
+  // ---------- Modal (settings / wallpaper) ----------
   function bindSettings() {
     const modal = document.getElementById('modal-set');
     const tabs = modal.querySelectorAll('.tab');
@@ -1333,7 +1351,7 @@
       tabs.forEach(x => x.classList.toggle('active', x === tb));
       const key = tb.dataset.tab;
       panes.forEach(p => p.hidden = p.dataset.pane !== key);
-      if (key === 'prompt') renderPromptManager(); // 每次进入模板页同步最新数据
+      if (key === 'prompt') renderPromptManager(); // re-sync on every visit to the Templates pane
     }));
     document.getElementById('f-upload').addEventListener('change', onUpload);
     document.getElementById('btn-reset-wall').addEventListener('click', () => {
@@ -1343,7 +1361,7 @@
     });
     document.getElementById('btn-wall-fetch').addEventListener('click', fetchWallLib);
     document.getElementById('btn-reset-all').addEventListener('click', resetAll);
-    // 模板管理（设置 → 模板）：＋ 新建
+    // Template manager (Settings -> Templates): the "new template" button.
     document.getElementById('btn-prompt-add').addEventListener('click', () => {
       promptEditingId = promptEditingId === 'new' ? null : 'new';
       renderPromptManager();
@@ -1351,7 +1369,7 @@
       if (ed) { ed.scrollIntoView({ block: 'nearest' }); ed.querySelector('.pe-name').focus(); }
     });
 
-    // 数据管理：导出 JSON / 导入 JSON / 从书签导入（书签走 optional_permissions，点击时请求授权）
+    // Data management: export JSON / import JSON / import from bookmarks (optional permission, requested on click).
     document.getElementById('btn-export').addEventListener('click', doExport);
     const fImport = document.getElementById('f-import');
     document.getElementById('btn-import').addEventListener('click', () => fImport.click());
@@ -1362,7 +1380,7 @@
     });
     document.getElementById('btn-import-bookmarks').addEventListener('click', importBookmarks);
 
-    // 常规
+    // General
     const nameInput = document.getElementById('f-name');
     const engineSel = document.getElementById('f-engine');
     const langSel = document.getElementById('f-lang');
@@ -1397,7 +1415,7 @@
       modal.hidden = false;
     }
   }
-  // ---------- 云同步设置面板 ----------
+  // ---------- Cloud sync settings panel ----------
   function syncStatusText(st) {
     switch (st.status) {
       case 'syncing': return t('sync.status.syncing');
@@ -1473,10 +1491,10 @@
         btn.disabled = false;
         if (!r.ok) {
           if (r.verifyPending) {
-            renderSyncPanel();  // 待验证态：邮箱预填 + 重发按钮
+            renderSyncPanel();  // pending-verification state: email pre-filled + resend button
             syncShowErr(t(r.error));
           } else {
-            syncShowErr(t(r.error));  // 保留输入，仅提示错误
+            syncShowErr(t(r.error));  // keep the input, just surface the error
           }
           return;
         }
@@ -1519,10 +1537,10 @@
     const dataUrl = await compressImage(f, 2560, 0.82);
     const light = await isLightImage(dataUrl);
     await setWallpaper({ type: 'image', value: dataUrl, light });
-    renderSwatches(); // 重渲染即带 active 态，无需手动清 class 或重开弹窗
+    renderSwatches(); // a re-render already carries the active state - no manual class clearing, no reopening the modal
     showToast(t('toast.wall_applied'));
   }
-  // 判定图片整体亮度（缩略采样），浅色图用于加深遮罩
+  // Estimate overall image brightness (downsampled); light images get a stronger scrim.
   function isLightImage(dataUrl) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -1569,7 +1587,7 @@
   }
 
   // ---------- Toast ----------
-  let toastTimer = 0; // 上一个 toast 的自动隐藏计时器，新 toast 出现时取消，避免旧计时器提前关掉新提示
+  let toastTimer = 0; // auto-hide timer of the previous toast; cancelled by the next one so an old timer cannot close a new message
   function showToast(text, actionLabel, action, ttl) {
     const box = document.getElementById('toast');
     box.innerHTML = `<span>${escapeHtml(text)}</span>` +
@@ -1604,7 +1622,7 @@
     showToast(t('toast.copied'));
   }
 
-  // ---------- 待办 widget ----------
+  // ---------- To-do widget ----------
   function renderTodos() {
     const list = document.getElementById('todo-list');
     const countEl = document.getElementById('todo-count');
@@ -1654,8 +1672,8 @@
     renderTodos();
   }
 
-  // ---------- 日历 widget（纯本地月历，含农历日；零网络请求） ----------
-  const calCursor = { y: 0, m: 0 }; // 当前显示年月；0 表示跟随今天
+  // ---------- Calendar widget (fully local month view with lunar days; zero network) ----------
+  const calCursor = { y: 0, m: 0 }; // currently displayed year/month; 0 = follow today
   function renderCalendar() {
     const title = document.getElementById('cal-title');
     const grid = document.getElementById('cal-grid');
@@ -1664,7 +1682,7 @@
     if (!calCursor.y) { calCursor.y = now.getFullYear(); calCursor.m = now.getMonth() + 1; }
     const y = calCursor.y, m = calCursor.m;
     title.textContent = isEn() ? `${EN_MONTHS[m - 1]} ${y}` : `${y}年${m}月`;
-    const startDow = new Date(y, m - 1, 1).getDay(); // 0=周日
+    const startDow = new Date(y, m - 1, 1).getDay(); // 0 = Sunday
     const daysInMonth = new Date(y, m, 0).getDate();
     const isThisMonth = y === now.getFullYear() && m === now.getMonth() + 1;
     const cells = [];
@@ -1689,7 +1707,7 @@
     next.addEventListener('click', () => { calCursor.m++; if (calCursor.m > 12) { calCursor.m = 1; calCursor.y++; } renderCalendar(); });
   }
 
-  // ---------- 重置 ----------
+  // ---------- Reset ----------
   async function resetAll() {
     if (!confirm(t('toast.reset_confirm'))) return;
     state.settings = structuredClone(DEFAULT_SETTINGS);
@@ -1711,13 +1729,13 @@
     renderTodos();
     document.getElementById('modal-set').hidden = true;
     showToast(t('toast.reset_done'));
-    reinitCanvas(); // 重置清空 layout 坐标，回到默认画布
+    reinitCanvas(); // reset clears layout coordinates, back to the default canvas
   }
 
-  // ---------- Schema 迁移 ----------
-  // 结构变更流程：SCHEMA_VERSION +1 → 在 MIGRATIONS 补 from:升一版的迁移函数 → 老数据读取时自动逐级迁移
+  // ---------- Schema migrations ----------
+  // Procedure for a structural change: bump SCHEMA_VERSION, add a single-step function to MIGRATIONS, and old data upgrades level by level on read.
   const MIGRATIONS = {
-    // v1 → v2：分组（settings.groups 数组 + 每个快捷方式 group 字段，默认空串=未分组）
+    // v1 -> v2: groups (a settings.groups array plus a group field on every shortcut; empty string = ungrouped).
     1: (d) => {
       const s = d.settings || {};
       if (!Array.isArray(s.groups)) s.groups = [];
@@ -1729,7 +1747,7 @@
       });
       return d;
     },
-    // v2 → v3：Prompt 模板库（lt.prompts）。老用户缺省注入内置模板集；空数组视为用户已清空，不重复注入
+    // v2 -> v3: prompt library (lt.prompts). Existing users get the built-in set injected; an empty array means the user cleared it, so do not re-inject.
     2: (d) => {
       if (d.prompts == null) d.prompts = DEFAULT_PROMPTS.map(p => ({ ...p, id: nid() }));
       return d;
@@ -1746,13 +1764,13 @@
       v++;
     }
     if (v < SCHEMA_VERSION) {
-      console.warn('[LightTab] 数据迁移中断于 schema', v, '/', SCHEMA_VERSION);
+      console.warn('[LightTab] migration stalled at schema', v, '/', SCHEMA_VERSION);
     }
     cur.schema = SCHEMA_VERSION;
     return cur;
   }
 
-  // 从持久层读数据 → 迁移 → 填充内存 state（纯读，不写 storage；云同步拉取覆盖后复用）
+  // Read storage -> migrate -> populate in-memory state. Read-only (never writes); also reused after a cloud-sync pull.
   async function loadDataIntoState() {
     const raw = await Store.getAll();
     const data = migrateSchema(raw);
@@ -1760,13 +1778,14 @@
     state.items = (data.items && data.items.length) ? data.items : structuredClone(DEFAULT_SITES);
     state.wallpaper = pickWallpaperFromData(data.wallpaper);
     state.todos = Array.isArray(data.todos) ? data.todos : [];
-    // 模板：空数组合法（用户全删过），undefined 才兜底默认集（首次运行或 v2 迁移已由 MIGRATIONS[2] 注入）
+    // Templates: an empty array is legitimate (the user deleted them all); only undefined falls back to the default set.
     state.prompts = Array.isArray(data.prompts) ? data.prompts : structuredClone(DEFAULT_PROMPTS);
     return { raw, data };
   }
 
-  // 云同步拉取覆盖本地后：刷新内存 state + 重渲染数据型 UI（不重绑事件），并提示一次
-  // （sync.js 仅在实际有远端覆盖时调用 remoteApply，轮询空转不会弹）
+  // After a cloud pull overwrites local data: refresh in-memory state, re-render data-driven UI without
+  // rebinding events, and surface a single toast.
+  // (sync.js only calls remoteApply when something was actually overwritten, so idle polling stays silent.)
   async function reloadFromStorage() {
     await loadDataIntoState();
     setLangOnly(state.settings.lang);
@@ -1776,7 +1795,7 @@
     syncUI();
     renderTodos();
     renderCalendar();
-    startClock(); // 问候/名字可能被远程更新
+    startClock(); // greeting/name may have been updated remotely
     const nameInput = document.getElementById('f-name');
     if (nameInput) nameInput.value = state.settings.name || '';
     const engineSel = document.getElementById('f-engine');
@@ -1784,7 +1803,7 @@
     showToast(t('sync.applied'));
   }
 
-  // ---------- 自由画布布局（块自由拖拽移动） ----------
+  // ---------- Free canvas layout (draggable blocks) ----------
   const BLOCK_DEFS = [
     { key: 'wclock', sel: '.wclock' },
     { key: 'wcal',   sel: '.wcal' },
@@ -1833,7 +1852,7 @@
     clearCardCanvas();
   }
 
-  // 首次进入画布：测量当前流式视觉位置 → 固化坐标（切换绝对定位零跳变）
+  // First entry into canvas mode: measure the current flow positions and freeze them as coordinates, so switching to absolute positioning causes zero jump.
   function captureLayout() {
     const root = canvasRoot();
     if (!root) return null;
@@ -1847,8 +1866,8 @@
         w: Math.round(r.width)
       };
     }
-    // 卡片格子坐标：首次进入画布时按当前流式视觉位置映射为 (col, row)。
-    // 没有 cells 时（极窄/无卡片），captureCardLayout 会原地返回空对象。
+    // Card grid coordinates: on first entry, map the current flow positions to (col, row).
+    // With no cells (extremely narrow window, or no cards) captureCardLayout returns an empty object.
     layout.cards = captureCardLayout();
     state.settings.layout = layout;
     Store.set(K.settings, state.settings);
@@ -1865,7 +1884,7 @@
       const bottom = r.bottom - rr.top;
       if (bottom > maxBottom) maxBottom = bottom;
     }
-    // 卡片绝对定位在 #grid 内，按 grid-wrap 的底 + 卡片相对底 取最大
+    // Cards are absolutely positioned inside #grid, so take the max of the grid-wrap bottom and each card's bottom.
     const grid = document.getElementById('grid');
     const gridWrap = document.getElementById('grid-wrap');
     if (grid && gridWrap) {
@@ -1876,19 +1895,19 @@
         const bottom = (r.bottom - rr.top);
         if (bottom > maxBottom) maxBottom = bottom;
       }
-      // grid-wrap 自身的底部也要算（防止没有任何卡片但 grid-wrap 有自定义高度）
+      // Count grid-wrap's own bottom too (covers having no cards but a custom grid-wrap height).
       const gwb = gw.bottom - rr.top;
       if (gwb > maxBottom) maxBottom = gwb;
     }
     root.style.height = (maxBottom + 90) + 'px';
   }
 
-  // ---------- 画布模式：卡片格子自由拖拽 + 自动对齐 ----------
-  // 卡片在画布模式下使用绝对定位，按 (col, row) 网格坐标存储在 layout.cards[id]。
-  // 网格尺寸根据 #grid 容器宽度动态计算（与 CSS repeat(auto-fill, minmax(118px, 1fr)) 保持一致）。
+  // ---------- Canvas mode: free card dragging with snap-to-grid ----------
+  // In canvas mode cards are absolutely positioned; their (col, row) grid coordinates live in layout.cards[id].
+  // Cell size is derived from the #grid container width, matching the CSS repeat(auto-fill, minmax(118px, 1fr)).
   const CARD_MIN_W = 118;
   const CARD_GAP = 13;
-  const CARD_GRID_PADDING = 0; // grid 自身无 padding
+  const CARD_GRID_PADDING = 0; // #grid itself has no padding
 
   function getCardLayout() {
     const l = getLayout();
@@ -1900,18 +1919,18 @@
     l.cards = map;
   }
 
-  // 计算当前 grid 可容纳的最大列数（与 CSS auto-fill 一致：floor((W + gap) / (minW + gap))）
+  // Max column count the grid can hold, matching CSS auto-fill: floor((W + gap) / (minW + gap)).
   function getCardCols(gridW) {
     return Math.max(1, Math.floor((gridW + CARD_GAP) / (CARD_MIN_W + CARD_GAP)));
   }
-  // 单列轨道宽度（auto-fill 下 1fr 均分剩余空间），与 CSS 网格实际分配的列宽一致
+  // Single track width (under auto-fill, 1fr splits the remaining space evenly) - matches the real CSS column width.
   function getCardTrackW(gridW) {
     const cols = getCardCols(gridW);
     return (gridW - (cols - 1) * CARD_GAP) / cols;
   }
 
-  // 单元格尺寸：列宽由容器宽度推导（绝对定位后卡片会收缩成内容宽，不能再用 offsetWidth 测量），
-  // 行高用首卡内容高（卡片高度由内容决定，绝对定位不影响）。
+  // Cell size: column width is derived from the container width, because once cards are absolutely positioned
+  // they shrink to their content width and offsetWidth is useless. Row height comes from the first card (height is content-driven, unaffected by positioning).
   function getCardCellSize() {
     const grid = document.getElementById('grid');
     if (!grid) return null;
@@ -1924,7 +1943,7 @@
     return { cardW, cardH, stepX: cardW + CARD_GAP, stepY: cardH + CARD_GAP };
   }
 
-  // 把当前可见卡片在 #grid 内的视觉位置（行/列）映射回 (col, row)，并保存
+  // Map each visible card's visual row/column inside #grid back to (col, row) and persist it.
   function captureCardLayout() {
     const grid = document.getElementById('grid');
     if (!grid) return {};
@@ -1943,7 +1962,7 @@
     return map;
   }
 
-  // 首次进入画布或缺少某些卡片坐标时，按可见顺序分配 (col, row)
+  // On first canvas entry, or when some cards lack coordinates, assign (col, row) in visible order.
   function assignInitialCardLayout() {
     const grid = document.getElementById('grid');
     if (!grid) return {};
@@ -1952,7 +1971,7 @@
     const visible = Array.from(grid.querySelectorAll('.card'));
     const cols = getCardCols(grid.clientWidth);
     const map = getCardLayout();
-    // 已存在的坐标标为占用，缺失的从第一个空格起逐列逐行顺次补
+    // Existing coordinates are marked occupied; missing ones take the first free cell, scanning column by column then row by row.
     const occupied = new Set();
     for (const id in map) {
       const p = map[id];
@@ -1979,7 +1998,7 @@
     return map;
   }
 
-  // 把 layout.cards 应用到 DOM（仅画布模式可见的卡片）
+  // Apply layout.cards to the DOM (only for cards visible in canvas mode).
   function applyCardCanvas() {
     const grid = document.getElementById('grid');
     if (!grid) return;
@@ -1994,7 +2013,7 @@
       c.style.width = cell.cardW + 'px';
       c.style.left = (p.col * cell.stepX) + 'px';
       c.style.top = (p.row * cell.stepY) + 'px';
-      // 画布模式下禁用 HTML5 拖拽（避免和指针拖拽冲突、避免拖到地址栏打开）
+      // Disable HTML5 drag in canvas mode: it fights pointer dragging and could open the link via the address bar.
       c.setAttribute('draggable', 'false');
     }
     injectCardDragHandles();
@@ -2011,7 +2030,7 @@
     }
   }
 
-  // 为画布模式下的卡片注入小型拖拽手柄（左上角，hover 时浮现）
+  // Inject a small drag handle into canvas-mode cards (top-left, revealed on hover).
   function injectCardDragHandles() {
     const grid = document.getElementById('grid');
     if (!grid) return;
@@ -2026,18 +2045,18 @@
     }
   }
 
-  // 画布模式：卡片指针拖拽 + 自动对齐到最近格 + 与目标格上的卡片自动换位
+  // Canvas mode: pointer-drag a card, snap it to the nearest cell, and swap with whatever card already sits there.
   function bindCardCanvasDrag() {
     const grid = document.getElementById('grid');
     if (!grid) return;
     let active = null;
-    let dragMoved = false; // 本次按下是否已判定为拖拽（用于在随后的 click 里抑制误打开链接）
+    let dragMoved = false; // whether this press turned into a drag (used to suppress the follow-up click)
 
     function onPointerDown(e) {
       if (!canvasEligible() || e.button !== 0) return;
       const card = e.target.closest('.card');
       if (!card) return;
-      // 仅编辑/删除按钮不参与拖拽（保留点击）；图标/标题/空白均可拖，靠位移阈值区分点击与拖拽
+      // Only the edit/delete buttons opt out of dragging; icon, title and blank space are all draggable - a movement threshold separates click from drag.
       if (e.target.closest('.card-actions')) return;
       const rr = grid.getBoundingClientRect();
       const r = card.getBoundingClientRect();
@@ -2052,7 +2071,7 @@
         moved: false,
         pointerId: e.pointerId
       };
-      // 不立即 preventDefault，让 click 仍能在未拖动时打开链接
+      // Do not preventDefault yet, so a plain click can still open the link.
     }
 
     function onPointerMove(e) {
@@ -2093,7 +2112,7 @@
       const rr = grid.getBoundingClientRect();
       let col = Math.max(0, Math.round((r.left - rr.left) / cell.stepX));
       let row = Math.max(0, Math.round((r.top - rr.top) / cell.stepY));
-      // 与目标格上的其他卡片换位（保持两张卡都不会重叠）
+      // Swap with whatever card occupies the target cell, so neither ends up overlapping.
       const map = getCardLayout();
       let swapId = null;
       for (const otherId in map) {
@@ -2106,12 +2125,12 @@
       }
       map[id] = { col, row };
       setCardLayoutMap(map);
-      // 重渲染所有可见卡片的位置（含被换位的目标）
+      // Re-apply positions for every visible card, including the swapped one.
       applyCardCanvas();
       Store.set(K.settings, state.settings);
     }
 
-    // 拖拽结束时抑制随之而来的 click（避免拖完卡片误打开链接）
+    // Suppress the click that follows a drag, otherwise finishing a drag would open the link.
     function onClickCapture(e) {
       if (!dragMoved) return;
       if (!e.target.closest('.card')) return;
@@ -2149,7 +2168,7 @@
       const handle = e.target.closest('.drag-handle');
       const block = blockEls().find(b => b.el === e.target.closest('.widget, #search, #grid-wrap'));
       if (!block) return;
-      // 非手柄：仅空白区域可拖（交互元素正常点击，不触发拖拽）
+      // Outside the handle: only blank areas start a drag (interactive elements keep normal click behaviour).
       if (!handle && e.target.closest(DRAG_INTERACTIVE)) return;
       e.preventDefault();
       const rr = root.getBoundingClientRect();
@@ -2189,7 +2208,7 @@
       active = null;
       block.el.classList.remove('block-dragging');
       try { block.el.releasePointerCapture(e.pointerId); } catch {}
-      if (!moved) return; // 未超过阈值：视为点击，不写坐标
+      if (!moved) return; // below the threshold: treat as a click and do not persist coordinates
       const l = getLayout();
       if (!l) return;
       const rr = root.getBoundingClientRect();
@@ -2209,7 +2228,7 @@
     root.addEventListener('pointercancel', onPointerUp);
   }
 
-  // 根据当前窗口宽度与 layout 数据，切回流式或进入画布（可重复调用：导入/重置后复用）
+  // Switch between flow and canvas based on window width and layout data (idempotent; reused after import/reset).
   function reinitCanvas() {
     leaveCanvas();
     if (!canvasEligible()) return;
@@ -2223,7 +2242,7 @@
     bindCardCanvasDrag();
 
     if (window.ResizeObserver) {
-      // 多个 observe 目标可能同帧连发回调：用 rAF 合并，避免一帧内重复测量
+      // Several observed targets can fire in the same frame; coalesce with rAF to avoid re-measuring repeatedly.
       let rafId = 0;
       const ro = new ResizeObserver(() => {
         if (rafId) cancelAnimationFrame(rafId);
@@ -2245,7 +2264,7 @@
     reinitCanvas();
   }
 
-  // ---------- 语言切换 ----------
+  // ---------- Language switching ----------
   function setLangOnly(l) {
     const v = (l === 'en') ? 'en' : 'zh';
     if (window.LT_I18N) window.LT_I18N.setLang(v);
@@ -2266,11 +2285,11 @@
     if (window.LT_SYNC) renderSyncPanel();
   }
 
-  // ---------- 启动 ----------
+  // ---------- Boot ----------
   async function boot() {
     const { raw, data } = await loadDataIntoState();
     setLangOnly(state.settings.lang);
-    // 若迁移后版本有变化则回写持久层：schema + 迁移过程中被补齐/改写的各 key（保证磁盘数据与内存一致）
+    // If migration changed the version, write back: schema plus every key the migration filled in or rewrote, keeping disk and memory consistent.
     if ((Number(raw.schema) || 1) !== SCHEMA_VERSION) {
       Store.set(K.schema, SCHEMA_VERSION);
       if (data.settings !== undefined) Store.set(K.settings, data.settings);
@@ -2290,12 +2309,12 @@
     bindCalendar();
     bindTodo();
 
-    // 搜索
+    // Search
     const form = document.getElementById('search-form');
     const qEl = document.getElementById('q');
     form.addEventListener('submit', e => { e.preventDefault(); submitSearch(qEl.value, e); });
     document.getElementById('search-go').addEventListener('click', e => submitSearch(qEl.value, e));
-    // 模板选中态下按 Esc：撤销模板回到普通搜索
+    // Esc while a template is active: drop the template and go back to plain search.
     qEl.addEventListener('keydown', e => {
       if (e.key === 'Escape' && activePrompt) { e.stopPropagation(); clearActiveTemplate(); qEl.focus(); }
     });
@@ -2322,7 +2341,7 @@
       if (!list.hidden && !e.target.closest('#search')) list.hidden = true;
     });
 
-    // 快捷键（焦点在输入类元素时不抢键）
+    // Keyboard shortcuts (never steal keys while focus is in a text-entry element).
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         document.querySelectorAll('.modal').forEach(m => m.hidden = true);
@@ -2335,7 +2354,7 @@
       }
       const typing = isTypingTarget(document.activeElement);
       if (e.key === '/') {
-        // 模板调色板：焦点不在输入区、或在空的搜索框上时按 / 打开（输入框有字则视为普通字符）
+        // Template palette: "/" opens it when focus is outside inputs, or in an empty search box (with text present it is just a character).
         const ae = document.activeElement;
         const emptyQ = ae && ae.id === 'q' && !ae.value;
         const openable = !typing || emptyQ;
@@ -2359,9 +2378,9 @@
     bindSiteForm();
     bindPalette();
     bindSettings();
-    sweepPending(); // 启动即清理过期/损坏的 pending 残留
+    sweepPending(); // sweep expired / corrupted pending leftovers on boot
 
-    // 云同步初始化（放最后：确保上面的迁移回写已落盘、事件已绑定）
+    // Cloud sync init, last: the migration write-back has landed and every event is bound.
     if (window.LT_SYNC) {
       window.LT_SYNC.configure({ remoteApply: reloadFromStorage, onChange: renderSyncPanel });
       bindSyncPanel();
@@ -2369,16 +2388,16 @@
       window.LT_SYNC.init();
     }
 
-    // 浮动添加按钮
+    // Floating add button
     document.getElementById('add-float').addEventListener('click', () => openSiteModal(null));
 
-    // 自由画布布局（块拖拽移动）：最后初始化，确保所有块已渲染
+    // Free canvas layout (draggable blocks): initialised last, once every block has rendered.
     initCanvasLayout();
 
-    // 自检
+    // Self-check
     if (!hasChromeStorage) {
-      // 仅首次给提示
-      // 延迟以免阻塞首屏
+      // Only warn on the first run.
+      // Delay so it does not block first paint.
       setTimeout(() => {
         const tip = document.createElement('div');
         tip.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(20,26,44,.92);color:#fff;padding:8px 14px;border-radius:10px;font-size:12px;z-index:200;border:1px solid rgba(255,255,255,.18)';
@@ -2389,7 +2408,8 @@
     }
   }
 
-  // 纯函数出口（供 scripts/smoke.cjs 离线断言；与 window.LT_LUNAR / window.LT_SYNC 同一风格）
+  // Pure-function exports for the offline assertions in scripts/smoke.cjs
+  // (same convention as window.LT_LUNAR / window.LT_SYNC).
   window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, hostnameOf, iconFor };
 
   if (document.readyState === 'loading') {

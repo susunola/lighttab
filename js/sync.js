@@ -1,14 +1,15 @@
 /* LightTab - sync.js
-   云同步：本地优先 + 整文档 LWW（last-write-wins）。
-   - 未登录时零网络请求，行为与纯本地完全一致
-   - 登录后：本地修改防抖推送，先拉后推；冲突按「本地修改时间 vs 服务器修改时间」LWW
-   - token 存 chrome.storage.local（lt.auth），不参与同步；同步元数据存 lt.syncmeta
-   暴露 window.LT_SYNC，由 app.js 注入 Store 读写适配并订阅状态变化。
+   Cloud sync: local-first with whole-document LWW (last-write-wins).
+   - Zero network requests while logged out; behaviour is identical to pure local mode.
+   - Once logged in: local edits are debounced and pushed, pull first then push; conflicts resolve by LWW
+   (local mtime vs server mtime). The token lives in chrome.storage.local (lt.auth) and is never synced;
+   sync metadata lives in lt.syncmeta. Exposes window.LT_SYNC; app.js injects the Store adapter and subscribes.
 */
 (() => {
   'use strict';
 
-  // 后端地址单一来源：sync.js 先于 app.js 加载（见 newtab.html 的 script 顺序），挂 window 供 app.js 壁纸库复用
+  // Single source of truth for the backend origin. sync.js loads before app.js (see the script order in
+  // newtab.html), so it hangs the value on window for the app.js wallpaper library to reuse.
   if (!window.LT_API_BASE) window.LT_API_BASE = 'https://lighttab.atomwangnus.com';
   const SYNC_BASE = window.LT_API_BASE;
   const SYNC_KEYS = ['lt.settings', 'lt.items', 'lt.wallpaper', 'lt.todos', 'lt.prompts'];
@@ -18,7 +19,7 @@
 
   const hasChromeStorage = !!(window.chrome && chrome.storage && chrome.storage.local);
 
-  // ---------- storage 适配（与 app.js Store 同一套降级语义） ----------
+  // ---------- storage adapter (same fallback semantics as the Store in app.js) ----------
   async function sGet(keys) {
     if (hasChromeStorage) {
       const r = await chrome.storage.local.get(keys);
@@ -40,26 +41,28 @@
     else keys.forEach(k => localStorage.removeItem(k));
   }
 
-  // ---------- 状态 ----------
+  // ---------- State ----------
   const S = {
     auth: null,                              // { token, email, userId } | null
     meta: { lastServerTime: 0, docs: {} },   // docs: { key: { rev, dirtyAt } }
     status: 'idle',                          // idle | syncing | offline | error
     lastSyncAt: 0,
     lastError: '',
-    pendingVerifyEmail: '',                  // 注册后待验证的邮箱（用于「重发/去登录」提示）
-    listeners: [],                           // 状态变化回调（UI 刷新）
-    remoteApply: null,                       // 远程覆盖本地后的 UI 刷新回调
+    pendingVerifyEmail: '',                  // email awaiting verification after signup (drives the resend hint)
+    listeners: [],                           // state-change callbacks (UI refresh)
+    remoteApply: null,                       // callback fired after a remote pull overwrites local data
     timer: 0,
     inFlight: false
   };
 
   function emit() { for (const cb of S.listeners) { try { cb(); } catch {} } }
 
-  // 服务器时间校准：本机时钟可能与服务器有偏差，LWW 比较统一用 nowServer()（本机时钟 + 偏移）。
-  // 偏移来源：响应体 serverTime（毫秒，优先）；缺失时退化到响应头 Date（秒级）。
-  // 局限：忽略 RTT，误差通常在亚秒级——对「整文档、人工操作频率」的 LWW 足够；
-  // 两者都不可用时退化为纯本机时钟（同一台设备自洽，跨设备以服务器 updatedAt 为准）。
+  // Server clock calibration: the local clock can drift from the server, so every LWW comparison goes
+  // through nowServer() (local clock + offset). The offset comes from the serverTime field in the response
+  // body (milliseconds, preferred), falling back to the Date response header (second precision).
+  // Caveat: RTT is ignored, so the error is usually sub-second - fine for whole-document LWW at human
+  // edit frequency. With neither source available it degrades to the raw local clock (self-consistent on
+  // one device; across devices the server updatedAt wins).
   let serverOffset = 0;
   function nowServer() { return Date.now() + serverOffset; }
   function noteServerTime(st) {
@@ -84,7 +87,7 @@
     } catch (e) {
       throw new HttpError(0, 'network unreachable');
     }
-    // 无 serverTime 字段的响应用 Date 头兜底校准时钟（秒级精度，仅作退化方案）
+    // Responses without a serverTime field calibrate off the Date header (second precision, fallback only).
     try {
       const dh = res.headers.get('Date');
       if (dh) { const t = Date.parse(dh); if (Number.isFinite(t)) serverOffset = t - Date.now(); }
@@ -96,12 +99,12 @@
     return data;
   }
 
-  // TODO: 后端改为返回结构化 error code 后按 code 映射；当前用 lowercase 子串匹配，
-  // 容忍后端英文措辞微调（大小写/标点变化不再导致提示退化为英文原文）。
+  // TODO: map by code once the backend returns structured error codes. For now we lowercase and substring-match,
+  // which tolerates small wording changes on the server (case/punctuation tweaks no longer leak raw English through).
   function friendlyAuthError(err) {
     const raw = String(err && err.message || err);
     const m = raw.toLowerCase();
-    // 服务器英文文案 → i18n key（app.js 按当前语言取词）；未知文案原样返回
+    // Server-side English text -> i18n key (app.js resolves it in the current language); unknown text passes through.
     const map = [
       ['invalid email or password', 'sync.err.invalid'],
       ['password must be at least 8 characters', 'sync.err.pass_short'],
@@ -116,7 +119,7 @@
     return raw;
   }
 
-  // ---------- 认证 ----------
+  // ---------- Auth ----------
   async function loadAuth() {
     const r = await sGet([AUTH_KEY]);
     S.auth = r[AUTH_KEY] || null;
@@ -135,23 +138,24 @@
       S.auth = { token: d.token, email: d.user.email, userId: d.user.userId };
       S.pendingVerifyEmail = '';
       await saveAuth();
-      // 首次登录：把本地已有的存量数据全部标 dirty，让首轮 sync 的 push 阶段推上去
-      // （首轮 pull 服务器优先：服务器已有的 key 会覆盖本地并清掉 dirty；服务器没有的 key 在此刻补齐）
+      // First login: mark every existing local document dirty so the push stage of the first sync uploads it.
+      // (The first pull is server-first: keys the server already has overwrite local and clear dirty; keys it
+      // lacks are filled in here.)
       const local = await sGet(SYNC_KEYS);
       const now = nowServer();
       for (const key of SYNC_KEYS) {
-        if (local[key] === undefined) continue;   // 本地从未写入的 key 不推空文档
+        if (local[key] === undefined) continue;   // never push an empty document for a key local has never written
         const meta = S.meta.docs[key] || { rev: 0, dirtyAt: 0 };
         meta.dirtyAt = now;
         S.meta.docs[key] = meta;
       }
       await saveMeta();
       emit();
-      await syncNow(true);   // 登录后立即首轮同步
+      await syncNow(true);   // first full sync right after login
       return { ok: true };
     } catch (err) {
       if (err && err.status === 403) {
-        // 邮箱未验证：提示查收/重发验证邮件
+        // Email not verified yet: prompt the user to check the inbox or resend.
         S.pendingVerifyEmail = email;
         emit();
         return { ok: false, verifyPending: true, error: friendlyAuthError(err) };
@@ -162,7 +166,7 @@
   async function register(email, password) {
     try {
       const d = await request('/auth/register', { method: 'POST', body: { email, password } }, false);
-      // 注册不再直接登录：进入邮箱验证流程
+      // Registering no longer logs you straight in: it enters the email-verification flow.
       S.pendingVerifyEmail = d.email || email;
       emit();
       return { ok: true, verify: true, email: d.email || email };
@@ -191,12 +195,12 @@
     emit();
   }
 
-  // ---------- 本地写入 hook（由 app.js 的 Store.set 调用） ----------
+  // ---------- Local write hook (called from Store.set in app.js) ----------
   function onLocalWrite(key) {
-    if (!S.auth) return;                    // 未登录不追踪
+    if (!S.auth) return;                    // not logged in, nothing to track
     if (!SYNC_KEYS.includes(key)) return;
     if (!S.meta.docs[key]) S.meta.docs[key] = { rev: 0, dirtyAt: 0 };
-    S.meta.docs[key].dirtyAt = nowServer();   // 用校准后的服务器时间标 dirty，避免本机时钟偏差输掉 LWW
+    S.meta.docs[key].dirtyAt = nowServer();   // stamp dirty with calibrated server time so clock drift cannot lose the LWW
     saveMeta();
     scheduleSync();
   }
@@ -206,7 +210,7 @@
     S.timer = setTimeout(() => { S.timer = 0; syncNow(false); }, DEBOUNCE_MS);
   }
 
-  // ---------- 同步主流程（先拉后推） ----------
+  // ---------- Main sync flow (pull, then push) ----------
   async function syncNow(first) {
     if (!S.auth || !S.auth.token) return;
     if (S.inFlight) return;
@@ -223,7 +227,7 @@
       S.status = 'idle';
     } catch (err) {
       if (err && err.status === 401) {
-        // token 过期/失效：静默登出，提示重新登录
+        // Token expired or revoked: log out silently and ask the user to sign in again.
         S.auth = null;
         await saveAuth();
         S.status = 'error';
@@ -240,7 +244,7 @@
     emit();
   }
 
-  // 拉取远端变更写回本地；first 时服务器优先（有 doc 覆盖本地，无 doc 留待 push 推本地）
+  // Pull remote changes into local storage. On the first sync the server wins (an existing doc overwrites
   async function applyPull(pull, first) {
     let changed = false;
     const docs = (pull && pull.docs) || {};
@@ -249,12 +253,12 @@
       if (!doc) continue;
       const meta = S.meta.docs[key] || { rev: 0, dirtyAt: 0 };
       if (!first && meta.dirtyAt && meta.dirtyAt >= doc.updatedAt) {
-        // 本地有更新的未推送修改：本地胜，跳过（push 阶段会覆盖服务器）
+        // Local has newer unpushed edits: local wins, skip (the push stage will overwrite the server).
         meta.rev = doc.rev;
         S.meta.docs[key] = meta;
         continue;
       }
-      // 服务器胜（或首次同步服务器优先）：写回本地
+      // Server wins (or first sync, server-first): write back locally.
       if (doc.payload != null && doc.payload !== '') {
         let val;
         try { val = JSON.parse(doc.payload); } catch { continue; }
@@ -268,7 +272,7 @@
     if (changed && S.remoteApply) { try { await S.remoteApply(); } catch {} }
   }
 
-  // 推送本地 dirty 文档；冲突时按 LWW 决定本地覆盖重推或服务器覆盖
+  // Push locally dirty documents; on conflict, LWW decides whether to re-push over the server or take theirs.
   async function pushDirty() {
     const ops = [];
     for (const key of SYNC_KEYS) {
@@ -287,7 +291,7 @@
       if (res.conflict) {
         const sd = res.serverDoc;
         if (sd && meta.dirtyAt >= sd.updatedAt) {
-          // 本地胜：以 serverDoc.rev 为 baseRev 重推覆盖
+          // Local wins: re-push using serverDoc.rev as the new baseRev.
           const r = await sGet([res.key]);
           const payload = JSON.stringify(r[res.key]);
           const retry = await request('/v1/sync', { method: 'POST', body: { ops: [{ key: res.key, baseRev: sd.rev, payload }] } });
@@ -295,9 +299,9 @@
           if (rr && !rr.conflict && rr.newRev != null) {
             S.meta.docs[res.key] = { rev: rr.newRev, dirtyAt: 0 };
           }
-          // 极端情况重推仍冲突：保留 dirtyAt，下轮再试
+          // Still conflicting after a re-push: keep dirtyAt and retry next round.
         } else if (sd) {
-          // 服务器胜：覆盖本地
+          // Server wins: overwrite local.
           if (sd.payload != null && sd.payload !== '') {
             try { await sSet({ [res.key]: JSON.parse(sd.payload) }); changed = true; } catch {}
           }
@@ -312,7 +316,7 @@
     if (changed && S.remoteApply) { try { await S.remoteApply(); } catch {} }
   }
 
-  // ---------- 对外 API ----------
+  // ---------- Public API ----------
   function getState() {
     return {
       loggedIn: !!(S.auth && S.auth.token),
@@ -334,7 +338,7 @@
       await loadMeta();
       emit();
       if (S.auth && S.auth.token) {
-        // 已有会话：后台静默同步一次（不阻塞首屏）
+        // Existing session: run one silent background sync (must not block first paint).
         syncNow(false);
       }
     },

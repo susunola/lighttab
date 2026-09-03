@@ -1,30 +1,30 @@
 /**
- * LightTab · AI 站点自动搜索注入（豆包 / ChatGPT 通用）
- *（版本号统一由 manifest.json 承载，文件头不再维护）
+ * LightTab - AI site auto-search injection (Doubao / ChatGPT, generic)
+ * (The version number lives solely in manifest.json; file headers no longer track it.)
  *
- * 由 LightTab 打开 <site>/?lt_auto=1&lt_k=<nonce> 时自动执行：
- * 1) 从扩展 storage 读取 lt.pending.<nonce> = { p, t } 取回完整 prompt（明文不落 URL）
- * 2) 等待聊天输入框出现 → 填入文本 → 触发发送（发送按钮优先，回车兜底）
- * 3) 成功后清理 URL 上的 lt_k / lt_auto / q 参数，避免刷新重复发送
+ * Runs automatically when LightTab opens <site>/?lt_auto=1&lt_k=<nonce>:
+ * 1) Read lt.pending.<nonce> = { p, t } from extension storage to recover the full prompt (never in the URL).
+ * 2) Wait for the chat input to appear -> fill in the text -> trigger send (send button first, Enter as fallback).
+ * 3) On success, strip lt_k / lt_auto / q from the URL so a refresh does not resend.
  *
- * 兼容降级：无扩展 storage 时（直接 ?q= 明文方式打开）退回读 URL 的 q 参数。
- * v3 变更：
- *  - 支持 lt_k nonce 通道（多目标并发共用一个 nonce，内容脚本不删除、只读；
- *    防重放靠发送后清 URL + newtab 启动时按 TTL 清理孤儿）
- *  - ?q= 明文仍作为 fallback（预览模式 / storage 不可用）
- * v2 修复（保留）：
- *  - run_at=document_start 注入并立即快照 URL 参数，避免 SPA 提前清掉 search 导致守卫失效
- *  - 输入框识别改为可见性 + 面积优先（ChatGPT 新会话输入框在页面中部）
- *  - 发送按钮识别增加可见性过滤与优先级（data-testid=send-button → aria-label → 类名）
- *  - 填词三路兜底：execCommand insertText → 剪贴板 paste 事件 → 直接赋值
- *  - 发送后轮询输入框清空判定成功；全程 console 分阶段日志便于排查
- * 仅当 URL 带 lt_auto=1 才激活；无网络请求、无数据上传、全程 try/catch。
+ * Graceful degradation: without extension storage (opened with a plaintext ?q=) it reads the q parameter instead.
+ * v3 changes:
+ *  - Adds the lt_k nonce channel. Concurrent targets share one nonce, so the content script only reads
+ *    and never deletes; replay protection is URL cleanup after send + TTL orphan sweeping on newtab boot.
+ *  - Plaintext ?q= remains a fallback (preview mode, or storage unavailable).
+ * v2 fixes (retained):
+ *  - Injected at run_at=document_start and snapshots URL params immediately, so an SPA cannot clear
+ *    the search string before the guard reads it.
+ *  - Input detection now prefers visibility + largest area (ChatGPT puts a new chat's input mid-page).
+ *  - Send-button detection adds a visibility filter and a priority order (data-testid=send-button -> aria-label -> class name).
+ *  - Three fallbacks for filling text: execCommand insertText -> a synthetic clipboard paste event -> direct assignment.
+ *  - After sending, polls until the input clears to confirm success; logs each stage to the console for debugging.
  */
 (() => {
   'use strict';
   const log = (...a) => { try { console.info('[LightTab]', ...a); } catch (_) {} };
 
-  // 立即快照参数（document_start 执行，SPA 尚未接管 URL）
+  // Snapshot the params immediately (we run at document_start, before the SPA takes over the URL).
   const qs = new URLSearchParams(location.search);
   const armed = qs.get('lt_auto') === '1';
   if (!armed) return;
@@ -43,7 +43,7 @@
   ];
   const PENDING_PREFIX = 'lt.pending.';
 
-  /** 从扩展 storage 取 nonce 对应的 prompt（多目标共用，只读不删；读失败返回 null 走 URL 兜底） */
+  /** Read the prompt for this nonce from extension storage (shared across targets: read-only, never deleted; returns null on failure so the URL fallback kicks in). */
   function readPending(nonce) {
     return new Promise((resolve) => {
       try {
@@ -72,13 +72,13 @@
     } catch (_) { /* ignore */ }
   }
 
-  /** 是否在视口内可见（粗判，覆盖 fixed / 常规流） */
+  /** Roughly visible in the viewport (covers fixed and normal flow elements). */
   function isVisible(el) {
     try {
       const st = getComputedStyle(el);
       if (st.display === 'none' || st.visibility === 'hidden') return false;
       const r = el.getBoundingClientRect();
-      if (r.width < 16 || r.height < 8) return false; // 发送按钮常为 28-40px 小图标，阈值不可过严
+      if (r.width < 16 || r.height < 8) return false; // send buttons are often 28-40px icons, so keep the threshold loose
       if (r.bottom < 0 || r.top > window.innerHeight) return false;
       return true;
     } catch (_) {
@@ -86,7 +86,7 @@
     }
   }
 
-  /** 找可见聊天输入框：可见性过滤 + 面积降序（ChatGPT 居中大框 / 豆包底部框都能命中） */
+  /** Find the visible chat input: filter by visibility, then take the largest area (matches ChatGPT's centred box and Doubao's bottom bar). */
   function pickInput() {
     let best = null, bestArea = 0;
     for (const sel of INPUT_SELECTORS) {
@@ -101,7 +101,7 @@
     return best;
   }
 
-  /** 找发送按钮：data-testid=send-button > aria-label(中英) > 类名；全部要求可见且可用 */
+  /** Find the send button: data-testid=send-button > aria-label (English or Chinese) > class name. All must be visible and enabled. */
   function findSendBtn() {
     const cands = document.querySelectorAll('button, [role="button"], [data-testid]');
     let fallback = null;
@@ -112,10 +112,10 @@
       const label = (b.getAttribute && (b.getAttribute('aria-label') || '')) || '';
       const text = (b.textContent || '').trim();
       const cls = typeof b.className === 'string' ? b.className : '';
-      if (tid === 'send-button') return b;                                     // 1) ChatGPT 官方 testid
-      if (/^(send prompt|发送|发送消息|send)$/i.test(label.trim()) || /发送|send prompt/i.test(label)) return b; // 2) 精确 aria-label
+      if (tid === 'send-button') return b;                                     // 1) official ChatGPT testid
+      if (/^(send prompt|发送|发送消息|send)$/i.test(label.trim()) || /发送|send prompt/i.test(label)) return b; // 2) exact aria-label (Chinese literals match Doubao's localised UI)
       if (/send/i.test(tid + ' ' + label + ' ' + text)) return b;
-      if (!fallback && /send/i.test(cls)) fallback = b;                        // 3) 类名兜底（保留首个）
+      if (!fallback && /send/i.test(cls)) fallback = b;                        // 3) class-name fallback (keep the first match)
     }
     return fallback;
   }
@@ -148,7 +148,7 @@
         el.dispatchEvent(ev);
         return true;
       }
-    } catch (_) { /* ClipboardEvent 构造可能不支持 clipboardData */ }
+    } catch (_) { /* ClipboardEvent construction may be unsupported */ }
     return false;
   }
 
@@ -161,7 +161,7 @@
       el.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     }
-    // contenteditable：execCommand 优先，失败补 InputEvent，再失败走 paste
+    // contenteditable: try execCommand first, then a synthetic InputEvent, then the paste path.
     tryExec(el, text);
     await sleep(150);
     if (currentValue(el).trim() === text) return true;
@@ -174,7 +174,7 @@
   }
 
   async function pressSend(input) {
-    // 1) 优先点击发送按钮（等它渲染并可用）
+    // 1) Prefer clicking the send button (wait for it to render and become enabled).
     for (let i = 0; i < 60; i++) {
       const btn = findSendBtn();
       if (btn) {
@@ -183,7 +183,7 @@
       }
       await sleep(150);
     }
-    // 2) 回车兜底
+    // 2) Fall back to pressing Enter.
     log('no send button found, fallback Enter');
     try {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
@@ -192,7 +192,7 @@
     return true;
   }
 
-  /** 发送后轮询输入框清空判定成功（0.2s × 25 ≈ 5s） */
+  /** After sending, poll until the input clears to confirm success (0.2s x 25 ~= 5s). */
   async function waitCleared(input) {
     for (let i = 0; i < 25; i++) {
       await sleep(200);
@@ -203,11 +203,11 @@
   }
 
   async function main(text) {
-    for (let i = 0; i < 80; i++) { // 最长约 20s（SPA / 登录跳转延迟）
+    for (let i = 0; i < 80; i++) { // up to ~20s (SPA boot / login redirects)
       const input = pickInput();
       if (input) {
         log('input found:', input.tagName, input.id || input.className || '');
-        await sleep(400); // 留出站点自身 URL 预填生效时间
+        await sleep(400); // give the site's own URL prefill a chance to run first
         let filled = currentValue(input).trim();
         if (!filled) {
           filled = await fillInput(input, text);
@@ -232,14 +232,14 @@
     clearParams();
   }
 
-  // ---------- 失败回退：复制 prompt 到剪贴板 + 页面内可见提示 ----------
+  // ---------- Failure fallback: copy the prompt to the clipboard + show an in-page notice ----------
   async function copyPrompt(text) {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
         return true;
       }
-    } catch (_) { /* 页面未聚焦等原因失败，走 execCommand 兜底 */ }
+    } catch (_) { /* fails when the page is not focused, etc. - fall through to execCommand */ }
     try {
       const ta = document.createElement('textarea');
       ta.value = text;
@@ -252,7 +252,7 @@
     } catch (_) { return false; }
   }
 
-  // content script 里没有 newtab 的 toast，注入一个浮动提示条
+  // The content script has no access to the newtab toast, so inject a floating notice bar instead.
   function notify(msg) {
     try {
       const tip = document.createElement('div');
@@ -265,7 +265,8 @@
     } catch (_) { /* ignore */ }
   }
 
-  // content script 不加载 i18n.js（manifest 未声明），按浏览器语言做中英双语
+  // The content script does not load i18n.js (it is not declared in the manifest), so the notice is
+  // bilingual and picks a language from the browser locale.
   const isZh = () => String(navigator.language || 'zh').toLowerCase().startsWith('zh');
   async function fallbackCopyAndNotify(reasonZh, reasonEn, text) {
     const ok = await copyPrompt(text);
@@ -277,7 +278,7 @@
                 : `LightTab: ${reason}, and copying to the clipboard failed — please type the prompt manually`));
   }
 
-  // 解析最终文本：lt_k 优先（扩展通道），取不到回落 URL 明文 q
+  // Resolve the final text: lt_k wins (extension channel); otherwise fall back to the plaintext q in the URL.
   (async () => {
     let text = q;
     if (ltK) {
