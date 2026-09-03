@@ -57,6 +57,8 @@
     engine: 'baidu',
     name: '',
     lang: 'zh',
+    // Theme: 'dark' | 'light' | 'system' (follow the OS scheme).
+    theme: 'dark',
     wallpaper: WALLPAPERS[0],
     // Groups: array of { id, name }. Empty = grouping disabled (group bar hidden, and the
     // shortcut dialog does not show the group dropdown).
@@ -1400,6 +1402,13 @@
       await Store.set(K.settings, state.settings);
       applyCurrentLang();
     });
+    const themeSel = document.getElementById('f-theme');
+    if (themeSel) themeSel.addEventListener('change', async () => {
+      const v = THEME_OPTIONS.includes(themeSel.value) ? themeSel.value : 'dark';
+      state.settings.theme = v;
+      await Store.set(K.settings, state.settings);
+      applyTheme(); // flips the whole page instantly — no toast needed
+    });
 
     document.getElementById('btn-wall').addEventListener('click', () => openSet('wall'));
     document.getElementById('btn-set').addEventListener('click', () => openSet('gen'));
@@ -1410,6 +1419,7 @@
       nameInput.value = state.settings.name || '';
       engineSel.value = state.settings.engine;
       if (langSel) langSel.value = state.settings.lang || 'zh';
+      applyTheme(); // keep the theme select in sync with state (covers remote sync changes)
       renderSwatches();
       renderWallLibGrid();
       modal.hidden = false;
@@ -1712,6 +1722,7 @@
     if (!confirm(t('toast.reset_confirm'))) return;
     state.settings = structuredClone(DEFAULT_SETTINGS);
     setLangOnly(state.settings.lang);
+    applyTheme();
     state.items = structuredClone(DEFAULT_SITES).map(x => ({ ...x, id: nid(), group: '' }));
     state.wallpaper = { type: 'gradient', value: WALLPAPERS[0].css };
     state.todos = [];
@@ -1789,6 +1800,7 @@
   async function reloadFromStorage() {
     await loadDataIntoState();
     setLangOnly(state.settings.lang);
+    applyTheme();
     applyWallpaper(state.wallpaper);
     setEngine(state.settings.engine);
     renderEngineList();
@@ -2285,10 +2297,39 @@
     if (window.LT_SYNC) renderSyncPanel();
   }
 
+  // ---------- Theme (dark / light / system) ----------
+  // Settings store 'dark' | 'light' | 'system'; the DOM attribute html[data-theme] is always
+  // 'dark' | 'light' so every CSS light-mode override can key off [data-theme="light"].
+  const THEME_OPTIONS = ['dark', 'light', 'system'];
+  function resolveTheme(pref) {
+    if (pref === 'light') return 'light';
+    if (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+    return 'dark'; // 'dark' and any unknown value fall back to the default dark theme
+  }
+  let themeMQBound = false;
+  function bindThemeMQ() {
+    if (themeMQBound || !window.matchMedia || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    if (!mq || typeof mq.addEventListener !== 'function') return;
+    themeMQBound = true;
+    mq.addEventListener('change', () => {
+      // Only live-follow the OS while the user actually asked for 'system'.
+      if ((state.settings && state.settings.theme) === 'system') applyTheme();
+    });
+  }
+  function applyTheme() {
+    const pref = (state.settings && state.settings.theme) || 'dark';
+    document.documentElement.dataset.theme = resolveTheme(pref);
+    const sel = document.getElementById('f-theme');
+    if (sel && sel.value !== pref) sel.value = pref;
+    bindThemeMQ();
+  }
+
   // ---------- Boot ----------
   async function boot() {
     const { raw, data } = await loadDataIntoState();
     setLangOnly(state.settings.lang);
+    applyTheme();
     // If migration changed the version, write back: schema plus every key the migration filled in or rewrote, keeping disk and memory consistent.
     if ((Number(raw.schema) || 1) !== SCHEMA_VERSION) {
       Store.set(K.schema, SCHEMA_VERSION);
@@ -2400,7 +2441,7 @@
       // Delay so it does not block first paint.
       setTimeout(() => {
         const tip = document.createElement('div');
-        tip.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(20,26,44,.92);color:#fff;padding:8px 14px;border-radius:10px;font-size:12px;z-index:200;border:1px solid rgba(255,255,255,.18)';
+        tip.className = 'boot-tip';
         tip.textContent = t('boot.preview');
         document.body.appendChild(tip);
         setTimeout(() => tip.remove(), 4000);
@@ -2410,7 +2451,7 @@
 
   // Pure-function exports for the offline assertions in scripts/smoke.cjs
   // (same convention as window.LT_LUNAR / window.LT_SYNC).
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, hostnameOf, iconFor };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, hostnameOf, iconFor, resolveTheme };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
