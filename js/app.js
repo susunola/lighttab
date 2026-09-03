@@ -5,6 +5,12 @@
 (() => {
   'use strict';
 
+  // ---------- 国际化（js/i18n.js 暴露 window.LT_I18N，本文件在其后加载） ----------
+  const t = (k, v) => (window.LT_I18N ? window.LT_I18N.t(k, v) : k);
+  const lang = () => (window.LT_I18N ? window.LT_I18N.getLang() : 'zh');
+  const isEn = () => lang() === 'en';
+  function engName(e) { return t('eng.' + e.id) || e.name; }
+
   // ---------- 常量 ----------
   const ENGINES = [
     { id: 'baidu',    name: '百度',   url: 'https://www.baidu.com/s?wd={q}',                            color: '#2932e1' },
@@ -46,6 +52,7 @@
   const DEFAULT_SETTINGS = {
     engine: 'baidu',
     name: '',
+    lang: 'zh',
     wallpaper: WALLPAPERS[0],
     // 分组：{ id, name } 数组；为空 = 不启用分组（分组栏隐藏，站点弹窗不出现分组下拉）
     groups: [],
@@ -104,8 +111,8 @@
     ));
   }
   function debounce(fn, ms) {
-    let t = 0;
-    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+    let tid = 0;
+    return (...args) => { clearTimeout(tid); tid = setTimeout(() => fn(...args), ms); };
   }
   // 焦点是否落在文本输入类元素上（输入框 / 多行框 / 下拉 / 可编辑区）
   function isTypingTarget(el) {
@@ -115,21 +122,46 @@
   }
   function greetingFor(d) {
     const h = d.getHours();
-    if (h >= 5 && h < 11) return '早上好';
-    if (h >= 11 && h < 13) return '中午好';
-    if (h >= 13 && h < 18) return '下午好';
-    if (h >= 18 && h < 23) return '晚上好';
-    return '夜深了';
+    if (h >= 5 && h < 11) return t('greet.morning');
+    if (h >= 11 && h < 13) return t('greet.noon');
+    if (h >= 13 && h < 18) return t('greet.afternoon');
+    if (h >= 18 && h < 23) return t('greet.evening');
+    return t('greet.night');
   }
+  function chipFor(d) {
+    const h = d.getHours();
+    if (h >= 5 && h < 11) return t('chip.morning');
+    if (h >= 11 && h < 13) return t('chip.noon');
+    if (h >= 13 && h < 18) return t('chip.afternoon');
+    if (h >= 18 && h < 23) return t('chip.evening');
+    return t('chip.night');
+  }
+  const EN_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const EN_MONTHS_S = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const EN_WEEKS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const EN_WEEKS_S = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   function dateLine(d) {
+    if (isEn()) {
+      return `${EN_WEEKS_S[d.getDay()]}, ${EN_MONTHS_S[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+    }
     const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
     return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 周${week}`;
+  }
+  function chipDate(d) {
+    if (isEn()) return `${EN_MONTHS_S[d.getMonth()]} ${d.getDate()}`;
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
   }
   // 农历（依赖 js/lunar.js 的 window.LT_LUNAR，缺失时静默降级为空）
   function lunarLine(d) {
     if (!window.LT_LUNAR) return '';
     const lu = window.LT_LUNAR.toLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
     if (!lu) return '';
+    if (isEn()) {
+      const mo = window.LT_LUNAR.monthNameEn(lu.month, lu.isLeap);
+      const da = window.LT_LUNAR.dayNameEn(lu.day);
+      const an = window.LT_LUNAR.animalYearEn(lu.year);
+      return `Lunar ${mo} ${da} · Year of the ${an}`;
+    }
     const gz = window.LT_LUNAR.ganzhiYear(lu.year);
     const an = window.LT_LUNAR.animalYear(lu.year);
     const mo = window.LT_LUNAR.monthName(lu.month, lu.isLeap);
@@ -146,13 +178,13 @@
   const PENDING_PREFIX = 'lt.pending.';
   const PENDING_TTL = 30 * 60 * 1000; // 30 分钟未消费视为孤儿
   const hasChromeStorage = !!(window.chrome && chrome.storage && chrome.storage.local);
-  // 各 key 的友好提示：保存失败时给用户可理解的反馈
+  // 各 key 的友好提示：保存失败时给用户可理解的反馈（存 i18n key，运行时按当前语言取词）
   const KEY_TIPS = {
-    [K.wallpaper]: '壁纸图片过大，未能保存（本次仍可预览，重开可能恢复默认）',
-    [K.settings]: '设置保存失败',
-    [K.items]: '快捷方式保存失败',
-    [K.todos]: '待办保存失败',
-    [K.prompts]: '模板保存失败'
+    [K.wallpaper]: 'store.wallpaper',
+    [K.settings]: 'store.settings',
+    [K.items]: 'store.items',
+    [K.todos]: 'store.todos',
+    [K.prompts]: 'store.prompts'
   };
 
   const Store = {
@@ -179,7 +211,7 @@
       } catch (err) {
         console.warn('[LightTab] 保存失败', key, err);
         // 存储写失败不阻塞主流程，但必须让用户知道（壁纸 dataURL 最易触顶配额）
-        const tip = KEY_TIPS[key] || '数据保存失败（可能超出浏览器存储限制）';
+        const tip = t(KEY_TIPS[key] || 'store.generic');
         try { showToast(tip, null, null, 4200); } catch {}
       }
     }
@@ -247,11 +279,11 @@
       : -1;
     swEl.innerHTML = WALLPAPERS.map((w, i) => `
       <div class="swatch ${i === currentId ? 'active' : ''}" data-i="${i}" style="background:${w.css}">
-        <span class="label">${w.name}</span>
+        <span class="label">${t('wp.' + w.id)}</span>
       </div>
     `).join('') + (state.wallpaper?.type === 'image' ? `
       <div class="swatch active" data-i="img" style="background:center/cover url('${state.wallpaper.value}')">
-        <span class="label">自定义</span>
+        <span class="label">${t('wp.custom')}</span>
       </div>
     ` : '');
     swEl.querySelectorAll('.swatch').forEach(el => {
@@ -268,18 +300,18 @@
     const btn = document.getElementById('btn-wall-fetch');
     const tip = document.getElementById('wall-lib-tip');
     if (btn) btn.disabled = true;
-    if (tip) tip.textContent = '加载中…';
+    if (tip) tip.textContent = t('wall.loading');
     try {
-      const res = await fetch(WALL_LIB_BASE + '/v1/wallpapers?idx=0&n=8&mkt=zh-CN');
+      const res = await fetch(WALL_LIB_BASE + '/v1/wallpapers?idx=0&n=8&mkt=' + (isEn() ? 'en-US' : 'zh-CN'));
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       wallLibImages = (data.images || []).filter(im => im && im.url);
       renderWallLibGrid();
-      if (tip) tip.textContent = `已获取 ${wallLibImages.length} 张必应每日壁纸 · 点击应用（图片来源见版权信息）`;
+      if (tip) tip.textContent = t('wall.got', { n: wallLibImages.length });
     } catch (e) {
       wallLibImages = null;
       renderWallLibGrid();
-      if (tip) tip.textContent = '壁纸库加载失败：' + (e && e.message || e) + '（需联网）';
+      if (tip) tip.textContent = t('wall.fail', { err: (e && e.message || e) });
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -301,7 +333,7 @@
         await setWallpaper({ type: 'image', value: el.dataset.url });
         renderSwatches();
         renderWallLibGrid();
-        showToast('已应用壁纸');
+        showToast(t('toast.wall_applied'));
       });
     });
   }
@@ -329,9 +361,10 @@
       }
       if (hh !== lastHour) {
         lastHour = hh;
-        const nm = state.settings.name ? `，${state.settings.name}` : '';
+        const sep = isEn() ? ', ' : '，';
+        const nm = state.settings.name ? `${sep}${state.settings.name}` : '';
         greetEl.textContent = `${greetingFor(d)}${nm}`;
-        chipEl.textContent = `${d.getMonth() + 1}月${d.getDate()}日 · ${greetingFor(d).replace('好', '')}`;
+        chipEl.textContent = `${chipDate(d)} · ${chipFor(d)}`;
       }
       const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
       if (dayKey !== lastDay) {
@@ -350,9 +383,9 @@
     const e = ENGINES.find(x => x.id === id) || ENGINES[0];
     currentEngine = e;
     const btn = document.getElementById('engine-btn');
-    btn.querySelector('.eng-name').textContent = e.name;
+    btn.querySelector('.eng-name').textContent = engName(e);
     btn.querySelector('.eng-dot').style.background = `linear-gradient(135deg, ${e.color}, ${shade(e.color, 30)})`;
-    document.getElementById('q').placeholder = `使用 ${e.name} 搜索，或输入网址回车`;
+    document.getElementById('q').placeholder = t('search.placeholder_engine', { engine: engName(e) });
   }
   function shade(hex, percent) {
     const c = hex.replace('#', '');
@@ -370,7 +403,7 @@
     ul.innerHTML = ENGINES.map((e, i) => `
       <li data-id="${e.id}" class="${e.id === currentEngine.id ? 'active' : ''}">
         <span class="eng-dot" style="background:${e.color}"></span>
-        <span>${e.name}</span>
+        <span>${engName(e)}</span>
         <span class="eng-key">${i + 1}</span>
       </li>
     `).join('');
@@ -387,7 +420,7 @@
     const q = (rawQuery || '').trim();
     // 已选用模板：输入内容 → 按模板多目标发射（不走普通搜索）
     if (activePrompt) {
-      if (!q) { showToast('输入内容后按 Enter 发射（{q} 为内容插槽）', null, null, 3000); document.getElementById('q').focus(); return; }
+      if (!q) { showToast(t('ai.enter'), null, null, 3000); document.getElementById('q').focus(); return; }
       launchPrompt(activePrompt, q, ev);
       return;
     }
@@ -397,7 +430,7 @@
     if (currentEngine.ai) {
       if (currentEngine.deeplink) {
         window.open(deepLinkUrl(currentEngine, q, null), '_blank');
-        showToast('已拉起 WorkBuddy · Prompt 已预填，在窗口按 Enter 发送', null, null, 3600);
+        showToast(t('ai.wb_launched'), null, null, 3600);
         return;
       }
       if (currentEngine.injected) {
@@ -409,7 +442,7 @@
         if (u && u !== currentEngine.url) openResult(u, ev);
       }
       copyText(q);
-      showToast('Prompt 已复制 · 对话页打开后 Ctrl+V 粘贴发送', null, null, 3200);
+      showToast(t('ai.copied'), null, null, 3200);
       return;
     }
 
@@ -494,12 +527,12 @@
     } else {
       text = content || '';
     }
-    if (!text.trim()) return showToast('内容为空，未发射', null, null, 2600);
+    if (!text.trim()) return showToast(t('ai.empty'), null, null, 2600);
     let targetIds = tpl ? (tpl.targets || []) : [currentEngine.id];
     targetIds = targetIds.filter(id => ENGINES.some(x => x.id === id));
     if (!targetIds.length) {
       if (tpl) targetIds = [currentEngine.id];
-      if (!targetIds.length) return showToast('模板未配置可用发射目标');
+      if (!targetIds.length) return showToast(t('ai.no_target'));
     }
     const engs = targetIds.map(id => ENGINES.find(x => x.id === id)).filter(Boolean);
     const deeplinks = engs.filter(x => x.deeplink);
@@ -525,12 +558,12 @@
         }
       }
     }
-    if (!webN && !dlN) return showToast('发射失败：没有成功打开任何目标');
-    const names = engs.map(x => x.name).join(' · ');
-    if (webN && dlN) showToast(`已拉起 WorkBuddy，并向 ${webN} 个网页目标发射`);
-    else if (dlN) showToast('已拉起 WorkBuddy · Prompt 已预填，在窗口按 Enter 发送', null, null, 3600);
-    else showToast(`已发射到 ${webN} 个目标：${names}`, null, null, blocked ? 4200 : 2600);
-    if (blocked) setTimeout(() => showToast('若浏览器拦截了弹窗，请允许本站弹窗后重试', null, null, 3200), blocked ? 2600 : 0);
+    if (!webN && !dlN) return showToast(t('ai.fail'));
+    const names = engs.map(x => engName(x)).join(' · ');
+    if (webN && dlN) showToast(t('ai.wb_multi', { n: webN }));
+    else if (dlN) showToast(t('ai.wb_launched'), null, null, 3600);
+    else showToast(t('ai.launched', { n: webN, names }), null, null, blocked ? 4200 : 2600);
+    if (blocked) setTimeout(() => showToast(t('ai.blocked'), null, null, 3200), blocked ? 2600 : 0);
     if (tpl) { tpl.lastUsedAt = Date.now(); savePrompts(); }
     sparkFx();
     sweepPending();
@@ -576,12 +609,12 @@
     chip.innerHTML = '';
     const nm = document.createElement('span');
     nm.className = 'tpl-name';
-    nm.textContent = p.name || '模板';
-    nm.title = p.name || '模板';
+    nm.textContent = p.name || t('tpl.default');
+    nm.title = p.name || t('tpl.default');
     const x = document.createElement('button');
     x.type = 'button';
     x.className = 'tpl-x';
-    x.setAttribute('aria-label', '取消模板');
+    x.setAttribute('aria-label', t('tpl.cancel'));
     x.textContent = '×';
     x.addEventListener('click', () => { clearActiveTemplate(); document.getElementById('q').focus(); });
     chip.append(nm, x);
@@ -595,7 +628,7 @@
     activePrompt = p;
     renderTemplateChip(p);
     const q = document.getElementById('q');
-    q.placeholder = p.hint || '输入内容，Enter 发射…';
+    q.placeholder = p.hint || t('tpl.enter_hint');
     q.value = '';
     q.focus();
   }
@@ -621,13 +654,13 @@
     ul.innerHTML = palItems.map((p, i) => {
       const dots = (p.targets || []).map(id => {
         const e = ENGINES.find(x => x.id === id);
-        return e ? `<i class="p-dot" style="background:${e.color}" title="${escapeHtml(e.name)}"></i>` : '';
+        return e ? `<i class="p-dot" style="background:${e.color}" title="${escapeHtml(engName(e))}"></i>` : '';
       }).join('');
       const preview = (p.tmpl || '').replace(/\{q\}/g, '').replace(/\s+/g, ' ').trim().slice(0, 46);
       return `
         <li class="${i === palIdx ? 'active' : ''}" data-i="${i}">
           <span class="p-name">${escapeHtml(p.name)}</span>
-          <span class="p-dots">${dots || '<span class="p-nodots">未设目标</span>'}</span>
+          <span class="p-dots">${dots || `<span class="p-nodots">${t('tpl.no_target')}</span>`}</span>
           <span class="p-preview">${escapeHtml(preview || p.hint || '')}</span>
         </li>`;
     }).join('');
@@ -688,18 +721,18 @@
           <span class="pr-tmpl" title="${escapeHtml(p.tmpl || '')}">${escapeHtml((p.tmpl || '').slice(0, 40))}</span>
           <span class="pr-tags">${(p.targets || []).map(id => {
             const e = ENGINES.find(x => x.id === id);
-            return e ? `<span class="ptag" style="--pc:${e.color};background:${e.color}20;color:${e.color}">${escapeHtml(e.name)}</span>` : '';
-          }).join('') || '<span class="ptag dim">未设目标</span>'}</span>
+            return e ? `<span class="ptag" style="--pc:${e.color};background:${e.color}20;color:${e.color}">${escapeHtml(engName(e))}</span>` : '';
+          }).join('') || `<span class="ptag dim">${t('tpl.no_target')}</span>`}</span>
           <span class="pr-acts">
-            <button class="btn ghost sm" data-act="edit">编辑</button>
-            <button class="btn ghost sm danger" data-act="del">删除</button>
+            <button class="btn ghost sm" data-act="edit">${t('prompt.edit')}</button>
+            <button class="btn ghost sm danger" data-act="del">${t('prompt.del')}</button>
           </span>
         </div>
         ${promptEditingId === p.id ? promptEditorHtml(p) : ''}
       </div>`).join('');
     box.innerHTML = (state.prompts.length
       ? rows
-      : '<div class="pr-empty">还没有模板：主界面按 / 打开模板面板即可选用；或点右上角「＋ 新建」创建。</div>')
+      : `<div class="pr-empty">${t('prompt.empty')}</div>`)
       + (promptEditingId === 'new' ? promptEditorHtml(null) : '');
     box.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
       const row = b.closest('.prompt-row');
@@ -707,37 +740,37 @@
       if (b.dataset.act === 'edit') { promptEditingId = promptEditingId === id ? null : id; renderPromptManager(); }
       if (b.dataset.act === 'del') {
         const p = state.prompts.find(x => x.id === id);
-        if (p && confirm(`删除模板「${p.name}」？`)) {
+        if (p && confirm(t('toast.prompt_del_confirm', { name: p.name }))) {
           state.prompts = state.prompts.filter(x => x.id !== id);
           promptEditingId = null;
           savePrompts();
           renderPromptManager();
-          showToast('模板已删除');
+          showToast(t('toast.prompt_deleted'));
         }
       }
     }));
     if (promptEditingId) bindPromptEditor();
   }
   function promptEditorHtml(p) {
-    const t = p || { name: '', tmpl: '', hint: '', targets: [], wb: {} };
-    const tg = t.targets || [];
-    const wb = t.wb || {};
+    const pv = p || { name: '', tmpl: '', hint: '', targets: [], wb: {} };
+    const tg = pv.targets || [];
+    const wb = pv.wb || {};
     return `
       <div class="prompt-editor" data-edit-id="${promptEditingId}">
-        <label class="pe-field"><span class="pe-lbl">名称</span>
-          <input class="pe-name" type="text" maxlength="24" placeholder="例如 翻译成中文" value="${escapeHtml(t.name || '')}"></label>
-        <label class="pe-field"><span class="pe-lbl">提示词模板（{q} = 内容插槽；不含 {q} 则作为固定指令，选中即发射）</span>
-          <textarea class="pe-tmpl" rows="3" maxlength="4000" placeholder="例如 请把下面的内容翻译成地道中文：&#10;&#10;{q}">${escapeHtml(t.tmpl || '')}</textarea></label>
-        <label class="pe-field"><span class="pe-lbl">输入框占位提示（选用后显示）</span>
-          <input class="pe-hint" type="text" maxlength="60" placeholder="例如 粘贴要翻译的内容…" value="${escapeHtml(t.hint || '')}"></label>
-        <div class="pe-field"><span class="pe-lbl">发射目标（多选；勾选 WorkBuddy 可填附加参数）</span>
+        <label class="pe-field"><span class="pe-lbl">${t('prompt.name')}</span>
+          <input class="pe-name" type="text" maxlength="24" placeholder="${escapeHtml(t('prompt.name_ph'))}" value="${escapeHtml(pv.name || '')}"></label>
+        <label class="pe-field"><span class="pe-lbl">${t('prompt.tmpl_label')}</span>
+          <textarea class="pe-tmpl" rows="3" maxlength="4000" placeholder="${escapeHtml(t('prompt.tmpl_ph')).replace(/\n/g, '&#10;')}">${escapeHtml(pv.tmpl || '')}</textarea></label>
+        <label class="pe-field"><span class="pe-lbl">${t('prompt.hint_label')}</span>
+          <input class="pe-hint" type="text" maxlength="60" placeholder="${escapeHtml(t('prompt.hint_ph'))}" value="${escapeHtml(pv.hint || '')}"></label>
+        <div class="pe-field"><span class="pe-lbl">${t('prompt.targets')}</span>
           <div class="pe-targets">${ENGINES.map(e => `
             <label class="pe-t"><input type="checkbox" value="${e.id}" ${tg.includes(e.id) ? 'checked' : ''}>
-            <span class="ptag" style="--pc:${e.color};background:${e.color}20;color:${e.color}">${escapeHtml(e.name)}</span></label>`).join('')}
+            <span class="ptag" style="--pc:${e.color};background:${e.color}20;color:${e.color}">${escapeHtml(engName(e))}</span></label>`).join('')}
           </div>
         </div>
         <div class="wb-fields" ${tg.includes('wbai') ? '' : 'hidden'}>
-          <span class="pe-lbl">WorkBuddy 附加参数（可选，官方深链：expertId / model / mode / cwd）</span>
+          <span class="pe-lbl">${t('prompt.wb_label')}</span>
           <div class="wb-grid">
             <input class="pe-wb" data-wbk="expertId" placeholder="expertId" value="${escapeHtml(wb.expertId || '')}">
             <input class="pe-wb" data-wbk="model" placeholder="model" value="${escapeHtml(wb.model || '')}">
@@ -746,8 +779,8 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn ghost" data-act="cancel">取消</button>
-          <button type="button" class="btn primary" data-act="save">保存</button>
+          <button type="button" class="btn ghost" data-act="cancel">${t('prompt.cancel')}</button>
+          <button type="button" class="btn primary" data-act="save">${t('prompt.save')}</button>
         </div>
       </div>`;
   }
@@ -766,8 +799,8 @@
     const name = (ed.querySelector('.pe-name').value || '').trim();
     const tmpl = ed.querySelector('.pe-tmpl').value;
     const hint = (ed.querySelector('.pe-hint').value || '').trim();
-    if (!name) return showToast('请填写模板名称');
-    if (!tmpl.trim()) return showToast('请填写提示词内容');
+    if (!name) return showToast(t('toast.prompt_name_required'));
+    if (!tmpl.trim()) return showToast(t('toast.prompt_tmpl_required'));
     const targets = [...ed.querySelectorAll('.pe-targets input:checked')].map(x => x.value).slice(0, 4);
     const wbOn = targets.includes('wbai');
     const wb = wbOn ? {} : null;
@@ -779,7 +812,7 @@
     }
     const rec = { name: name.slice(0, 24), tmpl: tmpl.slice(0, 4000), hint: hint.slice(0, 60), targets, wb };
     if (id === 'new') {
-      if (state.prompts.length >= 30) return showToast('模板数量已达上限（30）');
+      if (state.prompts.length >= 30) return showToast(t('toast.prompt_limit'));
       state.prompts.push({ id: nid(), ...rec });
     } else {
       const p = state.prompts.find(x => x.id === id);
@@ -788,7 +821,7 @@
     promptEditingId = null;
     savePrompts();
     renderPromptManager();
-    showToast(id === 'new' ? '模板已添加' : '模板已保存');
+    showToast(t(id === 'new' ? 'toast.prompt_added' : 'toast.prompt_saved'));
   }
 
   // ---------- 图标网格 ----------
@@ -803,8 +836,8 @@
     const list = state.view === VIEW_ALL ? state.items : state.items.filter(inView);
     if (!list.length) {
       const hint = state.view === VIEW_ALL
-        ? '暂无快捷方式，点右下角 ＋ 添加'
-        : '该视图暂无快捷方式，点右下角 ＋ 添加';
+        ? t('grid.empty')
+        : t('grid.empty_view');
       grid.innerHTML = `<div class="grid-empty">${hint}</div>`;
       return;
     }
@@ -851,10 +884,10 @@
         </div>
         <div class="title">${safeTitle}</div>
         <div class="card-actions">
-          <span class="mini edit" data-act="edit" title="编辑">
+          <span class="mini edit" data-act="edit" title="${t('card.edit')}">
             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
           </span>
-          <span class="mini del" data-act="del" title="删除">
+          <span class="mini del" data-act="del" title="${t('card.del')}">
             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
           </span>
         </div>
@@ -866,11 +899,11 @@
     document.querySelectorAll('#grid a.card').forEach(a => {      a.addEventListener('contextmenu', e => {
         e.preventDefault();
         openContextMenu(e.clientX, e.clientY, [
-          { label: '在新标签页打开', action: () => window.open(a.href, '_blank', 'noopener') },
-          { label: '复制链接', action: () => copyToClipboard(a.href) },
+          { label: t('ctx.open'), action: () => window.open(a.href, '_blank', 'noopener') },
+          { label: t('ctx.copy'), action: () => copyToClipboard(a.href) },
           { sep: true },
-          { label: '编辑', action: () => openSiteModal(a.dataset.id) },
-          { label: '删除', danger: true, action: () => deleteItem(a.dataset.id) }
+          { label: t('ctx.edit'), action: () => openSiteModal(a.dataset.id) },
+          { label: t('ctx.del'), danger: true, action: () => deleteItem(a.dataset.id) }
         ]);
       });
       a.querySelector('.edit')?.addEventListener('click', e => {
@@ -941,7 +974,7 @@
     await Store.set(K.items, state.items);
     syncUI();
     // 撤销：闭包各自绑定删除时刻的 item 与索引，互不覆盖（连删多次也能各自正确恢复原位）
-    showToast('已删除', '撤销', async () => {
+    showToast(t('toast.deleted'), t('toast.undo'), async () => {
       state.items.splice(Math.min(idx, state.items.length), 0, removed);
       await Store.set(K.items, state.items);
       syncUI();
@@ -964,9 +997,9 @@
     menuEl.style.left = Math.min(x, maxX) + 'px';
     menuEl.style.top = Math.min(y, maxY) + 'px';
     menuEl.onclick = (e) => {
-      const t = e.target.closest('.item');
-      if (!t) return;
-      const act = items[+t.dataset.i];
+      const row = e.target.closest('.item');
+      if (!row) return;
+      const act = items[+row.dataset.i];
       if (act && act.action) act.action();
       closeContextMenu();
     };
@@ -982,7 +1015,7 @@
   // ---------- 弹窗（站点） ----------
   // 分组下拉：无分组时整行隐藏；有分组时选中「编辑项的归属 / 当前视图分组」
   function fillGroupSelect(sel) {
-    sel.innerHTML = '<option value="">未分组</option>' +
+    sel.innerHTML = `<option value="">${t('group.ungrouped')}</option>` +
       state.settings.groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
   }
   function openSiteModal(id) {
@@ -996,12 +1029,12 @@
     if (id) {
       const it = state.items.find(x => x.id === id);
       if (!it) return;
-      titleEl.textContent = '编辑快捷方式';
+      titleEl.textContent = t('site.edit');
       form.elements['title'].value = it.title;
       form.elements['url'].value = it.url;
       form.dataset.editId = id;
     } else {
-      titleEl.textContent = '添加快捷方式';
+      titleEl.textContent = t('site.add');
       delete form.dataset.editId;
     }
     if (!row.hidden) {
@@ -1027,8 +1060,8 @@
       e.preventDefault();
       const title = form.elements['title'].value.trim();
       const url = normalizeUrl(form.elements['url'].value);
-      if (!title) return showToast('名称不能为空');
-      if (!url) return showToast('网址格式不正确');
+      if (!title) return showToast(t('toast.name_required'));
+      if (!url) return showToast(t('toast.url_invalid'));
       const group = document.getElementById('f-group').value || '';
       const editId = form.dataset.editId;
       if (editId) {
@@ -1056,19 +1089,19 @@
     const gs = state.settings.groups;
     // 无分组：仅保留「＋ 新建分组」入口（保证第一个分组可达）
     if (!gs.length) {
-      bar.innerHTML = '<button type="button" class="gchip add" data-g="add">＋ 新建分组</button>';
+      bar.innerHTML = `<button type="button" class="gchip add" data-g="add">${t('group.new')}</button>`;
       return;
     }
     const chip = (g, label, count, extra) => `
       <button type="button" class="gchip ${state.view === g ? 'active' : ''} ${extra || ''}" data-g="${g}">
         ${label}<span class="gcnt">${count}</span>
       </button>`;
-    let html = chip(VIEW_ALL, '全部', state.items.length);
-    html += chip(VIEW_NONE, '未分组', groupCount(it => !(it.group || '')));
+    let html = chip(VIEW_ALL, t('group.all'), state.items.length);
+    html += chip(VIEW_NONE, t('group.ungrouped'), groupCount(it => !(it.group || '')));
     for (const g of gs) html += chip(g.id, escapeHtml(g.name), groupCount(it => (it.group || '') === g.id));
-    html += '<button type="button" class="gchip add" data-g="add">＋ 新建分组</button>';
+    html += `<button type="button" class="gchip add" data-g="add">${t('group.new')}</button>`;
     if (state.view !== VIEW_ALL && state.view !== VIEW_NONE) {
-      html += '<button type="button" class="gchip del" data-g="del">删除分组</button>';
+      html += `<button type="button" class="gchip del" data-g="del">${t('group.del')}</button>`;
     }
     bar.innerHTML = html;
   }
@@ -1091,7 +1124,7 @@
   function startAddGroup(btn) {
     const input = document.createElement('input');
     input.className = 'gchip-input';
-    input.placeholder = '分组名称';
+    input.placeholder = t('group.name_ph');
     input.maxLength = 16;
     btn.replaceWith(input);
     input.focus();
@@ -1103,7 +1136,7 @@
       input.remove();
       if (!name) { renderGroupBar(); return; }
       if (state.settings.groups.some(x => x.name === name)) {
-        showToast('分组已存在');
+        showToast(t('toast.group_exists'));
         renderGroupBar();
         return;
       }
@@ -1124,21 +1157,21 @@
     const g = state.settings.groups.find(x => x.id === id);
     if (!g) return;
     const n = groupCount(it => (it.group || '') === id);
-    if (!confirm(`删除分组「${g.name}」？\n组内 ${n} 个快捷方式将移到「未分组」，不会被删除。`)) return;
+    if (!confirm(t('toast.group_del_confirm', { name: g.name, n }))) return;
     state.settings.groups = state.settings.groups.filter(x => x.id !== id);
     state.items.forEach(it => { if ((it.group || '') === id) it.group = ''; });
     state.view = VIEW_ALL;
     await Store.set(K.settings, state.settings);
     await Store.set(K.items, state.items);
     syncUI();
-    showToast(`已删除分组「${g.name}」`);
+    showToast(t('toast.group_deleted', { name: g.name }));
   }
 
   // ---------- 数据导出 / 导入 ----------
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.16.1',
+      version: '1.17.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -1161,19 +1194,19 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-      showToast('已导出数据文件（JSON）');
+      showToast(t('toast.export_ok'));
     } catch (err) {
       console.warn('[LightTab] 导出失败', err);
-      showToast('导出失败');
+      showToast(t('toast.export_fail'));
     }
   }
   async function doImport(file) {
     let data;
-    try { data = JSON.parse(await file.text()); } catch { return showToast('文件不是有效的 JSON'); }
-    if (!data || typeof data !== 'object') return showToast('文件格式不正确');
-    if (data.app && data.app !== 'LightTab') return showToast('不是 LightTab 的备份文件');
+    try { data = JSON.parse(await file.text()); } catch { return showToast(t('toast.import_not_json')); }
+    if (!data || typeof data !== 'object') return showToast(t('toast.import_bad'));
+    if (data.app && data.app !== 'LightTab') return showToast(t('toast.import_not_lighttab'));
     const hasLocal = state.items.length || state.todos.length || state.prompts.length;
-    if (hasLocal && !confirm('导入将覆盖当前全部数据（快捷方式/待办/模板/设置/壁纸），确定继续？')) return;
+    if (hasLocal && !confirm(t('toast.import_confirm'))) return;
     const migrated = migrateSchema({
       settings: data.settings || {},
       items: data.items || [],
@@ -1186,15 +1219,16 @@
     state.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), migrated.settings || {});
     if (!ENGINES.some(x => x.id === state.settings.engine)) state.settings.engine = 'baidu';
     if (!Array.isArray(state.settings.groups)) state.settings.groups = [];
+    setLangOnly(state.settings.lang);
     const gids = new Set(state.settings.groups.map(g => g.id));
     state.items = Array.isArray(migrated.items)
       ? migrated.items
           .filter(it => it && typeof it.url === 'string')
-          .map(it => ({ id: it.id || nid(), title: String(it.title || '').slice(0, 32) || '未命名', url: it.url, group: gids.has(it.group) ? it.group : '' }))
+          .map(it => ({ id: it.id || nid(), title: String(it.title || '').slice(0, 32) || t('toast.unnamed'), url: it.url, group: gids.has(it.group) ? it.group : '' }))
       : [];
     state.wallpaper = pickWallpaperFromData(migrated.wallpaper);
     state.todos = Array.isArray(migrated.todos)
-      ? migrated.todos.filter(t => t && typeof t.text === 'string').map(t => ({ id: t.id || nid(), text: t.text, done: !!t.done }))
+      ? migrated.todos.filter(it => it && typeof it.text === 'string').map(it => ({ id: it.id || nid(), text: it.text, done: !!it.done }))
       : [];
     // 模板：逐条校验（tmpl 必须字符串；targets 只保留已知引擎），坏项剔除
     const validTarget = id => ENGINES.some(x => x.id === id);
@@ -1203,7 +1237,7 @@
           .filter(p => p && typeof p.tmpl === 'string')
           .map(p => ({
             id: p.id || nid(),
-            name: String(p.name || '').slice(0, 24) || '未命名模板',
+            name: String(p.name || '').slice(0, 24) || t('toast.unnamed_tpl'),
             tmpl: p.tmpl.slice(0, 4000),
             hint: typeof p.hint === 'string' ? p.hint.slice(0, 60) : '',
             targets: Array.isArray(p.targets) ? p.targets.filter(validTarget).slice(0, 4) : [],
@@ -1223,13 +1257,13 @@
     document.getElementById('modal-set').hidden = true;
     syncUI();
     renderTodos();
-    showToast(`导入完成：${state.items.length} 个快捷方式 · ${state.todos.length} 条待办`);
+    showToast(t('toast.import_done', { items: state.items.length, todos: state.todos.length }));
     reinitCanvas(); // 导入可能带入/清空 layout 坐标，重新同步画布
   }
   // 从书签导入：走 optional_permissions（bookmarks），首次点击时请求授权
   async function importBookmarks() {
     if (!window.chrome || !chrome.permissions || !chrome.bookmarks) {
-      showToast('书签导入需在 Chrome 扩展中启用，当前预览模式不可用');
+      showToast(t('toast.bookmarks_unavailable'));
       return;
     }
     let granted = true;
@@ -1237,7 +1271,7 @@
     if (!chrome.bookmarks) {
       try { granted = await chrome.permissions.request({ permissions: ['bookmarks'] }); } catch { granted = false; }
     }
-    if (!granted) { showToast('未授权书签权限，导入已取消'); return; }
+    if (!granted) { showToast(t('toast.bookmarks_denied')); return; }
     const tree = await chrome.bookmarks.getTree();
     const targetGroup = (state.view !== VIEW_ALL && state.view !== VIEW_NONE) ? state.view : '';
     const seen = new Set(state.items.map(it => normalizeUrl(it.url) || it.url));
@@ -1251,7 +1285,7 @@
           if (seen.has(u)) { dup++; continue; }
           seen.add(u);
           let title = (n.title || '').trim();
-          if (!title) { const h = hostnameOf(u); title = h.split('.')[0] || '书签'; }
+          if (!title) { const h = hostnameOf(u); title = h.split('.')[0] || t('toast.bookmark_fallback'); }
           hits.push({ id: nid(), title: title.slice(0, 32), url: u, color: pickColor(u), group: targetGroup });
         } else if (n.children) {
           walk(n.children);
@@ -1259,13 +1293,13 @@
       }
     })(tree);
     if (!hits.length) {
-      showToast(dup ? `没有导入新书签（跳过 ${dup} 个重复）` : '书签列表为空');
+      showToast(dup ? t('toast.bookmarks_dup', { n: dup }) : t('toast.bookmarks_empty'));
       return;
     }
     state.items.push(...hits);
     await Store.set(K.items, state.items);
     syncUI();
-    showToast(`已导入 ${hits.length} 个书签` + (dup ? `，跳过 ${dup} 个重复` : '') + (targetGroup ? '（归入当前分组）' : ''));
+    showToast(t('toast.bookmarks_done', { n: hits.length }) + (dup ? t('toast.bookmarks_dup_suffix', { n: dup }) : '') + (targetGroup ? t('toast.bookmarks_group') : ''));
   }
 
   // ---------- 弹窗（设置 / 壁纸） ----------
@@ -1276,9 +1310,9 @@
 
     modal.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => modal.hidden = true));
     modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
-    tabs.forEach(t => t.addEventListener('click', () => {
-      tabs.forEach(x => x.classList.toggle('active', x === t));
-      const key = t.dataset.tab;
+    tabs.forEach(tb => tb.addEventListener('click', () => {
+      tabs.forEach(x => x.classList.toggle('active', x === tb));
+      const key = tb.dataset.tab;
       panes.forEach(p => p.hidden = p.dataset.pane !== key);
       if (key === 'prompt') renderPromptManager(); // 每次进入模板页同步最新数据
     }));
@@ -1286,7 +1320,7 @@
     document.getElementById('btn-reset-wall').addEventListener('click', () => {
       setWallpaper({ type: 'gradient', value: WALLPAPERS[0].css });
       renderSwatches();
-      showToast('已恢复默认渐变');
+      showToast(t('toast.wall_reset'));
     });
     document.getElementById('btn-wall-fetch').addEventListener('click', fetchWallLib);
     document.getElementById('btn-reset-all').addEventListener('click', resetAll);
@@ -1312,7 +1346,8 @@
     // 常规
     const nameInput = document.getElementById('f-name');
     const engineSel = document.getElementById('f-engine');
-    engineSel.innerHTML = ENGINES.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+    const langSel = document.getElementById('f-lang');
+    engineSel.innerHTML = ENGINES.map(e => `<option value="${e.id}">${engName(e)}</option>`).join('');
     nameInput.addEventListener('change', async () => {
       state.settings.name = nameInput.value.trim();
       await Store.set(K.settings, state.settings);
@@ -1323,15 +1358,21 @@
       await Store.set(K.settings, state.settings);
       setEngine(state.settings.engine);
     });
+    if (langSel) langSel.addEventListener('change', async () => {
+      state.settings.lang = langSel.value === 'en' ? 'en' : 'zh';
+      await Store.set(K.settings, state.settings);
+      applyCurrentLang();
+    });
 
     document.getElementById('btn-wall').addEventListener('click', () => openSet('wall'));
     document.getElementById('btn-set').addEventListener('click', () => openSet('gen'));
 
     function openSet(tab) {
-      const t = modal.querySelector(`.tab[data-tab="${tab}"]`);
-      t.click();
+      const tabBtn = modal.querySelector(`.tab[data-tab="${tab}"]`);
+      tabBtn.click();
       nameInput.value = state.settings.name || '';
       engineSel.value = state.settings.engine;
+      if (langSel) langSel.value = state.settings.lang || 'zh';
       renderSwatches();
       renderWallLibGrid();
       modal.hidden = false;
@@ -1340,10 +1381,10 @@
   // ---------- 云同步设置面板 ----------
   function syncStatusText(st) {
     switch (st.status) {
-      case 'syncing': return '同步中…';
-      case 'offline': return '离线，已保留本地修改';
-      case 'error': return st.lastError || '同步出错';
-      default: return st.lastSyncAt ? '已同步' : '待同步';
+      case 'syncing': return t('sync.status.syncing');
+      case 'offline': return t('sync.status.offline');
+      case 'error': return st.lastError ? t(st.lastError) : t('sync.status.error');
+      default: return st.lastSyncAt ? t('sync.status.synced') : t('sync.status.pending');
     }
   }
   function fmtSyncTime(ts) {
@@ -1362,24 +1403,24 @@
     if (!st.loggedIn) {
       const pending = st.pendingVerifyEmail;
       const pendingTip = pending
-        ? `<p class="form-tip sync-verify-tip">验证邮件已发送到 <b>${escapeHtml(pending)}</b>，请查收邮箱并点击邮件里的链接完成验证，完成后用下方账号登录。</p>`
+        ? `<p class="form-tip sync-verify-tip">${t('sync.verify_sent_panel', { email: `<b>${escapeHtml(pending)}</b>` })}</p>`
         : '';
       panel.innerHTML = `
         ${pendingTip}
-        <p class="form-tip">登录后可在多台设备间同步快捷方式、待办、设置、壁纸与模板。数据经 HTTPS 加密传输，密码仅存加密哈希，本地数据始终可用。</p>
-        <label><span>邮箱</span><input id="sync-email" type="email" autocomplete="email" placeholder="you@example.com"${pending ? ` value="${escapeHtml(pending)}"` : ''}></label>
-        <label><span>密码</span><input id="sync-pass" type="password" autocomplete="current-password" placeholder="至少 8 位"></label>
+        <p class="form-tip">${t('sync.desc')}</p>
+        <label><span>${t('sync.email')}</span><input id="sync-email" type="email" autocomplete="email" placeholder="you@example.com"${pending ? ` value="${escapeHtml(pending)}"` : ''}></label>
+        <label><span>${t('sync.pass')}</span><input id="sync-pass" type="password" autocomplete="current-password" placeholder="${t('sync.pass_ph')}"></label>
         <div class="sync-err" id="sync-err" hidden></div>
         <div class="sync-actions">
-          <button type="button" class="btn primary" data-sync="login">登录</button>
-          <button type="button" class="btn ghost" data-sync="register">注册新账号</button>
-          ${pending ? `<button type="button" class="btn ghost" data-sync="resend">重发验证邮件</button>` : ''}
+          <button type="button" class="btn primary" data-sync="login">${t('sync.login')}</button>
+          <button type="button" class="btn ghost" data-sync="register">${t('sync.register')}</button>
+          ${pending ? `<button type="button" class="btn ghost" data-sync="resend">${t('sync.resend')}</button>` : ''}
         </div>`;
     } else {
       const dot = st.status === 'syncing' ? 'busy' : (st.status === 'error' || st.status === 'offline' ? 'warn' : 'ok');
       panel.innerHTML = `
         <div class="sync-row">
-          <span class="data-label">已登录</span>
+          <span class="data-label">${t('sync.logged_in')}</span>
           <span class="sync-email">${escapeHtml(st.email)}</span>
         </div>
         <div class="sync-status">
@@ -1388,8 +1429,8 @@
           ${st.lastSyncAt ? `<span class="sync-time">${fmtSyncTime(st.lastSyncAt)}</span>` : ''}
         </div>
         <div class="sync-actions">
-          <button type="button" class="btn ghost sm" data-sync="now">立即同步</button>
-          <button type="button" class="btn ghost sm" data-sync="logout">登出</button>
+          <button type="button" class="btn ghost sm" data-sync="now">${t('sync.now')}</button>
+          <button type="button" class="btn ghost sm" data-sync="logout">${t('sync.logout')}</button>
         </div>`;
     }
   }
@@ -1404,8 +1445,8 @@
       if (action === 'login' || action === 'register') {
         const email = (document.getElementById('sync-email').value || '').trim();
         const pass = document.getElementById('sync-pass').value;
-        if (!email) { syncShowErr('请输入邮箱'); return; }
-        if (pass.length < 8) { syncShowErr('密码至少 8 位'); return; }
+        if (!email) { syncShowErr(t('sync.err_email')); return; }
+        if (pass.length < 8) { syncShowErr(t('sync.err_pass')); return; }
         btn.disabled = true;
         const r = action === 'login'
           ? await window.LT_SYNC.login(email, pass)
@@ -1414,30 +1455,30 @@
         if (!r.ok) {
           if (r.verifyPending) {
             renderSyncPanel();  // 待验证态：邮箱预填 + 重发按钮
-            syncShowErr(r.error);
+            syncShowErr(t(r.error));
           } else {
-            syncShowErr(r.error);  // 保留输入，仅提示错误
+            syncShowErr(t(r.error));  // 保留输入，仅提示错误
           }
           return;
         }
         if (r.verify) {
-          showToast('验证邮件已发送，请查收邮箱完成验证');
+          showToast(t('sync.verify_sent_toast'));
           renderSyncPanel();
           return;
         }
         if (errEl) errEl.hidden = true;
-        showToast('登录成功，正在同步…');
+        showToast(t('sync.login_success'));
       } else if (action === 'resend') {
         const email = (document.getElementById('sync-email').value || '').trim();
-        if (!email) { syncShowErr('请输入邮箱'); return; }
+        if (!email) { syncShowErr(t('sync.err_email')); return; }
         btn.disabled = true;
         const r = await window.LT_SYNC.resend(email);
         btn.disabled = false;
-        if (!r.ok) { syncShowErr(r.error); return; }
-        showToast('验证邮件已重新发送');
+        if (!r.ok) { syncShowErr(t(r.error)); return; }
+        showToast(t('sync.resend_sent'));
       } else if (action === 'logout') {
         await window.LT_SYNC.logout();
-        showToast('已登出');
+        showToast(t('sync.logged_out'));
       } else if (action === 'now') {
         window.LT_SYNC.syncNow(false);
       }
@@ -1455,12 +1496,12 @@
   async function onUpload(e) {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (f.size > 4 * 1024 * 1024) return showToast('图片超过 4MB，请压缩后再试');
+    if (f.size > 4 * 1024 * 1024) return showToast(t('toast.image_too_big'));
     const dataUrl = await compressImage(f, 2560, 0.82);
     const light = await isLightImage(dataUrl);
     await setWallpaper({ type: 'image', value: dataUrl, light });
     document.getElementById('swatches').querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
-    showToast('壁纸已应用');
+    showToast(t('toast.wall_applied'));
     // 触发设置面板刷新
     document.getElementById('btn-wall').click();
     document.getElementById('swatches').querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
@@ -1513,17 +1554,17 @@
 
   // ---------- Toast ----------
   function showToast(text, actionLabel, action, ttl) {
-    const t = document.getElementById('toast');
-    t.innerHTML = `<span>${escapeHtml(text)}</span>` +
+    const box = document.getElementById('toast');
+    box.innerHTML = `<span>${escapeHtml(text)}</span>` +
       (actionLabel ? `<button>${escapeHtml(actionLabel)}</button>` : '');
-    t.hidden = false;
+    box.hidden = false;
     if (actionLabel) {
-      t.querySelector('button').addEventListener('click', () => {
+      box.querySelector('button').addEventListener('click', () => {
         action && action();
-        t.hidden = true;
+        box.hidden = true;
       });
     }
-    if (ttl) setTimeout(() => t.hidden = true, ttl);
+    if (ttl) setTimeout(() => box.hidden = true, ttl);
   }
   function copyText(text) {
     if (navigator.clipboard) {
@@ -1542,24 +1583,25 @@
   }
   function copyToClipboard(text) {
     copyText(text);
-    showToast('已复制到剪贴板');
+    showToast(t('toast.copied'));
   }
 
   // ---------- 待办 widget ----------
   function renderTodos() {
     const list = document.getElementById('todo-list');
     const countEl = document.getElementById('todo-count');
-    const done = state.todos.filter(t => t.done).length;
+    const done = state.todos.filter(it => it.done).length;
     countEl.textContent = done + '/' + state.todos.length;
     if (!state.todos.length) {
-      list.innerHTML = '<li class="todo-empty">今天要做点什么？</li>';
+      list.innerHTML = `<li class="todo-empty">${t('todo.empty')}</li>`;
       return;
     }
-    list.innerHTML = state.todos.map(t => `
-      <li class="todo-item ${t.done ? 'done' : ''}" data-id="${t.id}">
+    const delLabel = escapeHtml(t('todo.del'));
+    list.innerHTML = state.todos.map(it => `
+      <li class="todo-item ${it.done ? 'done' : ''}" data-id="${it.id}">
         <span class="t-check"></span>
-        <span class="t-text">${escapeHtml(t.text)}</span>
-        <span class="t-del" title="删除">×</span>
+        <span class="t-text">${escapeHtml(it.text)}</span>
+        <span class="t-del" title="${delLabel}">×</span>
       </li>
     `).join('');
   }
@@ -1581,10 +1623,10 @@
     document.getElementById('todo-list').addEventListener('click', async e => {
       const item = e.target.closest('.todo-item');
       if (!item) return;
-      const todo = state.todos.find(t => t.id === item.dataset.id);
+      const todo = state.todos.find(it => it.id === item.dataset.id);
       if (!todo) return;
       if (e.target.closest('.t-del')) {
-        state.todos = state.todos.filter(t => t.id !== todo.id);
+        state.todos = state.todos.filter(it => it.id !== todo.id);
       } else {
         todo.done = !todo.done;
       }
@@ -1603,7 +1645,7 @@
     const now = new Date();
     if (!calCursor.y) { calCursor.y = now.getFullYear(); calCursor.m = now.getMonth() + 1; }
     const y = calCursor.y, m = calCursor.m;
-    title.textContent = `${y}年${m}月`;
+    title.textContent = isEn() ? `${EN_MONTHS[m - 1]} ${y}` : `${y}年${m}月`;
     const startDow = new Date(y, m - 1, 1).getDay(); // 0=周日
     const daysInMonth = new Date(y, m, 0).getDate();
     const isThisMonth = y === now.getFullYear() && m === now.getMonth() + 1;
@@ -1613,7 +1655,7 @@
       let lday = '';
       if (window.LT_LUNAR) {
         const lu = window.LT_LUNAR.toLunar(y, m, d);
-        if (lu) lday = window.LT_LUNAR.dayName(lu.day);
+        if (lu) lday = isEn() ? window.LT_LUNAR.dayNameEn(lu.day) : window.LT_LUNAR.dayName(lu.day);
       }
       const isToday = isThisMonth && d === now.getDate();
       const cls = 'cal-cell' + (isToday ? ' today' : '');
@@ -1631,8 +1673,9 @@
 
   // ---------- 重置 ----------
   async function resetAll() {
-    if (!confirm('确认重置所有数据？\n（名称、引擎、壁纸、快捷方式、分组、模板、待办都会被清空）')) return;
+    if (!confirm(t('toast.reset_confirm'))) return;
     state.settings = structuredClone(DEFAULT_SETTINGS);
+    setLangOnly(state.settings.lang);
     state.items = structuredClone(DEFAULT_SITES).map(x => ({ ...x, id: nid(), group: '' }));
     state.wallpaper = { type: 'gradient', value: WALLPAPERS[0].css };
     state.todos = [];
@@ -1649,7 +1692,7 @@
     startClock();
     renderTodos();
     document.getElementById('modal-set').hidden = true;
-    showToast('已恢复默认数据');
+    showToast(t('toast.reset_done'));
     reinitCanvas(); // 重置清空 layout 坐标，回到默认画布
   }
 
@@ -1707,6 +1750,7 @@
   // 云同步拉取覆盖本地后：刷新内存 state + 重渲染数据型 UI（不重绑事件）
   async function reloadFromStorage() {
     await loadDataIntoState();
+    setLangOnly(state.settings.lang);
     applyWallpaper(state.wallpaper);
     setEngine(state.settings.engine);
     renderEngineList();
@@ -1955,7 +1999,7 @@
       if (c.querySelector('.card-drag-handle')) continue;
       const h = document.createElement('span');
       h.className = 'card-drag-handle';
-      h.title = '拖拽移动（自动对齐网格）';
+      h.title = t('drag.card');
       h.setAttribute('aria-hidden', 'true');
       h.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
       c.appendChild(h);
@@ -2068,7 +2112,7 @@
       if (b.el.querySelector('.drag-handle')) continue;
       const h = document.createElement('span');
       h.className = 'drag-handle';
-      h.title = '拖拽移动';
+      h.title = t('drag.block');
       h.setAttribute('aria-hidden', 'true');
       h.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>';
       b.el.appendChild(h);
@@ -2178,9 +2222,31 @@
     reinitCanvas();
   }
 
+  // ---------- 语言切换 ----------
+  function setLangOnly(l) {
+    const v = (l === 'en') ? 'en' : 'zh';
+    if (window.LT_I18N) window.LT_I18N.setLang(v);
+    const sel = document.getElementById('f-lang');
+    if (sel) sel.value = v;
+  }
+  function applyCurrentLang() {
+    setLangOnly(state.settings.lang);
+    renderSwatches();
+    renderEngineList();
+    renderGroupBar();
+    renderGrid();
+    renderTodos();
+    renderCalendar();
+    renderPromptManager();
+    setEngine(state.settings.engine);
+    startClock();
+    if (window.LT_SYNC) renderSyncPanel();
+  }
+
   // ---------- 启动 ----------
   async function boot() {
     const { raw, data } = await loadDataIntoState();
+    setLangOnly(state.settings.lang);
     // 若迁移后版本有变化则回写持久层：schema + 迁移过程中被补齐/改写的各 key（保证磁盘数据与内存一致）
     if ((Number(raw.schema) || 1) !== SCHEMA_VERSION) {
       Store.set(K.schema, SCHEMA_VERSION);
@@ -2293,7 +2359,7 @@
       setTimeout(() => {
         const tip = document.createElement('div');
         tip.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(20,26,44,.92);color:#fff;padding:8px 14px;border-radius:10px;font-size:12px;z-index:200;border:1px solid rgba(255,255,255,.18)';
-        tip.textContent = '当前为浏览器直接预览模式（未安装扩展），数据保存在 localStorage。';
+        tip.textContent = t('boot.preview');
         document.body.appendChild(tip);
         setTimeout(() => tip.remove(), 4000);
       }, 600);

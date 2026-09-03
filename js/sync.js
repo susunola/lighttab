@@ -80,15 +80,16 @@
 
   function friendlyAuthError(err) {
     const m = String(err && err.message || err);
+    // 服务器返回英文错误文案 → 映射为 i18n key，由 app.js 按当前语言取词；未知文案原样返回
     const map = {
-      'invalid email or password': '邮箱或密码错误',
-      'password must be at least 8 characters': '密码至少 8 位',
-      'invalid email address': '邮箱格式不正确',
-      'email address does not exist': '该邮箱不存在，请检查后重试',
-      'email already registered': '该邮箱已注册，请直接登录',
-      'email not verified': '邮箱尚未验证，请查收邮件完成验证',
-      'rate limited, try again later': '操作太频繁，请稍后再试',
-      'network unreachable': '无法连接服务器，请检查网络'
+      'invalid email or password': 'sync.err.invalid',
+      'password must be at least 8 characters': 'sync.err.pass_short',
+      'invalid email address': 'sync.err.email_invalid',
+      'email address does not exist': 'sync.err.email_missing',
+      'email already registered': 'sync.err.email_registered',
+      'email not verified': 'sync.err.email_unverified',
+      'rate limited, try again later': 'sync.err.rate',
+      'network unreachable': 'sync.err.network'
     };
     return map[m] || m;
   }
@@ -193,10 +194,10 @@
         S.auth = null;
         await saveAuth();
         S.status = 'error';
-        S.lastError = '登录已过期，请重新登录';
+        S.lastError = 'sync.err.expired';
       } else if (err && err.status === 0) {
         S.status = 'offline';
-        S.lastError = '无法连接服务器，已保留本地修改';
+        S.lastError = 'sync.err.offline';
       } else {
         S.status = 'error';
         S.lastError = String(err && err.message || err);
