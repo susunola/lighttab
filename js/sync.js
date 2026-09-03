@@ -8,7 +8,9 @@
 (() => {
   'use strict';
 
-  const SYNC_BASE = 'https://lighttab.atomwangnus.com';
+  // 后端地址单一来源：sync.js 先于 app.js 加载（见 newtab.html 的 script 顺序），挂 window 供 app.js 壁纸库复用
+  if (!window.LT_API_BASE) window.LT_API_BASE = 'https://lighttab.atomwangnus.com';
+  const SYNC_BASE = window.LT_API_BASE;
   const SYNC_KEYS = ['lt.settings', 'lt.items', 'lt.wallpaper', 'lt.todos', 'lt.prompts'];
   const AUTH_KEY = 'lt.auth';
   const META_KEY = 'lt.syncmeta';
@@ -54,6 +56,17 @@
 
   function emit() { for (const cb of S.listeners) { try { cb(); } catch {} } }
 
+  // 服务器时间校准：本机时钟可能与服务器有偏差，LWW 比较统一用 nowServer()（本机时钟 + 偏移）。
+  // 偏移来源：响应体 serverTime（毫秒，优先）；缺失时退化到响应头 Date（秒级）。
+  // 局限：忽略 RTT，误差通常在亚秒级——对「整文档、人工操作频率」的 LWW 足够；
+  // 两者都不可用时退化为纯本机时钟（同一台设备自洽，跨设备以服务器 updatedAt 为准）。
+  let serverOffset = 0;
+  function nowServer() { return Date.now() + serverOffset; }
+  function noteServerTime(st) {
+    const t = Number(st);
+    if (Number.isFinite(t) && t > 0) serverOffset = t - Date.now();
+  }
+
   class HttpError extends Error {
     constructor(status, message) { super(message); this.status = status; }
   }
@@ -71,6 +84,11 @@
     } catch (e) {
       throw new HttpError(0, 'network unreachable');
     }
+    // 无 serverTime 字段的响应用 Date 头兜底校准时钟（秒级精度，仅作退化方案）
+    try {
+      const dh = res.headers.get('Date');
+      if (dh) { const t = Date.parse(dh); if (Number.isFinite(t)) serverOffset = t - Date.now(); }
+    } catch {}
     if (res.status === 204) return null;
     let data = {};
     try { data = await res.json(); } catch {}
@@ -78,20 +96,24 @@
     return data;
   }
 
+  // TODO: 后端改为返回结构化 error code 后按 code 映射；当前用 lowercase 子串匹配，
+  // 容忍后端英文措辞微调（大小写/标点变化不再导致提示退化为英文原文）。
   function friendlyAuthError(err) {
-    const m = String(err && err.message || err);
-    // 服务器返回英文错误文案 → 映射为 i18n key，由 app.js 按当前语言取词；未知文案原样返回
-    const map = {
-      'invalid email or password': 'sync.err.invalid',
-      'password must be at least 8 characters': 'sync.err.pass_short',
-      'invalid email address': 'sync.err.email_invalid',
-      'email address does not exist': 'sync.err.email_missing',
-      'email already registered': 'sync.err.email_registered',
-      'email not verified': 'sync.err.email_unverified',
-      'rate limited, try again later': 'sync.err.rate',
-      'network unreachable': 'sync.err.network'
-    };
-    return map[m] || m;
+    const raw = String(err && err.message || err);
+    const m = raw.toLowerCase();
+    // 服务器英文文案 → i18n key（app.js 按当前语言取词）；未知文案原样返回
+    const map = [
+      ['invalid email or password', 'sync.err.invalid'],
+      ['password must be at least 8 characters', 'sync.err.pass_short'],
+      ['invalid email address', 'sync.err.email_invalid'],
+      ['email address does not exist', 'sync.err.email_missing'],
+      ['email already registered', 'sync.err.email_registered'],
+      ['email not verified', 'sync.err.email_unverified'],
+      ['rate limited', 'sync.err.rate'],
+      ['network unreachable', 'sync.err.network']
+    ];
+    for (const [k, v] of map) { if (m.includes(k)) return v; }
+    return raw;
   }
 
   // ---------- 认证 ----------
@@ -113,6 +135,17 @@
       S.auth = { token: d.token, email: d.user.email, userId: d.user.userId };
       S.pendingVerifyEmail = '';
       await saveAuth();
+      // 首次登录：把本地已有的存量数据全部标 dirty，让首轮 sync 的 push 阶段推上去
+      // （首轮 pull 服务器优先：服务器已有的 key 会覆盖本地并清掉 dirty；服务器没有的 key 在此刻补齐）
+      const local = await sGet(SYNC_KEYS);
+      const now = nowServer();
+      for (const key of SYNC_KEYS) {
+        if (local[key] === undefined) continue;   // 本地从未写入的 key 不推空文档
+        const meta = S.meta.docs[key] || { rev: 0, dirtyAt: 0 };
+        meta.dirtyAt = now;
+        S.meta.docs[key] = meta;
+      }
+      await saveMeta();
       emit();
       await syncNow(true);   // 登录后立即首轮同步
       return { ok: true };
@@ -163,7 +196,7 @@
     if (!S.auth) return;                    // 未登录不追踪
     if (!SYNC_KEYS.includes(key)) return;
     if (!S.meta.docs[key]) S.meta.docs[key] = { rev: 0, dirtyAt: 0 };
-    S.meta.docs[key].dirtyAt = Date.now();
+    S.meta.docs[key].dirtyAt = nowServer();   // 用校准后的服务器时间标 dirty，避免本机时钟偏差输掉 LWW
     saveMeta();
     scheduleSync();
   }
@@ -230,7 +263,7 @@
       }
       S.meta.docs[key] = { rev: doc.rev, dirtyAt: 0 };
     }
-    if (pull && pull.serverTime) S.meta.lastServerTime = pull.serverTime;
+    if (pull && pull.serverTime) { noteServerTime(pull.serverTime); S.meta.lastServerTime = pull.serverTime; }
     await saveMeta();
     if (changed && S.remoteApply) { try { await S.remoteApply(); } catch {} }
   }
@@ -274,7 +307,7 @@
         S.meta.docs[res.key] = { rev: res.newRev, dirtyAt: 0 };
       }
     }
-    if (push.serverTime) S.meta.lastServerTime = push.serverTime;
+    if (push.serverTime) { noteServerTime(push.serverTime); S.meta.lastServerTime = push.serverTime; }
     await saveMeta();
     if (changed && S.remoteApply) { try { await S.remoteApply(); } catch {} }
   }

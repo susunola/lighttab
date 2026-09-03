@@ -1,5 +1,6 @@
 /**
- * LightTab v1.10.0 · 中国农历换算（纯本地、零依赖、零网络）
+ * LightTab · 中国农历换算（纯本地、零依赖、零网络）
+ *（版本号统一由 manifest.json 承载，文件头不再维护）
  *
  * 数据源：1900–2100 农历数据表（lunarInfo），算法为通用公历→农历换算。
  * 对外暴露 window.LT_LUNAR = { toLunar, monthName, dayName, ganzhiYear, animalYear }。

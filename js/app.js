@@ -110,9 +110,16 @@
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
     ));
   }
-  function debounce(fn, ms) {
-    let tid = 0;
-    return (...args) => { clearTimeout(tid); tid = setTimeout(() => fn(...args), ms); };
+  // 输入是否像 URL：带 scheme 直认；裸域名可带路径/查询/锚点（github.com/susunola），含空格的搜索词不误判
+  function looksLikeUrl(q) {
+    return /^https?:\/\//i.test(q) || /^[^\s]+\.[a-z]{2,}([/?#]\S*)?$/i.test(q);
+  }
+  // 壁纸 URL 白名单（防 CSS 注入）：仅允许 data:image/ 与 https:，且拒绝引号/反斜杠/换行
+  function sanitizeWallpaperUrl(v) {
+    if (typeof v !== 'string' || !v) return null;
+    if (/['"\\\r\n]/.test(v)) return null;
+    if (/^data:image\//i.test(v) || /^https:/i.test(v)) return v;
+    return null;
   }
   // 焦点是否落在文本输入类元素上（输入框 / 多行框 / 下拉 / 可编辑区）
   function isTypingTarget(el) {
@@ -246,16 +253,20 @@
       el.style.background = WALLPAPERS[0].css;
       return;
     }
-    if (wp.type === 'image' && wp.value) {
-      el.style.background = `center/cover no-repeat url("${wp.value}")`;
+    if (wp.type === 'image' && sanitizeWallpaperUrl(wp.value)) {
+      el.style.background = `center/cover no-repeat url("${sanitizeWallpaperUrl(wp.value)}")`;
     } else if (wp.type === 'gradient' && wp.value) {
       el.style.background = wp.value;
     } else {
+      // 含非法 image URL 时也落到默认渐变
       el.style.background = WALLPAPERS[0].css;
     }
   }
   function pickWallpaperFromData(data) {
-    if (data && data.type === 'image' && data.value) return data;
+    // 导入/读取路径统一过白名单：非法 image URL 回退默认渐变
+    if (data && data.type === 'image' && sanitizeWallpaperUrl(data.value)) {
+      return { ...data, value: sanitizeWallpaperUrl(data.value) };
+    }
     if (data && data.type === 'gradient' && data.value) return data;
     // 兼容旧版：未保存 → 渐变默认
     return { type: 'gradient', value: WALLPAPERS[0].css };
@@ -267,7 +278,8 @@
   }
 
   // ---------- 壁纸库（必应每日壁纸，经后端代理绕 CORS） ----------
-  const WALL_LIB_BASE = 'https://lighttab.atomwangnus.com';
+  // 后端地址与 sync.js 共用 window.LT_API_BASE（sync.js 先加载并定义；此处兜底常量防御顺序变化）
+  const WALL_LIB_BASE = window.LT_API_BASE || 'https://lighttab.atomwangnus.com';
   let wallLibImages = null;
 
   // 渐变 swatch 渲染（顶层函数，供 bindSettings 与壁纸库应用后复用）
@@ -281,8 +293,8 @@
       <div class="swatch ${i === currentId ? 'active' : ''}" data-i="${i}" style="background:${w.css}">
         <span class="label">${t('wp.' + w.id)}</span>
       </div>
-    `).join('') + (state.wallpaper?.type === 'image' ? `
-      <div class="swatch active" data-i="img" style="background:center/cover url('${state.wallpaper.value}')">
+    `).join('') + (state.wallpaper?.type === 'image' && sanitizeWallpaperUrl(state.wallpaper.value) ? `
+      <div class="swatch active" data-i="img" style="background:center/cover url('${sanitizeWallpaperUrl(state.wallpaper.value)}')">
         <span class="label">${t('wp.custom')}</span>
       </div>
     ` : '');
@@ -446,7 +458,7 @@
       return;
     }
 
-    if (/^https?:\/\//i.test(q) || /\.[a-z]{2,}$/i.test(q) && !/\s/.test(q)) {
+    if (looksLikeUrl(q)) {
       const url = normalizeUrl(q);
       if (url) { openResult(url, ev); return; }
     }
@@ -851,17 +863,23 @@
   // ---------- 图标渲染（全本地，零网络请求） ----------
   // 匹配链：完整 host → 剥 www host → 收录品牌主域尾缀（如 zh.wikipedia.org → wikipedia.org 未收录则跳过）
   // → 品牌色文字块兜底。ICONDB 见 js/icondb.js（simple-icons CC0 品牌 path + 品牌色）
+  const iconCache = new Map(); // hostname → icon | null
   function iconFor(url) {
     let host = hostnameOf(url);
     if (!host) return null;
+    // ICONDB 运行期只读，按 hostname 缓存匹配结果，避免每次渲染全表扫后缀
+    if (iconCache.has(host)) return iconCache.get(host);
     const I = window.LT_ICONDB || {};
-    if (I[host]) return I[host];
-    if (host.startsWith('www.')) host = host.slice(4);
-    if (I[host]) return I[host];
-    for (const key of Object.keys(I)) {
-      if (host !== key && host.endsWith('.' + key)) return I[key];
+    let res = I[host] || null;
+    if (!res && host.startsWith('www.')) host = host.slice(4);
+    if (!res) res = I[host] || null;
+    if (!res) {
+      for (const key of Object.keys(I)) {
+        if (host !== key && host.endsWith('.' + key)) { res = I[key]; break; }
+      }
     }
-    return null;
+    iconCache.set(host, res);
+    return res;
   }
   function cardHtml(it) {
     const host = hostnameOf(it.url) || it.title;
@@ -1171,7 +1189,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.17.0',
+      version: '1.18.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -1262,7 +1280,8 @@
   }
   // 从书签导入：走 optional_permissions（bookmarks），首次点击时请求授权
   async function importBookmarks() {
-    if (!window.chrome || !chrome.permissions || !chrome.bookmarks) {
+    // 仅判断预览模式（无扩展 API）；chrome.bookmarks 未授权时本就不存在，走下方权限请求分支
+    if (!window.chrome || !chrome.permissions) {
       showToast(t('toast.bookmarks_unavailable'));
       return;
     }
@@ -1500,11 +1519,8 @@
     const dataUrl = await compressImage(f, 2560, 0.82);
     const light = await isLightImage(dataUrl);
     await setWallpaper({ type: 'image', value: dataUrl, light });
-    document.getElementById('swatches').querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    renderSwatches(); // 重渲染即带 active 态，无需手动清 class 或重开弹窗
     showToast(t('toast.wall_applied'));
-    // 触发设置面板刷新
-    document.getElementById('btn-wall').click();
-    document.getElementById('swatches').querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
   }
   // 判定图片整体亮度（缩略采样），浅色图用于加深遮罩
   function isLightImage(dataUrl) {
@@ -1553,6 +1569,7 @@
   }
 
   // ---------- Toast ----------
+  let toastTimer = 0; // 上一个 toast 的自动隐藏计时器，新 toast 出现时取消，避免旧计时器提前关掉新提示
   function showToast(text, actionLabel, action, ttl) {
     const box = document.getElementById('toast');
     box.innerHTML = `<span>${escapeHtml(text)}</span>` +
@@ -1564,7 +1581,8 @@
         box.hidden = true;
       });
     }
-    if (ttl) setTimeout(() => box.hidden = true, ttl);
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = 0; }
+    if (ttl) toastTimer = setTimeout(() => { box.hidden = true; toastTimer = 0; }, ttl);
   }
   function copyText(text) {
     if (navigator.clipboard) {
@@ -1747,7 +1765,8 @@
     return { raw, data };
   }
 
-  // 云同步拉取覆盖本地后：刷新内存 state + 重渲染数据型 UI（不重绑事件）
+  // 云同步拉取覆盖本地后：刷新内存 state + 重渲染数据型 UI（不重绑事件），并提示一次
+  // （sync.js 仅在实际有远端覆盖时调用 remoteApply，轮询空转不会弹）
   async function reloadFromStorage() {
     await loadDataIntoState();
     setLangOnly(state.settings.lang);
@@ -1762,6 +1781,7 @@
     if (nameInput) nameInput.value = state.settings.name || '';
     const engineSel = document.getElementById('f-engine');
     if (engineSel) engineSel.value = state.settings.engine;
+    showToast(t('sync.applied'));
   }
 
   // ---------- 自由画布布局（块自由拖拽移动） ----------
@@ -2203,8 +2223,11 @@
     bindCardCanvasDrag();
 
     if (window.ResizeObserver) {
+      // 多个 observe 目标可能同帧连发回调：用 rAF 合并，避免一帧内重复测量
+      let rafId = 0;
       const ro = new ResizeObserver(() => {
-        refreshCanvasHeight();
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => { rafId = 0; refreshCanvasHeight(); });
       });
       blockEls().forEach(b => ro.observe(b.el));
       const grid = document.getElementById('grid');
@@ -2365,6 +2388,9 @@
       }, 600);
     }
   }
+
+  // 纯函数出口（供 scripts/smoke.cjs 离线断言；与 window.LT_LUNAR / window.LT_SYNC 同一风格）
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, hostnameOf, iconFor };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

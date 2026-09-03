@@ -152,7 +152,7 @@
     'gen.data_tip': { zh: '备份/恢复全部数据（快捷方式、待办、设置、壁纸）。导出文件可跨浏览器迁移。', en: 'Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.' },
     'gen.reset':    { zh: '恢复默认数据', en: 'Reset to defaults' },
     'gen.done':     { zh: '完成', en: 'Done' },
-    'gen.version':  { zh: 'LightTab v1.17.0 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.17.0 · Minimal new tab · Local-first, optional cloud sync' },
+    'gen.version':  { zh: 'LightTab v1.18.0 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.18.0 · Minimal new tab · Local-first, optional cloud sync' },
 
     // ---------- 模板 tab ----------
     'prompt.title':  { zh: 'Prompt 模板 · AI 发射台', en: 'Prompt templates · AI launcher' },
@@ -244,6 +244,7 @@
     'sync.login_success':  { zh: '登录成功，正在同步…', en: 'Logged in, syncing…' },
     'sync.resend_sent':    { zh: '验证邮件已重新发送', en: 'Verification email re-sent' },
     'sync.logged_out':     { zh: '已登出', en: 'Logged out' },
+    'sync.applied':        { zh: '已从云端同步更新', en: 'Updated from cloud sync' },
     'sync.err_email':      { zh: '请输入邮箱', en: 'Please enter an email' },
     'sync.err_pass':       { zh: '密码至少 8 位', en: 'Password must be at least 8 characters' },
     'sync.err.invalid':        { zh: '邮箱或密码错误', en: 'Incorrect email or password' },
