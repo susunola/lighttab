@@ -234,6 +234,78 @@
     await Store.set(K.wallpaper, wp);
   }
 
+  // ---------- 壁纸库（必应每日壁纸，经后端代理绕 CORS） ----------
+  const WALL_LIB_BASE = 'https://lighttab.atomwangnus.com';
+  let wallLibImages = null;
+
+  // 渐变 swatch 渲染（顶层函数，供 bindSettings 与壁纸库应用后复用）
+  function renderSwatches() {
+    const swEl = document.getElementById('swatches');
+    if (!swEl) return;
+    const currentId = state.wallpaper?.type === 'gradient'
+      ? WALLPAPERS.findIndex(w => w.css === state.wallpaper.value)
+      : -1;
+    swEl.innerHTML = WALLPAPERS.map((w, i) => `
+      <div class="swatch ${i === currentId ? 'active' : ''}" data-i="${i}" style="background:${w.css}">
+        <span class="label">${w.name}</span>
+      </div>
+    `).join('') + (state.wallpaper?.type === 'image' ? `
+      <div class="swatch active" data-i="img" style="background:center/cover url('${state.wallpaper.value}')">
+        <span class="label">自定义</span>
+      </div>
+    ` : '');
+    swEl.querySelectorAll('.swatch').forEach(el => {
+      el.addEventListener('click', () => {
+        if (el.dataset.i === 'img') return;
+        const w = WALLPAPERS[+el.dataset.i];
+        setWallpaper({ type: 'gradient', value: w.css });
+        renderSwatches();
+      });
+    });
+  }
+
+  async function fetchWallLib() {
+    const btn = document.getElementById('btn-wall-fetch');
+    const tip = document.getElementById('wall-lib-tip');
+    if (btn) btn.disabled = true;
+    if (tip) tip.textContent = '加载中…';
+    try {
+      const res = await fetch(WALL_LIB_BASE + '/v1/wallpapers?idx=0&n=8&mkt=zh-CN');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      wallLibImages = (data.images || []).filter(im => im && im.url);
+      renderWallLibGrid();
+      if (tip) tip.textContent = `已获取 ${wallLibImages.length} 张必应每日壁纸 · 点击应用（图片来源见版权信息）`;
+    } catch (e) {
+      wallLibImages = null;
+      renderWallLibGrid();
+      if (tip) tip.textContent = '壁纸库加载失败：' + (e && e.message || e) + '（需联网）';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function renderWallLibGrid() {
+    const grid = document.getElementById('wall-lib-grid');
+    if (!grid) return;
+    if (!wallLibImages || !wallLibImages.length) { grid.innerHTML = ''; return; }
+    const cur = state.wallpaper && state.wallpaper.type === 'image' ? state.wallpaper.value : '';
+    grid.innerHTML = wallLibImages.map(im => `
+      <div class="wall-thumb ${im.url === cur ? 'active' : ''}" data-url="${escapeHtml(im.url)}" title="${escapeHtml(im.copyright || im.title || '')}">
+        <img src="${escapeHtml(im.url)}" alt="${escapeHtml(im.title || '')}" loading="lazy">
+        <span class="wall-thumb-copy">${escapeHtml(im.title || im.copyright || '')}</span>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.wall-thumb').forEach(el => {
+      el.addEventListener('click', async () => {
+        await setWallpaper({ type: 'image', value: el.dataset.url });
+        renderSwatches();
+        renderWallLibGrid();
+        showToast('已应用壁纸');
+      });
+    });
+  }
+
   // ---------- 时钟 / 问候 ----------
   function startClock() {
     const hhmmEl = document.getElementById('clock-hhmm');
@@ -1062,7 +1134,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.13.0',
+      version: '1.14.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -1195,32 +1267,9 @@
   // ---------- 弹窗（设置 / 壁纸） ----------
   function bindSettings() {
     const modal = document.getElementById('modal-set');
-    const swEl = document.getElementById('swatches');
     const tabs = modal.querySelectorAll('.tab');
     const panes = modal.querySelectorAll('.tab-pane');
 
-    function renderSwatches() {
-      const currentId = state.wallpaper?.type === 'gradient'
-        ? WALLPAPERS.findIndex(w => w.css === state.wallpaper.value)
-        : -1;
-      swEl.innerHTML = WALLPAPERS.map((w, i) => `
-        <div class="swatch ${i === currentId ? 'active' : ''}" data-i="${i}" style="background:${w.css}">
-          <span class="label">${w.name}</span>
-        </div>
-      `).join('') + (state.wallpaper?.type === 'image' ? `
-        <div class="swatch active" data-i="img" style="background:center/cover url('${state.wallpaper.value}')">
-          <span class="label">自定义</span>
-        </div>
-      ` : '');
-      swEl.querySelectorAll('.swatch').forEach(el => {
-        el.addEventListener('click', () => {
-          if (el.dataset.i === 'img') return;
-          const w = WALLPAPERS[+el.dataset.i];
-          setWallpaper({ type: 'gradient', value: w.css });
-          renderSwatches();
-        });
-      });
-    }
     modal.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => modal.hidden = true));
     modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
     tabs.forEach(t => t.addEventListener('click', () => {
@@ -1235,6 +1284,7 @@
       renderSwatches();
       showToast('已恢复默认渐变');
     });
+    document.getElementById('btn-wall-fetch').addEventListener('click', fetchWallLib);
     document.getElementById('btn-reset-all').addEventListener('click', resetAll);
     // 模板管理（设置 → 模板）：＋ 新建
     document.getElementById('btn-prompt-add').addEventListener('click', () => {
@@ -1279,6 +1329,7 @@
       nameInput.value = state.settings.name || '';
       engineSel.value = state.settings.engine;
       renderSwatches();
+      renderWallLibGrid();
       modal.hidden = false;
     }
   }
