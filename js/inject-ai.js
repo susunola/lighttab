@@ -1,5 +1,6 @@
 /**
- * LightTab v1.10.0 · AI 站点自动搜索注入（豆包 / ChatGPT 通用 · v3）
+ * LightTab · AI 站点自动搜索注入（豆包 / ChatGPT 通用）
+ *（版本号统一由 manifest.json 承载，文件头不再维护）
  *
  * 由 LightTab 打开 <site>/?lt_auto=1&lt_k=<nonce> 时自动执行：
  * 1) 从扩展 storage 读取 lt.pending.<nonce> = { p, t } 取回完整 prompt（明文不落 URL）
@@ -219,6 +220,7 @@
           await waitCleared(input);
         } else {
           log('give up: could not fill text into input');
+          fallbackCopyAndNotify('未能把 Prompt 填入输入框', 'could not fill the prompt into the input box', text);
         }
         setTimeout(clearParams, 800);
         return;
@@ -226,7 +228,53 @@
       await sleep(250);
     }
     log('timeout: no input box found (maybe not logged in)');
+    fallbackCopyAndNotify('未找到对话输入框（可能未登录或页面结构已变更）', 'no chat input box found (maybe not logged in, or the page layout changed)', text);
     clearParams();
+  }
+
+  // ---------- 失败回退：复制 prompt 到剪贴板 + 页面内可见提示 ----------
+  async function copyPrompt(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (_) { /* 页面未聚焦等原因失败，走 execCommand 兜底 */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return !!ok;
+    } catch (_) { return false; }
+  }
+
+  // content script 里没有 newtab 的 toast，注入一个浮动提示条
+  function notify(msg) {
+    try {
+      const tip = document.createElement('div');
+      tip.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);max-width:72vw;'
+        + 'background:rgba(20,26,44,.94);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;'
+        + 'line-height:1.5;z-index:2147483647;border:1px solid rgba(255,255,255,.2);box-shadow:0 8px 24px rgba(0,0,0,.35)';
+      tip.textContent = msg;
+      (document.body || document.documentElement).appendChild(tip);
+      setTimeout(() => tip.remove(), 8000);
+    } catch (_) { /* ignore */ }
+  }
+
+  // content script 不加载 i18n.js（manifest 未声明），按浏览器语言做中英双语
+  const isZh = () => String(navigator.language || 'zh').toLowerCase().startsWith('zh');
+  async function fallbackCopyAndNotify(reasonZh, reasonEn, text) {
+    const ok = await copyPrompt(text);
+    const reason = isZh() ? reasonZh : reasonEn;
+    notify(ok
+      ? (isZh() ? `LightTab：${reason}，Prompt 已复制到剪贴板，请在输入框粘贴后手动发送`
+                : `LightTab: ${reason}. The prompt has been copied to your clipboard — paste and send it manually`)
+      : (isZh() ? `LightTab：${reason}，且复制到剪贴板失败，请手动输入 Prompt`
+                : `LightTab: ${reason}, and copying to the clipboard failed — please type the prompt manually`));
   }
 
   // 解析最终文本：lt_k 优先（扩展通道），取不到回落 URL 明文 q
