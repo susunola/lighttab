@@ -293,6 +293,63 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink-3);
 }
 
+/* 日历 widget（纯本地月历 + 农历日） */
+.wcal .cal-nav {
+  display: flex; align-items: center; gap: 4px;
+}
+.cal-title {
+  min-width: 78px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-2);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.cal-nav-btn {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px;
+  color: var(--ink-2);
+  font-size: 17px;
+  line-height: 1;
+  transition: background .15s ease, color .15s ease;
+}
+.cal-nav-btn:hover { background: var(--glass-2); color: var(--ink); }
+.cal-week {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 3px;
+}
+.cal-week span {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  padding: 2px 0;
+}
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.cal-cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 38px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.cal-cell b { font-weight: 400; line-height: 1; }
+.cal-cell i {
+  font-style: normal;
+  font-size: 9px;
+  color: var(--ink-3);
+  line-height: 1;
+  margin-top: 3px;
+  letter-spacing: 0.02em;
+}
+.cal-cell.today { background: rgba(125, 211, 252, 0.16); }
+.cal-cell.today b { color: var(--accent); font-weight: 600; }
+.cal-cell.today i { color: var(--accent); }
+.cal-cell.empty { cursor: default; }
+
 /* ====== 搜索 ====== */
 .search {
   position: relative;

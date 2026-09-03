@@ -1419,6 +1419,41 @@
     renderTodos();
   }
 
+  // ---------- 日历 widget（纯本地月历，含农历日；零网络请求） ----------
+  const calCursor = { y: 0, m: 0 }; // 当前显示年月；0 表示跟随今天
+  function renderCalendar() {
+    const title = document.getElementById('cal-title');
+    const grid = document.getElementById('cal-grid');
+    if (!title || !grid) return;
+    const now = new Date();
+    if (!calCursor.y) { calCursor.y = now.getFullYear(); calCursor.m = now.getMonth() + 1; }
+    const y = calCursor.y, m = calCursor.m;
+    title.textContent = `${y}年${m}月`;
+    const startDow = new Date(y, m - 1, 1).getDay(); // 0=周日
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const isThisMonth = y === now.getFullYear() && m === now.getMonth() + 1;
+    const cells = [];
+    for (let i = 0; i < startDow; i++) cells.push('<span class="cal-cell empty"></span>');
+    for (let d = 1; d <= daysInMonth; d++) {
+      let lday = '';
+      if (window.LT_LUNAR) {
+        const lu = window.LT_LUNAR.toLunar(y, m, d);
+        if (lu) lday = window.LT_LUNAR.dayName(lu.day);
+      }
+      const isToday = isThisMonth && d === now.getDate();
+      const cls = 'cal-cell' + (isToday ? ' today' : '');
+      cells.push(`<span class="${cls}"><b>${d}</b><i>${lday}</i></span>`);
+    }
+    grid.innerHTML = cells.join('');
+  }
+  function bindCalendar() {
+    const prev = document.getElementById('cal-prev');
+    const next = document.getElementById('cal-next');
+    if (!prev || !next) return;
+    prev.addEventListener('click', () => { calCursor.m--; if (calCursor.m < 1) { calCursor.m = 12; calCursor.y--; } renderCalendar(); });
+    next.addEventListener('click', () => { calCursor.m++; if (calCursor.m > 12) { calCursor.m = 1; calCursor.y++; } renderCalendar(); });
+  }
+
   // ---------- 重置 ----------
   async function resetAll() {
     if (!confirm('确认重置所有数据？\n（名称、引擎、壁纸、快捷方式、分组、模板、待办都会被清空）')) return;
@@ -1506,6 +1541,8 @@
     syncUI();
     bindGroupBar();
     startClock();
+    renderCalendar();
+    bindCalendar();
     bindTodo();
 
     // 搜索

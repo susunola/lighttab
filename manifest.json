@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "LightTab - Minimal New Tab",
   "short_name": "LightTab",
-  "version": "1.10.0",
-  "description": "极简新标签页：时钟问候（含中国农历）、聚合搜索、AI 模板发射台（最近使用优先）、图标分组网格、待办与壁纸。本地存储零上传，支持书签与 JSON 备份。",
+  "version": "1.11.0",
+  "description": "极简新标签页：时钟问候（含中国农历）、月历、聚合搜索、AI 模板发射台（最近使用优先）、图标分组网格、待办与壁纸。本地存储零上传，支持书签与 JSON 备份。",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },

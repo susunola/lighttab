@@ -7,6 +7,7 @@ A minimal, calm, fast new-tab page: live clock & greeting (with Chinese lunar ca
 ## Features
 
 - **Clock & greeting** — live time, date, time-of-day greeting, plus Chinese lunar calendar (干支纪年 / 生肖 / 闰月, 1900–2100, pure local computation)
+- **Calendar widget** — local month view with lunar-day labels and month navigation (zero network)
 - **One-box search** — URL shortcuts + 6 search engines + 2 AI chats (Doubao, ChatGPT) + WorkBuddy deep link
 - **AI Prompt Launcher** (press `/`) — pick a template, type your content, send the same prompt to multiple targets at once. Prompt text never travels in the URL (nonce channel in extension mode)
 - **Icon grid** — drag-to-reorder, folders/groups, built-in brand-icon library (zero external favicon requests)
