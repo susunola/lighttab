@@ -742,8 +742,18 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   letter-spacing: 0.04em;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
-.upload-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
-.upload-row > .btn { flex: 1; text-align: center; justify-content: center; min-width: 0; }
+.upload-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+.upload-row > .btn {
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+  margin: 0;
+}
 
 /* ====== 壁纸库（必应每日壁纸） ====== */
 .wall-lib { margin-top: 16px; }
