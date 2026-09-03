@@ -1134,7 +1134,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.14.0',
+      version: '1.15.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -1356,14 +1356,20 @@
     if (!panel || !window.LT_SYNC) return;
     const st = window.LT_SYNC.getState();
     if (!st.loggedIn) {
+      const pending = st.pendingVerifyEmail;
+      const pendingTip = pending
+        ? `<p class="form-tip sync-verify-tip">验证邮件已发送到 <b>${escapeHtml(pending)}</b>，请查收邮箱并点击邮件里的链接完成验证，完成后用下方账号登录。</p>`
+        : '';
       panel.innerHTML = `
+        ${pendingTip}
         <p class="form-tip">登录后可在多台设备间同步快捷方式、待办、设置、壁纸与模板。数据经 HTTPS 加密传输，密码仅存加密哈希，本地数据始终可用。</p>
-        <label><span>邮箱</span><input id="sync-email" type="email" autocomplete="email" placeholder="you@example.com"></label>
+        <label><span>邮箱</span><input id="sync-email" type="email" autocomplete="email" placeholder="you@example.com"${pending ? ` value="${escapeHtml(pending)}"` : ''}></label>
         <label><span>密码</span><input id="sync-pass" type="password" autocomplete="current-password" placeholder="至少 8 位"></label>
         <div class="sync-err" id="sync-err" hidden></div>
         <div class="sync-actions">
           <button type="button" class="btn primary" data-sync="login">登录</button>
           <button type="button" class="btn ghost" data-sync="register">注册新账号</button>
+          ${pending ? `<button type="button" class="btn ghost" data-sync="resend">重发验证邮件</button>` : ''}
         </div>`;
     } else {
       const dot = st.status === 'syncing' ? 'busy' : (st.status === 'error' || st.status === 'offline' ? 'warn' : 'ok');
@@ -1401,9 +1407,30 @@
           ? await window.LT_SYNC.login(email, pass)
           : await window.LT_SYNC.register(email, pass);
         btn.disabled = false;
-        if (!r.ok) { syncShowErr(r.error); renderSyncPanel(); return; }
+        if (!r.ok) {
+          if (r.verifyPending) {
+            renderSyncPanel();  // 待验证态：邮箱预填 + 重发按钮
+            syncShowErr(r.error);
+          } else {
+            syncShowErr(r.error);  // 保留输入，仅提示错误
+          }
+          return;
+        }
+        if (r.verify) {
+          showToast('验证邮件已发送，请查收邮箱完成验证');
+          renderSyncPanel();
+          return;
+        }
         if (errEl) errEl.hidden = true;
         showToast('登录成功，正在同步…');
+      } else if (action === 'resend') {
+        const email = (document.getElementById('sync-email').value || '').trim();
+        if (!email) { syncShowErr('请输入邮箱'); return; }
+        btn.disabled = true;
+        const r = await window.LT_SYNC.resend(email);
+        btn.disabled = false;
+        if (!r.ok) { syncShowErr(r.error); return; }
+        showToast('验证邮件已重新发送');
       } else if (action === 'logout') {
         await window.LT_SYNC.logout();
         showToast('已登出');
