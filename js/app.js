@@ -172,6 +172,8 @@
       try {
         if (hasChromeStorage) await chrome.storage.local.set({ [key]: val });
         else localStorage.setItem(key, JSON.stringify(val));
+        // 云同步：业务 key 写入后标记 dirty（未登录时 sync 模块内部直接忽略）
+        if (window.LT_SYNC) window.LT_SYNC.onLocalWrite(key);
       } catch (err) {
         console.warn('[LightTab] 保存失败', key, err);
         // 存储写失败不阻塞主流程，但必须让用户知道（壁纸 dataURL 最易触顶配额）
@@ -1058,7 +1060,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.10.0',
+      version: '1.12.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -1277,6 +1279,94 @@
       modal.hidden = false;
     }
   }
+  // ---------- 云同步设置面板 ----------
+  function syncStatusText(st) {
+    switch (st.status) {
+      case 'syncing': return '同步中…';
+      case 'offline': return '离线，已保留本地修改';
+      case 'error': return st.lastError || '同步出错';
+      default: return st.lastSyncAt ? '已同步' : '待同步';
+    }
+  }
+  function fmtSyncTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+  function syncShowErr(msg) {
+    const el = document.getElementById('sync-err');
+    if (el) { el.textContent = msg; el.hidden = false; }
+  }
+  function renderSyncPanel() {
+    const panel = document.getElementById('sync-panel');
+    if (!panel || !window.LT_SYNC) return;
+    const st = window.LT_SYNC.getState();
+    if (!st.loggedIn) {
+      panel.innerHTML = `
+        <p class="form-tip">登录后可在多台设备间同步快捷方式、待办、设置、壁纸与模板。数据经 HTTPS 加密传输，密码仅存加密哈希，本地数据始终可用。</p>
+        <label><span>邮箱</span><input id="sync-email" type="email" autocomplete="email" placeholder="you@example.com"></label>
+        <label><span>密码</span><input id="sync-pass" type="password" autocomplete="current-password" placeholder="至少 8 位"></label>
+        <div class="sync-err" id="sync-err" hidden></div>
+        <div class="sync-actions">
+          <button type="button" class="btn primary" data-sync="login">登录</button>
+          <button type="button" class="btn ghost" data-sync="register">注册新账号</button>
+        </div>`;
+    } else {
+      const dot = st.status === 'syncing' ? 'busy' : (st.status === 'error' || st.status === 'offline' ? 'warn' : 'ok');
+      panel.innerHTML = `
+        <div class="sync-row">
+          <span class="data-label">已登录</span>
+          <span class="sync-email">${escapeHtml(st.email)}</span>
+        </div>
+        <div class="sync-status">
+          <span class="dot ${dot}"></span>
+          <span>${escapeHtml(syncStatusText(st))}</span>
+          ${st.lastSyncAt ? `<span class="sync-time">${fmtSyncTime(st.lastSyncAt)}</span>` : ''}
+        </div>
+        <div class="sync-actions">
+          <button type="button" class="btn ghost sm" data-sync="now">立即同步</button>
+          <button type="button" class="btn ghost sm" data-sync="logout">登出</button>
+        </div>`;
+    }
+  }
+  function bindSyncPanel() {
+    const panel = document.getElementById('sync-panel');
+    if (!panel || !window.LT_SYNC) return;
+    panel.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-sync]');
+      if (!btn) return;
+      const action = btn.dataset.sync;
+      const errEl = document.getElementById('sync-err');
+      if (action === 'login' || action === 'register') {
+        const email = (document.getElementById('sync-email').value || '').trim();
+        const pass = document.getElementById('sync-pass').value;
+        if (!email) { syncShowErr('请输入邮箱'); return; }
+        if (pass.length < 8) { syncShowErr('密码至少 8 位'); return; }
+        btn.disabled = true;
+        const r = action === 'login'
+          ? await window.LT_SYNC.login(email, pass)
+          : await window.LT_SYNC.register(email, pass);
+        btn.disabled = false;
+        if (!r.ok) { syncShowErr(r.error); renderSyncPanel(); return; }
+        if (errEl) errEl.hidden = true;
+        showToast('登录成功，正在同步…');
+      } else if (action === 'logout') {
+        await window.LT_SYNC.logout();
+        showToast('已登出');
+      } else if (action === 'now') {
+        window.LT_SYNC.syncNow(false);
+      }
+      renderSyncPanel();
+    });
+    panel.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.target.id === 'sync-email' || e.target.id === 'sync-pass')) {
+        e.preventDefault();
+        const btn = panel.querySelector('[data-sync="login"]');
+        if (btn) btn.click();
+      }
+    });
+  }
+
   async function onUpload(e) {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -1515,8 +1605,8 @@
     return cur;
   }
 
-  // ---------- 启动 ----------
-  async function boot() {
+  // 从持久层读数据 → 迁移 → 填充内存 state（纯读，不写 storage；云同步拉取覆盖后复用）
+  async function loadDataIntoState() {
     const raw = await Store.getAll();
     const data = migrateSchema(raw);
     state.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), data.settings || {});
@@ -1525,6 +1615,28 @@
     state.todos = Array.isArray(data.todos) ? data.todos : [];
     // 模板：空数组合法（用户全删过），undefined 才兜底默认集（首次运行或 v2 迁移已由 MIGRATIONS[2] 注入）
     state.prompts = Array.isArray(data.prompts) ? data.prompts : structuredClone(DEFAULT_PROMPTS);
+    return { raw, data };
+  }
+
+  // 云同步拉取覆盖本地后：刷新内存 state + 重渲染数据型 UI（不重绑事件）
+  async function reloadFromStorage() {
+    await loadDataIntoState();
+    applyWallpaper(state.wallpaper);
+    setEngine(state.settings.engine);
+    renderEngineList();
+    syncUI();
+    renderTodos();
+    renderCalendar();
+    startClock(); // 问候/名字可能被远程更新
+    const nameInput = document.getElementById('f-name');
+    if (nameInput) nameInput.value = state.settings.name || '';
+    const engineSel = document.getElementById('f-engine');
+    if (engineSel) engineSel.value = state.settings.engine;
+  }
+
+  // ---------- 启动 ----------
+  async function boot() {
+    const { raw, data } = await loadDataIntoState();
     // 若迁移后版本有变化则回写持久层：schema + 迁移过程中被补齐/改写的各 key（保证磁盘数据与内存一致）
     if ((Number(raw.schema) || 1) !== SCHEMA_VERSION) {
       Store.set(K.schema, SCHEMA_VERSION);
@@ -1615,6 +1727,14 @@
     bindPalette();
     bindSettings();
     sweepPending(); // 启动即清理过期/损坏的 pending 残留
+
+    // 云同步初始化（放最后：确保上面的迁移回写已落盘、事件已绑定）
+    if (window.LT_SYNC) {
+      window.LT_SYNC.configure({ remoteApply: reloadFromStorage, onChange: renderSyncPanel });
+      bindSyncPanel();
+      renderSyncPanel();
+      window.LT_SYNC.init();
+    }
 
     // 浮动添加按钮
     document.getElementById('add-float').addEventListener('click', () => openSiteModal(null));

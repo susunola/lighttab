@@ -155,6 +155,7 @@
           <button class="tab active" data-tab="wall" data-page-node-id="izN9dJ7JbJWV9sLvyjHJd3">壁纸</button>
           <button class="tab" data-tab="gen" data-page-node-id="vG6sY2gFZMO2HRxqJkJLHu">常规</button>
           <button class="tab" data-tab="prompt" data-page-node-id="T1rRRdGoBeZamEIxyIHIgW">模板</button>
+          <button class="tab" data-tab="sync" data-page-node-id="t1rRRdGoBeZamEIxyIHIgW">同步</button>
         </div>
         <button class="icon-btn close-btn" data-close aria-label="关闭" data-page-node-id="Ejn3sPTAFhOjN2mOxuQ0BE">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="u2y7qoM57cBPMvkhBcdQBf"><line x1="18" y1="6" x2="6" y2="18" data-page-node-id="Jn2ZKblMKAQlV5M0m3ZQof"/><line x1="6" y1="6" x2="18" y2="18" data-page-node-id="7rmK7l8sWrdCSDpM5SWr8B"/></svg>
@@ -195,7 +196,7 @@
             <button type="button" class="btn ghost" id="btn-reset-all" data-page-node-id="RMHSd1hNtGMccmPLz09bFG">恢复默认数据</button>
             <button type="button" class="btn primary" data-close data-page-node-id="c7WvaKsfq8fuwDC8iqw8YE">完成</button>
           </div>
-          <p class="form-tip ver-line" data-page-node-id="2Vz4CpjpI8M7gG7XPcI9yI">LightTab v1.10.0 · 极简新标签页 · 数据仅保存在本地</p>
+          <p class="form-tip ver-line" data-page-node-id="2Vz4CpjpI8M7gG7XPcI9yI">LightTab v1.12.0 · 极简新标签页 · 本地优先，可选云同步</p>
         </div>
         <div class="tab-pane" data-pane="prompt" hidden data-page-node-id="IKczTQGGkNqZH8m19bOLu8">
           <div class="ptoolbar" data-page-node-id="nHHMyvel8qqmgm0Q5Db9LA">
@@ -208,12 +209,16 @@
             <button type="button" class="btn primary" data-close data-page-node-id="b0JRjOHTGEWM5Jk1oq5IiI">完成</button>
           </div>
         </div>
+        <div class="tab-pane" data-pane="sync" hidden>
+          <div id="sync-panel"></div>
+        </div>
       </div>
     </div>
   </div>
 
   <script src="js/icondb.js"></script>
   <script src="js/lunar.js"></script>
+  <script src="js/sync.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
