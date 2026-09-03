@@ -8,8 +8,9 @@
  *  3) 版本号一致：manifest.json / newtab.html ver-line / app.js exportPayload() /
  *     js/i18n.js 的 gen.version（中英两份）
  *  4) 纯函数断言：looksLikeUrl（URL 识别）、lunar 已知日期换算、iconFor 后缀匹配、
- *     sanitizeWallpaperUrl 白名单、i18n 字典 zh/en 完整性
+ *     sanitizeWallpaperUrl 白名单、resolveTheme（dark/light/system 映射）、i18n 字典 zh/en 完整性
  *  5) newtab.html 无编辑器残留的 data-page-node-id 属性
+ *  6) #48 主题静态结构：html 默认 data-theme、#f-theme 三选项、主题词条钩子
  */
 'use strict';
 
@@ -132,6 +133,16 @@ console.log('[4] 纯函数');
     assert(P.iconFor('https://github.com/susunola')?.d === 'M0 0', 'iconFor 精确匹配 github.com');
     assert(P.iconFor('https://zh.wikipedia.org/wiki/X')?.d === 'M1 1', 'iconFor 尾缀匹配 wikipedia.org');
     assert(P.iconFor('https://no-such-host-zzz.example/') === null, 'iconFor 未收录返回 null');
+    // resolveTheme：'dark'/'light' 直接映射；'system' 在无 matchMedia 时回退深色，有 matchMedia 时跟随系统
+    assert(P.resolveTheme('dark') === 'dark' && P.resolveTheme('light') === 'light', 'resolveTheme 固定 dark/light');
+    assert(P.resolveTheme('bogus') === 'dark', 'resolveTheme 未知值回退 dark');
+    assert(P.resolveTheme('system') === 'dark', 'resolveTheme system（无 matchMedia）回退 dark');
+    const realMQ = sandbox.matchMedia;
+    sandbox.matchMedia = () => ({ matches: true, addEventListener: () => {} });
+    assert(P.resolveTheme('system') === 'light', 'resolveTheme system（prefers light）→ light');
+    sandbox.matchMedia = () => ({ matches: false, addEventListener: () => {} });
+    assert(P.resolveTheme('system') === 'dark', 'resolveTheme system（prefers dark）→ dark');
+    sandbox.matchMedia = realMQ;
   }
   void elStub;
 }
@@ -148,6 +159,11 @@ console.log('[4] 纯函数');
     I.setLang('en');
     assert(I.t('sync.applied') === 'Updated from cloud sync', "t('sync.applied') 英文词条");
     I.setLang('zh');
+    // #48 theme：gen.theme 标签 + 三个选项词条，中英各一份
+    assert(I.t('gen.theme') === '主题' && I.t('theme.dark') === '深色' && I.t('theme.light') === '浅色' && I.t('theme.system') === '跟随系统', 'theme 词条 中文');
+    I.setLang('en');
+    assert(I.t('gen.theme') === 'Theme' && I.t('theme.dark') === 'Dark' && I.t('theme.light') === 'Light' && I.t('theme.system') === 'Follow system', 'theme 词条 英文');
+    I.setLang('zh');
   }
 }
 
@@ -155,6 +171,17 @@ console.log('[4] 纯函数');
 console.log('[5] newtab.html');
 assert(!/data-page-node-id/.test(html), '无 data-page-node-id 残留');
 assert(/<\/html>\s*$/.test(html), '文档以 </html> 收尾（结构完整）');
+
+// ---------- 6) #48 主题静态结构 ----------
+console.log('[6] #48 主题');
+assert(/<html lang="en" data-theme="dark"/.test(html), 'html 标签默认 data-theme="dark"');
+const themeSel = html.match(/<select id="f-theme">([\s\S]*?)<\/select>/);
+assert(!!themeSel, '设置页含 #f-theme 下拉');
+if (themeSel) {
+  const opts = [...themeSel[1].matchAll(/<option value="(dark|light|system)"/g)].map(m => m[1]);
+  assert(opts.join(',') === 'dark,light,system', '#f-theme 三个选项 dark/light/system', opts.join(','));
+}
+assert(/data-i18n="gen\.theme"/.test(html), '主题标签带 data-i18n="gen.theme"');
 
 console.log('');
 if (failures) {
