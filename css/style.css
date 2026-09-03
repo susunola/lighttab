@@ -1223,3 +1223,48 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
   transition: none;
 }
+
+/* ====== 画布模式：卡片可自由拖拽 + 自动对齐 ====== */
+.layout.canvas #grid {
+  display: block;
+  position: relative;
+  min-height: 240px;
+}
+.layout.canvas #grid .card {
+  position: absolute;
+  left: 0; top: 0;
+  margin: 0;
+  cursor: grab;
+  transition: box-shadow .14s ease, border-color .14s ease;
+}
+.layout.canvas #grid .card:hover { transform: none; }
+.layout.canvas #grid .card.card-dragging {
+  z-index: 50;
+  cursor: grabbing;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  border-color: var(--accent);
+}
+.layout.canvas #grid .card.card-snap-target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+}
+/* 卡片拖拽手柄：左上角小六点 grip，仅画布模式显示 */
+.layout.canvas #grid .card .card-drag-handle {
+  position: absolute;
+  top: 5px; left: 5px;
+  z-index: 3;
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink-3);
+  background: rgba(10, 14, 24, 0.55);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity .14s ease;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.layout.canvas #grid .card:hover .card-drag-handle,
+.layout.canvas #grid .card.card-dragging .card-drag-handle { opacity: .9; }
+.layout.canvas #grid .card .card-drag-handle:active { cursor: grabbing; }
