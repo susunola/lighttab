@@ -1117,6 +1117,17 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .wb-grid input:focus { border-color: rgba(125, 211, 252, 0.55); }
 
 /* ====== 云同步设置面板 ====== */
+.sync-verify-tip {
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--accent-2);
+  background: rgba(56, 189, 248, 0.10);
+  border: 1px solid rgba(56, 189, 248, 0.30);
+  border-radius: 10px;
+}
+.sync-verify-tip b { color: var(--ink); font-weight: 600; }
 .sync-err {
   margin: 10px 0 0;
   padding: 8px 10px;

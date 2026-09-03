@@ -45,6 +45,7 @@
     status: 'idle',                          // idle | syncing | offline | error
     lastSyncAt: 0,
     lastError: '',
+    pendingVerifyEmail: '',                  // 注册后待验证的邮箱（用于「重发/去登录」提示）
     listeners: [],                           // 状态变化回调（UI 刷新）
     remoteApply: null,                       // 远程覆盖本地后的 UI 刷新回调
     timer: 0,
@@ -83,7 +84,9 @@
       'invalid email or password': '邮箱或密码错误',
       'password must be at least 8 characters': '密码至少 8 位',
       'invalid email address': '邮箱格式不正确',
+      'email address does not exist': '该邮箱不存在，请检查后重试',
       'email already registered': '该邮箱已注册，请直接登录',
+      'email not verified': '邮箱尚未验证，请查收邮件完成验证',
       'rate limited, try again later': '操作太频繁，请稍后再试',
       'network unreachable': '无法连接服务器，请检查网络'
     };
@@ -107,21 +110,37 @@
     try {
       const d = await request('/auth/login', { method: 'POST', body: { email, password } }, false);
       S.auth = { token: d.token, email: d.user.email, userId: d.user.userId };
+      S.pendingVerifyEmail = '';
       await saveAuth();
       emit();
       await syncNow(true);   // 登录后立即首轮同步
       return { ok: true };
     } catch (err) {
+      if (err && err.status === 403) {
+        // 邮箱未验证：提示查收/重发验证邮件
+        S.pendingVerifyEmail = email;
+        emit();
+        return { ok: false, verifyPending: true, error: friendlyAuthError(err) };
+      }
       return { ok: false, error: friendlyAuthError(err) };
     }
   }
   async function register(email, password) {
     try {
       const d = await request('/auth/register', { method: 'POST', body: { email, password } }, false);
-      S.auth = { token: d.token, email: d.user.email, userId: d.user.userId };
-      await saveAuth();
+      // 注册不再直接登录：进入邮箱验证流程
+      S.pendingVerifyEmail = d.email || email;
       emit();
-      await syncNow(true);
+      return { ok: true, verify: true, email: d.email || email };
+    } catch (err) {
+      return { ok: false, error: friendlyAuthError(err) };
+    }
+  }
+  async function resend(email) {
+    try {
+      await request('/auth/resend', { method: 'POST', body: { email } }, false);
+      S.pendingVerifyEmail = email;
+      emit();
       return { ok: true };
     } catch (err) {
       return { ok: false, error: friendlyAuthError(err) };
@@ -131,6 +150,7 @@
     try { if (S.auth) await request('/auth/logout', { method: 'POST' }); } catch {}
     S.auth = null;
     S.meta = { lastServerTime: 0, docs: {} };
+    S.pendingVerifyEmail = '';
     await saveAuth();
     await saveMeta();
     S.status = 'idle'; S.lastError = ''; S.lastSyncAt = 0;
@@ -265,7 +285,8 @@
       email: S.auth ? S.auth.email : '',
       status: S.status,
       lastSyncAt: S.lastSyncAt,
-      lastError: S.lastError
+      lastError: S.lastError,
+      pendingVerifyEmail: S.pendingVerifyEmail
     };
   }
 
@@ -284,7 +305,7 @@
       }
     },
     onLocalWrite,
-    login, register, logout, syncNow,
+    login, register, resend, logout, syncNow,
     getState,
     isLoggedIn() { return !!(S.auth && S.auth.token); }
   };
