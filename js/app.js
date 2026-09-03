@@ -810,6 +810,10 @@
     }
     grid.innerHTML = list.map(it => cardHtml(it)).join('');
     bindCardEvents();
+    // 画布模式：渲染后立即把 (col, row) 应用到卡片上，并补上新卡的初始坐标
+    if (canvasRoot() && canvasRoot().classList.contains('canvas') && canvasEligible()) {
+      applyCardCanvas();
+    }
   }
   // ---------- 图标渲染（全本地，零网络请求） ----------
   // 匹配链：完整 host → 剥 www host → 收录品牌主域尾缀（如 zh.wikipedia.org → wikipedia.org 未收录则跳过）
@@ -1134,7 +1138,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.15.0',
+      version: '1.16.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -1750,6 +1754,7 @@
       b.el.style.top = c.y + 'px';
       b.el.style.width = c.w ? c.w + 'px' : '';
     }
+    applyCardCanvas();
     refreshCanvasHeight();
   }
 
@@ -1761,6 +1766,7 @@
     for (const b of blockEls()) {
       b.el.style.left = ''; b.el.style.top = ''; b.el.style.width = '';
     }
+    clearCardCanvas();
   }
 
   // 首次进入画布：测量当前流式视觉位置 → 固化坐标（切换绝对定位零跳变）
@@ -1777,6 +1783,9 @@
         w: Math.round(r.width)
       };
     }
+    // 卡片格子坐标：首次进入画布时按当前流式视觉位置映射为 (col, row)。
+    // 没有 cells 时（极窄/无卡片），captureCardLayout 会原地返回空对象。
+    layout.cards = captureCardLayout();
     state.settings.layout = layout;
     Store.set(K.settings, state.settings);
     return layout;
@@ -1792,7 +1801,266 @@
       const bottom = r.bottom - rr.top;
       if (bottom > maxBottom) maxBottom = bottom;
     }
+    // 卡片绝对定位在 #grid 内，按 grid-wrap 的底 + 卡片相对底 取最大
+    const grid = document.getElementById('grid');
+    const gridWrap = document.getElementById('grid-wrap');
+    if (grid && gridWrap) {
+      const gw = gridWrap.getBoundingClientRect();
+      const cards = grid.querySelectorAll('.card');
+      for (const c of cards) {
+        const r = c.getBoundingClientRect();
+        const bottom = (r.bottom - rr.top);
+        if (bottom > maxBottom) maxBottom = bottom;
+      }
+      // grid-wrap 自身的底部也要算（防止没有任何卡片但 grid-wrap 有自定义高度）
+      const gwb = gw.bottom - rr.top;
+      if (gwb > maxBottom) maxBottom = gwb;
+    }
     root.style.height = (maxBottom + 90) + 'px';
+  }
+
+  // ---------- 画布模式：卡片格子自由拖拽 + 自动对齐 ----------
+  // 卡片在画布模式下使用绝对定位，按 (col, row) 网格坐标存储在 layout.cards[id]。
+  // 网格尺寸根据 #grid 容器宽度动态计算（与 CSS repeat(auto-fill, minmax(118px, 1fr)) 保持一致）。
+  const CARD_MIN_W = 118;
+  const CARD_GAP = 13;
+  const CARD_GRID_PADDING = 0; // grid 自身无 padding
+
+  function getCardLayout() {
+    const l = getLayout();
+    return (l && l.cards && typeof l.cards === 'object') ? l.cards : {};
+  }
+  function setCardLayoutMap(map) {
+    const l = getLayout();
+    if (!l) return;
+    l.cards = map;
+  }
+
+  // 计算当前 grid 可容纳的最大列数（与 CSS auto-fill 一致：floor((W + gap) / (minW + gap))）
+  function getCardCols(gridW) {
+    return Math.max(1, Math.floor((gridW + CARD_GAP) / (CARD_MIN_W + CARD_GAP)));
+  }
+  // 单列轨道宽度（auto-fill 下 1fr 均分剩余空间），与 CSS 网格实际分配的列宽一致
+  function getCardTrackW(gridW) {
+    const cols = getCardCols(gridW);
+    return (gridW - (cols - 1) * CARD_GAP) / cols;
+  }
+
+  // 单元格尺寸：列宽由容器宽度推导（绝对定位后卡片会收缩成内容宽，不能再用 offsetWidth 测量），
+  // 行高用首卡内容高（卡片高度由内容决定，绝对定位不影响）。
+  function getCardCellSize() {
+    const grid = document.getElementById('grid');
+    if (!grid) return null;
+    const gridW = grid.clientWidth;
+    if (!gridW) return null;
+    const first = grid.querySelector('.card');
+    const cardH = first ? first.offsetHeight : 0;
+    if (!cardH) return null;
+    const cardW = getCardTrackW(gridW);
+    return { cardW, cardH, stepX: cardW + CARD_GAP, stepY: cardH + CARD_GAP };
+  }
+
+  // 把当前可见卡片在 #grid 内的视觉位置（行/列）映射回 (col, row)，并保存
+  function captureCardLayout() {
+    const grid = document.getElementById('grid');
+    if (!grid) return {};
+    const cell = getCardCellSize();
+    if (!cell) return {};
+    const visible = Array.from(grid.querySelectorAll('.card'));
+    if (!visible.length) return {};
+    const gridRect = grid.getBoundingClientRect();
+    const map = {};
+    for (const c of visible) {
+      const r = c.getBoundingClientRect();
+      const col = Math.max(0, Math.round((r.left - gridRect.left) / cell.stepX));
+      const row = Math.max(0, Math.round((r.top - gridRect.top) / cell.stepY));
+      map[c.dataset.id] = { col, row };
+    }
+    return map;
+  }
+
+  // 首次进入画布或缺少某些卡片坐标时，按可见顺序分配 (col, row)
+  function assignInitialCardLayout() {
+    const grid = document.getElementById('grid');
+    if (!grid) return {};
+    const cell = getCardCellSize();
+    if (!cell) return {};
+    const visible = Array.from(grid.querySelectorAll('.card'));
+    const cols = getCardCols(grid.clientWidth);
+    const map = getCardLayout();
+    // 已存在的坐标标为占用，缺失的从第一个空格起逐列逐行顺次补
+    const occupied = new Set();
+    for (const id in map) {
+      const p = map[id];
+      if (p && typeof p.col === 'number' && typeof p.row === 'number') {
+        occupied.add(p.col + ',' + p.row);
+      }
+    }
+    function nextFree(fromCol, fromRow) {
+      let col = fromCol, row = fromRow;
+      while (occupied.has(col + ',' + row)) {
+        col++;
+        if (col >= cols) { col = 0; row++; }
+      }
+      return { col, row };
+    }
+    let cur = { col: 0, row: 0 };
+    for (const c of visible) {
+      const id = c.dataset.id;
+      if (map[id] && typeof map[id].col === 'number' && typeof map[id].row === 'number') continue;
+      cur = nextFree(cur.col, cur.row);
+      map[id] = { col: cur.col, row: cur.row };
+      occupied.add(cur.col + ',' + cur.row);
+    }
+    return map;
+  }
+
+  // 把 layout.cards 应用到 DOM（仅画布模式可见的卡片）
+  function applyCardCanvas() {
+    const grid = document.getElementById('grid');
+    if (!grid) return;
+    const cell = getCardCellSize();
+    if (!cell) return;
+    const map = assignInitialCardLayout();
+    setCardLayoutMap(map);
+    for (const c of grid.querySelectorAll('.card')) {
+      const id = c.dataset.id;
+      const p = map[id];
+      if (!p) continue;
+      c.style.width = cell.cardW + 'px';
+      c.style.left = (p.col * cell.stepX) + 'px';
+      c.style.top = (p.row * cell.stepY) + 'px';
+      // 画布模式下禁用 HTML5 拖拽（避免和指针拖拽冲突、避免拖到地址栏打开）
+      c.setAttribute('draggable', 'false');
+    }
+    injectCardDragHandles();
+    refreshCanvasHeight();
+  }
+
+  function clearCardCanvas() {
+    const grid = document.getElementById('grid');
+    if (!grid) return;
+    for (const c of grid.querySelectorAll('.card')) {
+      c.style.left = '';
+      c.style.top = '';
+      c.style.width = '';
+    }
+  }
+
+  // 为画布模式下的卡片注入小型拖拽手柄（左上角，hover 时浮现）
+  function injectCardDragHandles() {
+    const grid = document.getElementById('grid');
+    if (!grid) return;
+    for (const c of grid.querySelectorAll('.card')) {
+      if (c.querySelector('.card-drag-handle')) continue;
+      const h = document.createElement('span');
+      h.className = 'card-drag-handle';
+      h.title = '拖拽移动（自动对齐网格）';
+      h.setAttribute('aria-hidden', 'true');
+      h.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
+      c.appendChild(h);
+    }
+  }
+
+  // 画布模式：卡片指针拖拽 + 自动对齐到最近格 + 与目标格上的卡片自动换位
+  function bindCardCanvasDrag() {
+    const grid = document.getElementById('grid');
+    if (!grid) return;
+    let active = null;
+    let dragMoved = false; // 本次按下是否已判定为拖拽（用于在随后的 click 里抑制误打开链接）
+
+    function onPointerDown(e) {
+      if (!canvasEligible() || e.button !== 0) return;
+      const card = e.target.closest('.card');
+      if (!card) return;
+      // 仅编辑/删除按钮不参与拖拽（保留点击）；图标/标题/空白均可拖，靠位移阈值区分点击与拖拽
+      if (e.target.closest('.card-actions')) return;
+      const rr = grid.getBoundingClientRect();
+      const r = card.getBoundingClientRect();
+      dragMoved = false;
+      active = {
+        card,
+        id: card.dataset.id,
+        baseX: r.left - rr.left,
+        baseY: r.top - rr.top,
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+        pointerId: e.pointerId
+      };
+      // 不立即 preventDefault，让 click 仍能在未拖动时打开链接
+    }
+
+    function onPointerMove(e) {
+      if (!active || e.pointerId !== active.pointerId) return;
+      const dx = e.clientX - active.startX;
+      const dy = e.clientY - active.startY;
+      if (!active.moved) {
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        active.moved = true;
+        dragMoved = true;
+        active.card.classList.add('card-dragging');
+        try { active.card.setPointerCapture(e.pointerId); } catch {}
+        e.preventDefault();
+      } else {
+        e.preventDefault();
+      }
+      const rr = grid.getBoundingClientRect();
+      let nx = Math.round(active.baseX + dx);
+      let ny = Math.round(active.baseY + dy);
+      nx = Math.max(0, nx);
+      ny = Math.max(0, ny);
+      active.card.style.left = nx + 'px';
+      active.card.style.top = ny + 'px';
+    }
+
+    function onPointerUp(e) {
+      if (!active || e.pointerId !== active.pointerId) return;
+      const { card, id, moved } = active;
+      active = null;
+      card.classList.remove('card-dragging');
+      try { card.releasePointerCapture(e.pointerId); } catch {}
+      if (!moved) { dragMoved = false; return; }
+      e.preventDefault();
+
+      const cell = getCardCellSize();
+      if (!cell) return;
+      const r = card.getBoundingClientRect();
+      const rr = grid.getBoundingClientRect();
+      let col = Math.max(0, Math.round((r.left - rr.left) / cell.stepX));
+      let row = Math.max(0, Math.round((r.top - rr.top) / cell.stepY));
+      // 与目标格上的其他卡片换位（保持两张卡都不会重叠）
+      const map = getCardLayout();
+      let swapId = null;
+      for (const otherId in map) {
+        if (otherId === id) continue;
+        const p = map[otherId];
+        if (p && p.col === col && p.row === row) { swapId = otherId; break; }
+      }
+      if (swapId) {
+        map[swapId] = map[id] || { col: 0, row: 0 };
+      }
+      map[id] = { col, row };
+      setCardLayoutMap(map);
+      // 重渲染所有可见卡片的位置（含被换位的目标）
+      applyCardCanvas();
+      Store.set(K.settings, state.settings);
+    }
+
+    // 拖拽结束时抑制随之而来的 click（避免拖完卡片误打开链接）
+    function onClickCapture(e) {
+      if (!dragMoved) return;
+      if (!e.target.closest('.card')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragMoved = false;
+    }
+
+    grid.addEventListener('pointerdown', onPointerDown);
+    grid.addEventListener('pointermove', onPointerMove);
+    grid.addEventListener('pointerup', onPointerUp);
+    grid.addEventListener('pointercancel', onPointerUp);
+    grid.addEventListener('click', onClickCapture, true);
   }
 
   function injectDragHandles() {
@@ -1888,10 +2156,15 @@
   function initCanvasLayout() {
     injectDragHandles();
     bindBlockDrag();
+    bindCardCanvasDrag();
 
     if (window.ResizeObserver) {
-      const ro = new ResizeObserver(() => refreshCanvasHeight());
+      const ro = new ResizeObserver(() => {
+        refreshCanvasHeight();
+      });
       blockEls().forEach(b => ro.observe(b.el));
+      const grid = document.getElementById('grid');
+      if (grid) ro.observe(grid);
     }
 
     window.addEventListener('resize', () => {
