@@ -1075,3 +1075,48 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   outline: 0;
 }
 .wb-grid input:focus { border-color: rgba(125, 211, 252, 0.55); }
+
+/* ====== 云同步设置面板 ====== */
+.sync-err {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--danger);
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 10px;
+}
+.sync-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.sync-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.sync-row .data-label { margin: 0; }
+.sync-email {
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sync-status {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.sync-time { margin-left: auto; font-size: 11.5px; color: var(--ink-3); font-family: var(--font-num); }
+.dot {
+  flex: none;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink-3);
+}
+.dot.ok { background: #34d399; box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18); }
+.dot.busy { background: var(--accent-2); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18); animation: pulse 1.2s ease infinite; }
+.dot.warn { background: #fbbf24; box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.18); }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
