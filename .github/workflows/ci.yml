@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: node --check all JS
+        run: |
+          node --check js/app.js
+          node --check js/sync.js
+          node --check js/inject-ai.js
+          node --check js/lunar.js
+          node --check js/icondb.js
+      - name: smoke
+        run: node scripts/smoke.cjs
