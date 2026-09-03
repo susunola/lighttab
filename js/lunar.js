@@ -37,6 +37,7 @@
   var Gan = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
   var Zhi = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
   var Animals = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
+  var AnimalsEn = ['Rat', 'Ox', 'Tiger', 'Rabbit', 'Dragon', 'Snake', 'Horse', 'Goat', 'Monkey', 'Rooster', 'Dog', 'Pig'];
   // 月名：正月…十月、冬月(11)、腊月(12)——已含「月」字
   var MonthNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月'];
   var nStr1 = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -128,5 +129,28 @@
     return Animals[(lunarYear - 4) % 12];
   }
 
-  window.LT_LUNAR = { toLunar: toLunar, monthName: monthName, dayName: dayName, ganzhiYear: ganzhiYear, animalYear: animalYear };
+  // ---------- 英文变体（供英文界面显示） ----------
+  // 序数：1st / 2nd / 3rd / 4th …
+  function ord(n) {
+    var s = ['th', 'st', 'nd', 'rd'];
+    var v = n % 100;
+    var suffix = (v >= 11 && v <= 13) ? 'th' : (s[n % 10] || 'th');
+    return n + suffix;
+  }
+  // 农历月名英文：8th month / leap 8th month
+  function monthNameEn(lunarMonth, isLeap) {
+    if (lunarMonth < 1 || lunarMonth > 12) return '';
+    return (isLeap ? 'leap ' : '') + ord(lunarMonth) + ' month';
+  }
+  // 农历日英文：1st … 30th
+  function dayNameEn(lunarDay) {
+    if (lunarDay < 1 || lunarDay > 30) return '';
+    return ord(lunarDay);
+  }
+  // 生肖英文
+  function animalYearEn(lunarYear) {
+    return AnimalsEn[(lunarYear - 4) % 12];
+  }
+
+  window.LT_LUNAR = { toLunar: toLunar, monthName: monthName, dayName: dayName, ganzhiYear: ganzhiYear, animalYear: animalYear, monthNameEn: monthNameEn, dayNameEn: dayNameEn, animalYearEn: animalYearEn };
 })();

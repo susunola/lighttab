@@ -7,6 +7,7 @@ A minimal, calm, fast new-tab page: live clock & greeting (with Chinese lunar ca
 ## Features
 
 - **Clock & greeting** — live time, date, time-of-day greeting, plus Chinese lunar calendar (干支纪年 / 生肖 / 闰月, 1900–2100, pure local computation)
+- **Bilingual UI (中文 / English)** — switch the whole interface in *Settings → General → Language*; greetings, dates, lunar line, calendar, engine names, menus and messages all follow. Persisted locally, no reload needed
 - **Calendar widget** — local month view with lunar-day labels and month navigation (zero network)
 - **One-box search** — URL shortcuts + 6 search engines + 2 AI chats (Doubao, ChatGPT) + WorkBuddy deep link
 - **AI Prompt Launcher** (press `/`) — pick a template, type your content, send the same prompt to multiple targets at once. Prompt text never travels in the URL (nonce channel in extension mode)
@@ -46,8 +47,10 @@ lighttab/
 ├── css/style.css
 ├── js/
 │   ├── app.js             # main logic (storage / clock / search / grid / settings)
+│   ├── i18n.js            # zh/en dictionary + t() runtime + [data-i18n] static pass
 │   ├── icondb.js          # built-in brand-icon library
-│   ├── lunar.js           # Chinese lunar calendar (pure local)
+│   ├── lunar.js           # Chinese lunar calendar (pure local, zh + en names)
+│   ├── sync.js            # optional cloud sync client
 │   └── inject-ai.js       # content script for Doubao / ChatGPT auto-fill
 └── icons/                 # 16 / 48 / 128
 ```
