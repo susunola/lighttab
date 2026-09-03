@@ -48,7 +48,9 @@
     name: '',
     wallpaper: WALLPAPERS[0],
     // 分组：{ id, name } 数组；为空 = 不启用分组（分组栏隐藏，站点弹窗不出现分组下拉）
-    groups: []
+    groups: [],
+    // 自由画布布局：{ wclock/wcal/wtodo/search/grid: {x,y,w} }；null = 用默认两栏流式
+    layout: null
   };
 
   // 内置 Prompt 模板：name 展示名 / tmpl 含 {q}（用户输入插槽）/ hint 选中后输入框占位 / targets 发射目标引擎
@@ -1060,7 +1062,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.12.0',
+      version: '1.13.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -1146,6 +1148,7 @@
     syncUI();
     renderTodos();
     showToast(`导入完成：${state.items.length} 个快捷方式 · ${state.todos.length} 条待办`);
+    reinitCanvas(); // 导入可能带入/清空 layout 坐标，重新同步画布
   }
   // 从书签导入：走 optional_permissions（bookmarks），首次点击时请求授权
   async function importBookmarks() {
@@ -1565,6 +1568,7 @@
     renderTodos();
     document.getElementById('modal-set').hidden = true;
     showToast('已恢复默认数据');
+    reinitCanvas(); // 重置清空 layout 坐标，回到默认画布
   }
 
   // ---------- Schema 迁移 ----------
@@ -1632,6 +1636,195 @@
     if (nameInput) nameInput.value = state.settings.name || '';
     const engineSel = document.getElementById('f-engine');
     if (engineSel) engineSel.value = state.settings.engine;
+  }
+
+  // ---------- 自由画布布局（块自由拖拽移动） ----------
+  const BLOCK_DEFS = [
+    { key: 'wclock', sel: '.wclock' },
+    { key: 'wcal',   sel: '.wcal' },
+    { key: 'wtodo',  sel: '#todo-widget' },
+    { key: 'search', sel: '#search' },
+    { key: 'grid',   sel: '#grid-wrap' }
+  ];
+  const CANVAS_MIN_W = 1024;
+  const DRAG_THRESHOLD = 6;
+  const DRAG_INTERACTIVE = 'input,button,a,select,textarea,.card,.gchip,.todo-item,.cal-nav-btn,.cal-cell,.engine-list,.menu,.palette,[data-act]';
+
+  function blockEls() {
+    return BLOCK_DEFS.map(b => ({ ...b, el: document.querySelector(b.sel) })).filter(b => b.el);
+  }
+  function canvasRoot() { return document.querySelector('.layout'); }
+  function canvasEligible() { return window.innerWidth > CANVAS_MIN_W; }
+  function getLayout() {
+    const l = state.settings && state.settings.layout;
+    return (l && typeof l === 'object') ? l : null;
+  }
+
+  function applyCanvas() {
+    const root = canvasRoot();
+    const l = getLayout();
+    if (!root || !l) return;
+    root.classList.add('canvas');
+    for (const b of blockEls()) {
+      const c = l[b.key];
+      if (!c || typeof c.x !== 'number' || typeof c.y !== 'number') continue;
+      b.el.style.left = c.x + 'px';
+      b.el.style.top = c.y + 'px';
+      b.el.style.width = c.w ? c.w + 'px' : '';
+    }
+    refreshCanvasHeight();
+  }
+
+  function leaveCanvas() {
+    const root = canvasRoot();
+    if (!root) return;
+    root.classList.remove('canvas');
+    root.style.height = '';
+    for (const b of blockEls()) {
+      b.el.style.left = ''; b.el.style.top = ''; b.el.style.width = '';
+    }
+  }
+
+  // 首次进入画布：测量当前流式视觉位置 → 固化坐标（切换绝对定位零跳变）
+  function captureLayout() {
+    const root = canvasRoot();
+    if (!root) return null;
+    const rr = root.getBoundingClientRect();
+    const layout = {};
+    for (const b of blockEls()) {
+      const r = b.el.getBoundingClientRect();
+      layout[b.key] = {
+        x: Math.round(r.left - rr.left),
+        y: Math.round(r.top - rr.top),
+        w: Math.round(r.width)
+      };
+    }
+    state.settings.layout = layout;
+    Store.set(K.settings, state.settings);
+    return layout;
+  }
+
+  function refreshCanvasHeight() {
+    const root = canvasRoot();
+    if (!root || !root.classList.contains('canvas')) return;
+    let maxBottom = 0;
+    const rr = root.getBoundingClientRect();
+    for (const b of blockEls()) {
+      const r = b.el.getBoundingClientRect();
+      const bottom = r.bottom - rr.top;
+      if (bottom > maxBottom) maxBottom = bottom;
+    }
+    root.style.height = (maxBottom + 90) + 'px';
+  }
+
+  function injectDragHandles() {
+    for (const b of blockEls()) {
+      if (b.el.querySelector('.drag-handle')) continue;
+      const h = document.createElement('span');
+      h.className = 'drag-handle';
+      h.title = '拖拽移动';
+      h.setAttribute('aria-hidden', 'true');
+      h.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>';
+      b.el.appendChild(h);
+    }
+  }
+
+  function bindBlockDrag() {
+    const root = canvasRoot();
+    if (!root) return;
+    let active = null;
+
+    function onPointerDown(e) {
+      if (!canvasEligible() || e.button !== 0) return;
+      const handle = e.target.closest('.drag-handle');
+      const block = blockEls().find(b => b.el === e.target.closest('.widget, #search, #grid-wrap'));
+      if (!block) return;
+      // 非手柄：仅空白区域可拖（交互元素正常点击，不触发拖拽）
+      if (!handle && e.target.closest(DRAG_INTERACTIVE)) return;
+      e.preventDefault();
+      const rr = root.getBoundingClientRect();
+      const r = block.el.getBoundingClientRect();
+      active = {
+        block,
+        baseX: r.left - rr.left,
+        baseY: r.top - rr.top,
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+        pointerId: e.pointerId
+      };
+      block.el.classList.add('block-dragging');
+      try { block.el.setPointerCapture(e.pointerId); } catch {}
+    }
+
+    function onPointerMove(e) {
+      if (!active || e.pointerId !== active.pointerId) return;
+      const dx = e.clientX - active.startX;
+      const dy = e.clientY - active.startY;
+      if (!active.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      active.moved = true;
+      const rootW = root.clientWidth;
+      const w = active.block.el.offsetWidth;
+      let nx = Math.round(active.baseX + dx);
+      let ny = Math.round(active.baseY + dy);
+      nx = Math.max(0, Math.min(nx, rootW - w));
+      ny = Math.max(0, ny);
+      active.block.el.style.left = nx + 'px';
+      active.block.el.style.top = ny + 'px';
+    }
+
+    function onPointerUp(e) {
+      if (!active || e.pointerId !== active.pointerId) return;
+      const { block, moved } = active;
+      active = null;
+      block.el.classList.remove('block-dragging');
+      try { block.el.releasePointerCapture(e.pointerId); } catch {}
+      if (!moved) return; // 未超过阈值：视为点击，不写坐标
+      const l = getLayout();
+      if (!l) return;
+      const rr = root.getBoundingClientRect();
+      const r = block.el.getBoundingClientRect();
+      l[block.key] = {
+        x: Math.round(r.left - rr.left),
+        y: Math.round(r.top - rr.top),
+        w: Math.round(r.width)
+      };
+      Store.set(K.settings, state.settings);
+      refreshCanvasHeight();
+    }
+
+    root.addEventListener('pointerdown', onPointerDown);
+    root.addEventListener('pointermove', onPointerMove);
+    root.addEventListener('pointerup', onPointerUp);
+    root.addEventListener('pointercancel', onPointerUp);
+  }
+
+  // 根据当前窗口宽度与 layout 数据，切回流式或进入画布（可重复调用：导入/重置后复用）
+  function reinitCanvas() {
+    leaveCanvas();
+    if (!canvasEligible()) return;
+    if (getLayout()) applyCanvas();
+    else { captureLayout(); applyCanvas(); }
+  }
+
+  function initCanvasLayout() {
+    injectDragHandles();
+    bindBlockDrag();
+
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => refreshCanvasHeight());
+      blockEls().forEach(b => ro.observe(b.el));
+    }
+
+    window.addEventListener('resize', () => {
+      if (!canvasEligible()) { leaveCanvas(); return; }
+      if (getLayout()) {
+        if (!canvasRoot().classList.contains('canvas')) applyCanvas();
+        else refreshCanvasHeight();
+      }
+    });
+
+    reinitCanvas();
   }
 
   // ---------- 启动 ----------
@@ -1738,6 +1931,9 @@
 
     // 浮动添加按钮
     document.getElementById('add-float').addEventListener('click', () => openSiteModal(null));
+
+    // 自由画布布局（块拖拽移动）：最后初始化，确保所有块已渲染
+    initCanvasLayout();
 
     // 自检
     if (!hasChromeStorage) {
