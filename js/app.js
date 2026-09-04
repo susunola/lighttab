@@ -2179,22 +2179,13 @@
     const avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
     const name = String(state.settings.name || '').trim();
     const initial = name ? Array.from(name)[0].toUpperCase() : '';
-    let loggedIn = false, email = '', displayName = name, sub = t('avatar.local'), syncLabel = t('avatar.sync');
+    let loggedIn = false, syncLabel = t('avatar.sync');
     if (window.LT_SYNC) {
       const st = window.LT_SYNC.getState();
       loggedIn = !!st.loggedIn;
-      email = st.email || '';
-      if (loggedIn) {
-        // 登录态主标题显示账号邮箱，避免与本地「未登录」身份并存（#63 修复）
-        displayName = email || name;
-        sub = t('avatar.logged_in');
-        syncLabel = t('avatar.logout');
-      } else {
-        sub = t('avatar.local');
-        syncLabel = t('avatar.sync');
-      }
+      syncLabel = loggedIn ? t('avatar.logout') : t('avatar.sync');
     }
-    return { avatar, name, initial, loggedIn, email, displayName, sub, syncLabel };
+    return { avatar, initial, loggedIn, syncLabel };
   }
   function renderAvatar() {
     const s = avatarState();
@@ -2204,10 +2195,6 @@
     if (img) { img.style.backgroundImage = s.avatar ? `url("${s.avatar}")` : ''; img.hidden = !s.avatar; }
     if (ini) { ini.textContent = s.initial; ini.hidden = !(!s.avatar && s.initial); }
     if (fb) fb.hidden = !!(s.avatar || s.initial);
-    const nameEl = document.getElementById('avatar-name');
-    if (nameEl) nameEl.textContent = s.displayName || t('avatar.guest');
-    const subEl = document.getElementById('avatar-sub');
-    if (subEl) subEl.textContent = s.sub;
     const big = document.getElementById('avatar-big');
     if (big) {
       if (s.avatar) big.innerHTML = `<img src="${s.avatar}" alt="">`;

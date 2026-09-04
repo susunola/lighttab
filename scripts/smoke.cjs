@@ -529,7 +529,7 @@ assert(/--glass-hl:/.test(cssSrc) && (cssSrc.match(/inset 0 1px 0 var\(--glass-h
 console.log('[12] #63 右上角个人头像');
 // 静态结构：右上角头像按钮 + 下拉菜单 + 设置页上传区（本地优先，登录态只镜像）
 for (const id of ['btn-avatar', 'avatar-img', 'avatar-initial', 'avatar-fallback', 'avatar-menu',
-  'avatar-big', 'avatar-name', 'avatar-sub', 'avatar-open-set', 'avatar-sync', 'avatar-sync-label',
+  'avatar-big', 'avatar-open-set', 'avatar-sync', 'avatar-sync-label',
   'avatar-export', 'f-avatar', 'f-avatar-remove', 'avatar-preview']) {
   assert(new RegExp(`id="${id}"`).test(html), `newtab.html 含 #${id}`);
 }
@@ -555,7 +555,7 @@ assert(/window\.LT_SYNC\.getState\(\)/.test(appSrc), '下拉登录态镜像自 w
   vm.createContext(sandbox);
   vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
   const I = sandbox.window.LT_I18N;
-  const avatarKeys = ['avatar.title', 'avatar.guest', 'avatar.local', 'avatar.logged_in', 'avatar.open_settings',
+  const avatarKeys = ['avatar.title', 'avatar.open_settings',
     'avatar.export', 'avatar.sync', 'avatar.logout', 'avatar.upload', 'avatar.remove', 'avatar.tip',
     'gen.avatar', 'toast.avatar_saved', 'toast.avatar_removed'];
   const tOk = (lang) => avatarKeys.every(k => I.t(k) !== k && I.t(k).length > 0);
@@ -563,9 +563,6 @@ assert(/window\.LT_SYNC\.getState\(\)/.test(appSrc), '下拉登录态镜像自 w
   assert(tOk('zh'), '头像词条 中文已译', avatarKeys.map(k => I.t(k)).join(' | '));
   I.setLang('en');
   assert(tOk('en'), '头像词条 英文已译', avatarKeys.map(k => I.t(k)).join(' | '));
-  I.setLang('zh');
-  assert(I.t('avatar.guest') !== I.t('avatar.logged_in'), '未登录与已登录文案互斥（避免菜单两种身份共存）');
-  assert(/displayName = email \|\| name/.test(appSrc), '登录态主标题用邮箱、未登录用本地名（不再并存）');
 }
 // CSS：头像按钮 / 下拉 / 预览 三处均有样式
 for (const sel of ['.avatar-btn', '.avatar-menu', '.avatar-big', '.avatar-item', '.avatar-zone', '.avatar-preview']) {
