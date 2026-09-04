@@ -37,7 +37,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 // ---------- 1) JS 语法 ----------
 console.log('[1] node --check');
-const JS_FILES = ['js/app.js', 'js/sync.js', 'js/inject-ai.js', 'js/lunar.js', 'js/icondb.js', 'js/i18n.js'];
+const JS_FILES = ['js/app.js', 'js/canvas.js', 'js/prompts.js', 'js/sync.js', 'js/inject-ai.js', 'js/lunar.js', 'js/icondb.js', 'js/i18n.js'];
 for (const f of JS_FILES) {
   try {
     execFileSync(process.execPath, ['--check', path.join(ROOT, f)], { stdio: 'pipe' });
@@ -64,6 +64,7 @@ if (manifest) {
 console.log('[3] 版本号一致性');
 const html = read('newtab.html');
 const appSrc = read('js/app.js');
+const canvasSrc = read('js/canvas.js'); // 画布布局已从 app.js 拆出（v1.18.1）
 const cssSrc = read('css/style.css');
 const i18nSrc = read('js/i18n.js');
 const mHtml = html.match(/ver-line[^>]*>\s*LightTab v(\d+\.\d+\.\d+)/);
@@ -381,13 +382,14 @@ assert(/state\.settings\.widgets = normalizeWidgets\(state\.settings\.widgets\)/
 // 删除/恢复/云拉取/重置四条路径都要重新应用一次
 assert((appSrc.match(/applyWidgets\(\)/g) || []).length >= 6, 'applyWidgets 在启动/删除/导入/重置/云拉取各路径均被调用');
 // 自由画布模式：坐标是冻结的，移除组件必须重算，且不能覆盖用户手拖的排布
-assert(/layout\.auto = true/.test(appSrc), 'captureLayout 标记 auto 布局');
-assert((appSrc.match(/\.auto = false/g) || []).length >= 2, '块拖拽与卡片拖拽都会把布局标记为手动');
-assert(/function widgetLayoutStale/.test(appSrc), 'app.js 定义 widgetLayoutStale()（冷启动陈旧坐标检测）');
-assert(/function recaptureBlocksFromFlow/.test(appSrc), 'app.js 定义 recaptureBlocksFromFlow()');
-assert(/if \(!l \|\| l\.auto === false\) return/.test(appSrc), '手动布局不被自动重算覆盖');
-assert(/next\.cards = captureCardLayout\(\)/.test(appSrc), '重算时卡片坐标一并重新推导（网格变宽会改列数）');
-assert(/if \(widgetLayoutStale\(\)\) recaptureBlocksFromFlow\(\)/.test(appSrc), '启动时修正陈旧的画布坐标');
+// （画布实现已拆到 js/canvas.js，相关断言读 canvasSrc；启动调用点留在 app.js）
+assert(/layout\.auto = true/.test(canvasSrc), 'captureLayout 标记 auto 布局');
+assert((canvasSrc.match(/\.auto = false/g) || []).length >= 2, '块拖拽与卡片拖拽都会把布局标记为手动');
+assert(/function widgetLayoutStale/.test(canvasSrc), 'canvas.js 定义 widgetLayoutStale()（冷启动陈旧坐标检测）');
+assert(/function recaptureBlocksFromFlow/.test(canvasSrc), 'canvas.js 定义 recaptureBlocksFromFlow()');
+assert(/if \(!l \|\| l\.auto === false\) return/.test(canvasSrc), '手动布局不被自动重算覆盖');
+assert(/next\.cards = captureCardLayout\(\)/.test(canvasSrc), '重算时卡片坐标一并重新推导（网格变宽会改列数）');
+assert(/if \(window\.LT_CANVAS\.widgetLayoutStale\(\)\) window\.LT_CANVAS\.recaptureBlocksFromFlow\(\)/.test(appSrc), '启动时修正陈旧的画布坐标');
 
 
 console.log('');

@@ -715,10 +715,10 @@
     else if (dlN) showToast(t('ai.wb_launched'), null, null, 3600);
     else showToast(t('ai.launched', { n: webN, names }), null, null, blocked ? 4200 : 2600);
     if (blocked) setTimeout(() => showToast(t('ai.blocked'), null, null, 3200), blocked ? 2600 : 0);
-    if (tpl) { tpl.lastUsedAt = Date.now(); savePrompts(); }
+    if (tpl) { tpl.lastUsedAt = Date.now(); window.LT_PROMPTS.savePrompts(); }
     sparkFx();
     sweepPending();
-    clearActiveTemplate();
+    window.LT_PROMPTS.clearActiveTemplate();
   }
 
   // ---------- Launch animation signature: scattering sparks (the LightTab visual signature) ----------
@@ -745,235 +745,7 @@
     }
   }
 
-  // ---------- Prompt template UI: active chip + the "/" palette ----------
-  function clearActiveTemplate() {
-    activePrompt = null;
-    const chip = document.getElementById('tpl-chip');
-    if (chip) chip.hidden = true;
-    setEngine(currentEngine.id); // restore the default placeholder text
-    const q = document.getElementById('q');
-    if (q) q.value = '';
-  }
-  function renderTemplateChip(p) {
-    const chip = document.getElementById('tpl-chip');
-    if (!p || !chip) return;
-    chip.innerHTML = '';
-    const nm = document.createElement('span');
-    nm.className = 'tpl-name';
-    nm.textContent = p.name || t('tpl.default');
-    nm.title = p.name || t('tpl.default');
-    const x = document.createElement('button');
-    x.type = 'button';
-    x.className = 'tpl-x';
-    x.setAttribute('aria-label', t('tpl.cancel'));
-    x.textContent = '×';
-    x.addEventListener('click', () => { clearActiveTemplate(); document.getElementById('q').focus(); });
-    chip.append(nm, x);
-    chip.hidden = false;
-  }
-  function chooseTemplate(p) {
-    if (!p) return;
-    closePalette(false);
-    // No {q} slot = fixed-command template: it fires on selection, no further input needed.
-    if (p.tmpl.indexOf('{q}') === -1) { launchPrompt(p, ''); return; }
-    activePrompt = p;
-    renderTemplateChip(p);
-    const q = document.getElementById('q');
-    q.placeholder = p.hint || t('tpl.enter_hint');
-    q.value = '';
-    q.focus();
-  }
-  // Palette: opened with "/", supports filtering and keyboard selection.
-  let palItems = [], palIdx = 0;
-  function paletteRows() {
-    const inp = document.getElementById('palette-q');
-    const kw = (inp ? inp.value : '').trim().toLowerCase();
-    const src = state.prompts.filter(p => p && typeof p.tmpl === 'string');
-    if (!kw) {
-      // No query: recently used float to the top (lastUsedAt desc; the sort is stable so unused ones keep their original order).
-      return src.slice().sort((a, b) => (b.lastUsedAt || 0) - (a.lastUsedAt || 0));
-    }
-    return src.filter(p =>
-      (p.name || '').toLowerCase().includes(kw) ||
-      (p.hint || '').toLowerCase().includes(kw) ||
-      (p.tmpl || '').toLowerCase().includes(kw));
-  }
-  function renderPalette() {
-    palItems = paletteRows();
-    if (palIdx > palItems.length - 1) palIdx = Math.max(0, palItems.length - 1);
-    const ul = document.getElementById('palette-list');
-    ul.innerHTML = palItems.map((p, i) => {
-      const dots = (p.targets || []).map(id => {
-        const e = ENGINES.find(x => x.id === id);
-        return e ? `<i class="p-dot" style="background:${e.color}" title="${escapeHtml(engName(e))}"></i>` : '';
-      }).join('');
-      const preview = (p.tmpl || '').replace(/\{q\}/g, '').replace(/\s+/g, ' ').trim().slice(0, 46);
-      return `
-        <li class="${i === palIdx ? 'active' : ''}" data-i="${i}">
-          <span class="p-name">${escapeHtml(p.name)}</span>
-          <span class="p-dots">${dots || `<span class="p-nodots">${t('tpl.no_target')}</span>`}</span>
-          <span class="p-preview">${escapeHtml(preview || p.hint || '')}</span>
-        </li>`;
-    }).join('');
-    document.getElementById('palette-empty').hidden = palItems.length > 0;
-    const act = ul.querySelector('li.active');
-    if (act) act.scrollIntoView({ block: 'nearest' });
-  }
-  function openPalette() {
-    const p = document.getElementById('palette');
-    if (p.hidden === false) return;
-    p.hidden = false;
-    document.getElementById('engine-list').hidden = true;
-    document.getElementById('palette-q').value = '';
-    palIdx = 0;
-    renderPalette();
-    document.getElementById('palette-q').focus();
-  }
-  function closePalette(refocus) {
-    const p = document.getElementById('palette');
-    if (!p || p.hidden) return;
-    p.hidden = true;
-    if (refocus !== false) document.getElementById('q').focus();
-  }
-  function bindPalette() {
-    const inp = document.getElementById('palette-q');
-    inp.addEventListener('input', () => { palIdx = 0; renderPalette(); });
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'ArrowDown') { e.preventDefault(); palIdx = Math.min(palIdx + 1, palItems.length - 1); renderPalette(); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); palIdx = Math.max(palIdx - 1, 0); renderPalette(); }
-      else if (e.key === 'Enter') { e.preventDefault(); const it = palItems[palIdx]; if (it) chooseTemplate(it); }
-      else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
-      e.stopPropagation();
-    });
-    document.getElementById('palette-list').addEventListener('click', e => {
-      const li = e.target.closest('li');
-      if (!li) return;
-      const it = palItems[+li.dataset.i];
-      if (it) chooseTemplate(it);
-    });
-    document.getElementById('palette-close').addEventListener('click', () => closePalette());
-    document.getElementById('tpl-open').addEventListener('click', () => {
-      const p = document.getElementById('palette');
-      if (p.hidden) openPalette(); else closePalette();
-    });
-  }
-  // Template manager (Settings -> Templates): row list + inline editor.
-  let promptEditingId = null;
-  async function savePrompts() {
-    await Store.set(K.prompts, state.prompts);
-  }
-  function renderPromptManager() {
-    const box = document.getElementById('prompt-manage');
-    if (!box) return;
-    const rows = state.prompts.map(p => `
-      <div class="prompt-row ${promptEditingId === p.id ? 'open' : ''}" data-id="${p.id}">
-        <div class="pr-main">
-          <span class="pr-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</span>
-          <span class="pr-tmpl" title="${escapeHtml(p.tmpl || '')}">${escapeHtml((p.tmpl || '').slice(0, 40))}</span>
-          <span class="pr-tags">${(p.targets || []).map(id => {
-            const e = ENGINES.find(x => x.id === id);
-            return e ? `<span class="ptag" style="--pc:${e.color};background:${e.color}20;color:${e.color}">${escapeHtml(engName(e))}</span>` : '';
-          }).join('') || `<span class="ptag dim">${t('tpl.no_target')}</span>`}</span>
-          <span class="pr-acts">
-            <button class="btn ghost sm" data-act="edit">${t('prompt.edit')}</button>
-            <button class="btn ghost sm danger" data-act="del">${t('prompt.del')}</button>
-          </span>
-        </div>
-        ${promptEditingId === p.id ? promptEditorHtml(p) : ''}
-      </div>`).join('');
-    box.innerHTML = (state.prompts.length
-      ? rows
-      : `<div class="pr-empty">${t('prompt.empty')}</div>`)
-      + (promptEditingId === 'new' ? promptEditorHtml(null) : '');
-    box.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
-      const row = b.closest('.prompt-row');
-      const id = row ? row.dataset.id : null;
-      if (b.dataset.act === 'edit') { promptEditingId = promptEditingId === id ? null : id; renderPromptManager(); }
-      if (b.dataset.act === 'del') {
-        const p = state.prompts.find(x => x.id === id);
-        if (p && confirm(t('toast.prompt_del_confirm', { name: p.name }))) {
-          state.prompts = state.prompts.filter(x => x.id !== id);
-          promptEditingId = null;
-          savePrompts();
-          renderPromptManager();
-          showToast(t('toast.prompt_deleted'));
-        }
-      }
-    }));
-    if (promptEditingId) bindPromptEditor();
-  }
-  function promptEditorHtml(p) {
-    const pv = p || { name: '', tmpl: '', hint: '', targets: [], wb: {} };
-    const tg = pv.targets || [];
-    const wb = pv.wb || {};
-    return `
-      <div class="prompt-editor" data-edit-id="${promptEditingId}">
-        <label class="pe-field"><span class="pe-lbl">${t('prompt.name')}</span>
-          <input class="pe-name" type="text" maxlength="24" placeholder="${escapeHtml(t('prompt.name_ph'))}" value="${escapeHtml(pv.name || '')}"></label>
-        <label class="pe-field"><span class="pe-lbl">${t('prompt.tmpl_label')}</span>
-          <textarea class="pe-tmpl" rows="3" maxlength="4000" placeholder="${escapeHtml(t('prompt.tmpl_ph')).replace(/\n/g, '&#10;')}">${escapeHtml(pv.tmpl || '')}</textarea></label>
-        <label class="pe-field"><span class="pe-lbl">${t('prompt.hint_label')}</span>
-          <input class="pe-hint" type="text" maxlength="60" placeholder="${escapeHtml(t('prompt.hint_ph'))}" value="${escapeHtml(pv.hint || '')}"></label>
-        <div class="pe-field"><span class="pe-lbl">${t('prompt.targets')}</span>
-          <div class="pe-targets">${ENGINES.map(e => `
-            <label class="pe-t"><input type="checkbox" value="${e.id}" ${tg.includes(e.id) ? 'checked' : ''}>
-            <span class="ptag" style="--pc:${e.color};background:${e.color}20;color:${e.color}">${escapeHtml(engName(e))}</span></label>`).join('')}
-          </div>
-        </div>
-        <div class="wb-fields" ${tg.includes('wbai') ? '' : 'hidden'}>
-          <span class="pe-lbl">${t('prompt.wb_label')}</span>
-          <div class="wb-grid">
-            <input class="pe-wb" data-wbk="expertId" placeholder="expertId" value="${escapeHtml(wb.expertId || '')}">
-            <input class="pe-wb" data-wbk="model" placeholder="model" value="${escapeHtml(wb.model || '')}">
-            <input class="pe-wb" data-wbk="mode" placeholder="mode" value="${escapeHtml(wb.mode || '')}">
-            <input class="pe-wb" data-wbk="cwd" placeholder="cwd" value="${escapeHtml(wb.cwd || '')}">
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn ghost" data-act="cancel">${t('prompt.cancel')}</button>
-          <button type="button" class="btn primary" data-act="save">${t('prompt.save')}</button>
-        </div>
-      </div>`;
-  }
-  function bindPromptEditor() {
-    const ed = document.querySelector('#prompt-manage .prompt-editor');
-    if (!ed) return;
-    ed.querySelector('[data-act="cancel"]').addEventListener('click', () => { promptEditingId = null; renderPromptManager(); });
-    ed.querySelector('[data-act="save"]').addEventListener('click', () => savePromptEditor(ed));
-    ed.querySelectorAll('.pe-targets input').forEach(cb => cb.addEventListener('change', () => {
-      const wf = ed.querySelector('.wb-fields');
-      if (wf) wf.hidden = !ed.querySelector('.pe-targets input[value="wbai"]').checked;
-    }));
-  }
-  function savePromptEditor(ed) {
-    const id = ed.dataset.editId;
-    const name = (ed.querySelector('.pe-name').value || '').trim();
-    const tmpl = ed.querySelector('.pe-tmpl').value;
-    const hint = (ed.querySelector('.pe-hint').value || '').trim();
-    if (!name) return showToast(t('toast.prompt_name_required'));
-    if (!tmpl.trim()) return showToast(t('toast.prompt_tmpl_required'));
-    const targets = [...ed.querySelectorAll('.pe-targets input:checked')].map(x => x.value).slice(0, 4);
-    const wbOn = targets.includes('wbai');
-    const wb = wbOn ? {} : null;
-    if (wb) {
-      ed.querySelectorAll('.pe-wb').forEach(inp => {
-        const v = inp.value.trim();
-        if (v) wb[inp.dataset.wbk] = v;
-      });
-    }
-    const rec = { name: name.slice(0, 24), tmpl: tmpl.slice(0, 4000), hint: hint.slice(0, 60), targets, wb };
-    if (id === 'new') {
-      if (state.prompts.length >= 30) return showToast(t('toast.prompt_limit'));
-      state.prompts.push({ id: nid(), ...rec });
-    } else {
-      const p = state.prompts.find(x => x.id === id);
-      if (p) Object.assign(p, rec);
-    }
-    promptEditingId = null;
-    savePrompts();
-    renderPromptManager();
-    showToast(t(id === 'new' ? 'toast.prompt_added' : 'toast.prompt_saved'));
-  }
+  // Prompt template UI lives in js/prompts.js (window.LT_PROMPTS; loaded before this file).
 
   // ---------- Icon grid ----------
   // Whether a shortcut belongs to the current view (all / ungrouped / a specific group).
@@ -995,8 +767,9 @@
     grid.innerHTML = list.map(it => cardHtml(it)).join('');
     bindCardEvents();
     // Canvas mode: right after rendering, apply (col, row) to the cards and assign coordinates to any new ones.
-    if (canvasRoot() && canvasRoot().classList.contains('canvas') && canvasEligible()) {
-      applyCardCanvas();
+    const C = window.LT_CANVAS;
+    if (C.canvasRoot() && C.canvasRoot().classList.contains('canvas') && C.canvasEligible()) {
+      C.applyCardCanvas();
     }
   }
   // ---------- Icon rendering (fully local, zero network requests) ----------
@@ -1430,7 +1203,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.18.0',
+      version: '1.18.1',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -1519,7 +1292,7 @@
     renderTodos();
     applyWidgets(); // an import may bring in a different left-column widget selection
     showToast(t('toast.import_done', { items: state.items.length, todos: state.todos.length }));
-    reinitCanvas(); // an import may bring in or clear layout coordinates, so resync the canvas
+    window.LT_CANVAS.reinitCanvas(); // an import may bring in or clear layout coordinates, so resync the canvas
   }
   // Import from bookmarks: uses the optional "bookmarks" permission, requested on first click.
   async function importBookmarks() {
@@ -1577,7 +1350,7 @@
       tabs.forEach(x => x.classList.toggle('active', x === tb));
       const key = tb.dataset.tab;
       panes.forEach(p => p.hidden = p.dataset.pane !== key);
-      if (key === 'prompt') renderPromptManager(); // re-sync on every visit to the Templates pane
+      if (key === 'prompt') window.LT_PROMPTS.renderPromptManager(); // re-sync on every visit to the Templates pane
     }));
     document.getElementById('f-upload').addEventListener('change', onUpload);
     document.getElementById('btn-reset-wall').addEventListener('click', () => {
@@ -1589,12 +1362,7 @@
     document.getElementById('btn-wall-fetch').addEventListener('click', fetchWallLib);
     document.getElementById('btn-reset-all').addEventListener('click', resetAll);
     // Template manager (Settings -> Templates): the "new template" button.
-    document.getElementById('btn-prompt-add').addEventListener('click', () => {
-      promptEditingId = promptEditingId === 'new' ? null : 'new';
-      renderPromptManager();
-      const ed = document.querySelector('#prompt-manage .prompt-editor');
-      if (ed) { ed.scrollIntoView({ block: 'nearest' }); ed.querySelector('.pe-name').focus(); }
-    });
+    document.getElementById('btn-prompt-add').addEventListener('click', () => window.LT_PROMPTS.toggleNewPromptEditor());
 
     // Data management: export JSON / import JSON / import from bookmarks (optional permission, requested on click).
     document.getElementById('btn-export').addEventListener('click', doExport);
@@ -2083,7 +1851,7 @@
     applyWidgets(); // reset brings every left-column widget back
     document.getElementById('modal-set').hidden = true;
     showToast(t('toast.reset_done'));
-    reinitCanvas(); // reset clears layout coordinates, back to the default canvas
+    window.LT_CANVAS.reinitCanvas(); // reset clears layout coordinates, back to the default canvas
   }
 
   // ---------- Schema migrations ----------
@@ -2160,510 +1928,7 @@
     showToast(t('sync.applied'));
   }
 
-  // ---------- Free canvas layout (draggable blocks) ----------
-  const BLOCK_DEFS = [
-    { key: 'wclock', sel: '.wclock' },
-    { key: 'wcal',   sel: '.wcal' },
-    { key: 'wtodo',  sel: '#todo-widget' },
-    { key: 'search', sel: '#search' },
-    { key: 'grid',   sel: '#grid-wrap' }
-  ];
-  const CANVAS_MIN_W = 1024;
-  const DRAG_THRESHOLD = 6;
-  const DRAG_INTERACTIVE = 'input,button,a,select,textarea,.card,.gchip,.todo-item,.cal-nav-btn,.cal-cell,.engine-list,.menu,.palette,[data-act]';
-
-  function blockEls() {
-    return BLOCK_DEFS.map(b => ({ ...b, el: document.querySelector(b.sel) })).filter(b => b.el);
-  }
-  function canvasRoot() { return document.querySelector('.layout'); }
-  function canvasEligible() { return window.innerWidth > CANVAS_MIN_W; }
-  function getLayout() {
-    const l = state.settings && state.settings.layout;
-    return (l && typeof l === 'object') ? l : null;
-  }
-
-  function applyCanvas() {
-    const root = canvasRoot();
-    const l = getLayout();
-    if (!root || !l) return;
-    root.classList.add('canvas');
-    for (const b of blockEls()) {
-      const c = l[b.key];
-      if (!c || typeof c.x !== 'number' || typeof c.y !== 'number') continue;
-      b.el.style.left = c.x + 'px';
-      b.el.style.top = c.y + 'px';
-      b.el.style.width = c.w ? c.w + 'px' : '';
-    }
-    applyCardCanvas();
-    refreshCanvasHeight();
-  }
-
-  function leaveCanvas() {
-    const root = canvasRoot();
-    if (!root) return;
-    root.classList.remove('canvas');
-    root.style.height = '';
-    for (const b of blockEls()) {
-      b.el.style.left = ''; b.el.style.top = ''; b.el.style.width = '';
-    }
-    clearCardCanvas();
-  }
-
-  // First entry into canvas mode: measure the current flow positions and freeze them as coordinates, so switching to absolute positioning causes zero jump.
-  function captureLayout() {
-    const root = canvasRoot();
-    if (!root) return null;
-    const rr = root.getBoundingClientRect();
-    const layout = {};
-    for (const b of blockEls()) {
-      const r = b.el.getBoundingClientRect();
-      layout[b.key] = {
-        x: Math.round(r.left - rr.left),
-        y: Math.round(r.top - rr.top),
-        w: Math.round(r.width)
-      };
-    }
-    // Card grid coordinates: on first entry, map the current flow positions to (col, row).
-    // With no cells (extremely narrow window, or no cards) captureCardLayout returns an empty object.
-    layout.cards = captureCardLayout();
-    // auto=true marks coordinates the app derived from the flow layout rather than the user dragging
-    // blocks around. Only an auto layout may be silently re-derived (see recaptureBlocksFromFlow).
-    layout.auto = true;
-    state.settings.layout = layout;
-    Store.set(K.settings, state.settings);
-    return layout;
-  }
-
-  function refreshCanvasHeight() {
-    const root = canvasRoot();
-    if (!root || !root.classList.contains('canvas')) return;
-    let maxBottom = 0;
-    const rr = root.getBoundingClientRect();
-    for (const b of blockEls()) {
-      const r = b.el.getBoundingClientRect();
-      const bottom = r.bottom - rr.top;
-      if (bottom > maxBottom) maxBottom = bottom;
-    }
-    // Cards are absolutely positioned inside #grid, so take the max of the grid-wrap bottom and each card's bottom.
-    const grid = document.getElementById('grid');
-    const gridWrap = document.getElementById('grid-wrap');
-    if (grid && gridWrap) {
-      const gw = gridWrap.getBoundingClientRect();
-      const cards = grid.querySelectorAll('.card');
-      for (const c of cards) {
-        const r = c.getBoundingClientRect();
-        const bottom = (r.bottom - rr.top);
-        if (bottom > maxBottom) maxBottom = bottom;
-      }
-      // Count grid-wrap's own bottom too (covers having no cards but a custom grid-wrap height).
-      const gwb = gw.bottom - rr.top;
-      if (gwb > maxBottom) maxBottom = gwb;
-    }
-    root.style.height = (maxBottom + 90) + 'px';
-  }
-
-  // ---------- Canvas mode: free card dragging with snap-to-grid ----------
-  // In canvas mode cards are absolutely positioned; their (col, row) grid coordinates live in layout.cards[id].
-  // Cell size is derived from the #grid container width, matching the CSS repeat(auto-fill, minmax(118px, 1fr)).
-  const CARD_MIN_W = 118;
-  const CARD_GAP = 13;
-  const CARD_GRID_PADDING = 0; // #grid itself has no padding
-
-  function getCardLayout() {
-    const l = getLayout();
-    return (l && l.cards && typeof l.cards === 'object') ? l.cards : {};
-  }
-  function setCardLayoutMap(map) {
-    const l = getLayout();
-    if (!l) return;
-    l.cards = map;
-  }
-
-  // Max column count the grid can hold, matching CSS auto-fill: floor((W + gap) / (minW + gap)).
-  function getCardCols(gridW) {
-    return Math.max(1, Math.floor((gridW + CARD_GAP) / (CARD_MIN_W + CARD_GAP)));
-  }
-  // Single track width (under auto-fill, 1fr splits the remaining space evenly) - matches the real CSS column width.
-  function getCardTrackW(gridW) {
-    const cols = getCardCols(gridW);
-    return (gridW - (cols - 1) * CARD_GAP) / cols;
-  }
-
-  // Cell size: column width is derived from the container width, because once cards are absolutely positioned
-  // they shrink to their content width and offsetWidth is useless. Row height comes from the first card (height is content-driven, unaffected by positioning).
-  function getCardCellSize() {
-    const grid = document.getElementById('grid');
-    if (!grid) return null;
-    const gridW = grid.clientWidth;
-    if (!gridW) return null;
-    const first = grid.querySelector('.card');
-    const cardH = first ? first.offsetHeight : 0;
-    if (!cardH) return null;
-    const cardW = getCardTrackW(gridW);
-    return { cardW, cardH, stepX: cardW + CARD_GAP, stepY: cardH + CARD_GAP };
-  }
-
-  // Map each visible card's visual row/column inside #grid back to (col, row) and persist it.
-  function captureCardLayout() {
-    const grid = document.getElementById('grid');
-    if (!grid) return {};
-    const cell = getCardCellSize();
-    if (!cell) return {};
-    const visible = Array.from(grid.querySelectorAll('.card'));
-    if (!visible.length) return {};
-    const gridRect = grid.getBoundingClientRect();
-    const map = {};
-    for (const c of visible) {
-      const r = c.getBoundingClientRect();
-      const col = Math.max(0, Math.round((r.left - gridRect.left) / cell.stepX));
-      const row = Math.max(0, Math.round((r.top - gridRect.top) / cell.stepY));
-      map[c.dataset.id] = { col, row };
-    }
-    return map;
-  }
-
-  // On first canvas entry, or when some cards lack coordinates, assign (col, row) in visible order.
-  function assignInitialCardLayout() {
-    const grid = document.getElementById('grid');
-    if (!grid) return {};
-    const cell = getCardCellSize();
-    if (!cell) return {};
-    const visible = Array.from(grid.querySelectorAll('.card'));
-    const cols = getCardCols(grid.clientWidth);
-    const map = getCardLayout();
-    // Existing coordinates are marked occupied; missing ones take the first free cell, scanning column by column then row by row.
-    const occupied = new Set();
-    for (const id in map) {
-      const p = map[id];
-      if (p && typeof p.col === 'number' && typeof p.row === 'number') {
-        occupied.add(p.col + ',' + p.row);
-      }
-    }
-    function nextFree(fromCol, fromRow) {
-      let col = fromCol, row = fromRow;
-      while (occupied.has(col + ',' + row)) {
-        col++;
-        if (col >= cols) { col = 0; row++; }
-      }
-      return { col, row };
-    }
-    let cur = { col: 0, row: 0 };
-    for (const c of visible) {
-      const id = c.dataset.id;
-      if (map[id] && typeof map[id].col === 'number' && typeof map[id].row === 'number') continue;
-      cur = nextFree(cur.col, cur.row);
-      map[id] = { col: cur.col, row: cur.row };
-      occupied.add(cur.col + ',' + cur.row);
-    }
-    return map;
-  }
-
-  // Apply layout.cards to the DOM (only for cards visible in canvas mode).
-  function applyCardCanvas() {
-    const grid = document.getElementById('grid');
-    if (!grid) return;
-    const cell = getCardCellSize();
-    if (!cell) return;
-    const map = assignInitialCardLayout();
-    setCardLayoutMap(map);
-    for (const c of grid.querySelectorAll('.card')) {
-      const id = c.dataset.id;
-      const p = map[id];
-      if (!p) continue;
-      c.style.width = cell.cardW + 'px';
-      c.style.left = (p.col * cell.stepX) + 'px';
-      c.style.top = (p.row * cell.stepY) + 'px';
-      // Disable HTML5 drag in canvas mode: it fights pointer dragging and could open the link via the address bar.
-      c.setAttribute('draggable', 'false');
-    }
-    injectCardDragHandles();
-    refreshCanvasHeight();
-  }
-
-  function clearCardCanvas() {
-    const grid = document.getElementById('grid');
-    if (!grid) return;
-    for (const c of grid.querySelectorAll('.card')) {
-      c.style.left = '';
-      c.style.top = '';
-      c.style.width = '';
-    }
-  }
-
-  // Inject a small drag handle into canvas-mode cards (top-left, revealed on hover).
-  function injectCardDragHandles() {
-    const grid = document.getElementById('grid');
-    if (!grid) return;
-    for (const c of grid.querySelectorAll('.card')) {
-      if (c.querySelector('.card-drag-handle')) continue;
-      const h = document.createElement('span');
-      h.className = 'card-drag-handle';
-      h.title = t('drag.card');
-      h.setAttribute('aria-hidden', 'true');
-      h.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
-      c.appendChild(h);
-    }
-  }
-
-  // Canvas mode: pointer-drag a card, snap it to the nearest cell, and swap with whatever card already sits there.
-  function bindCardCanvasDrag() {
-    const grid = document.getElementById('grid');
-    if (!grid) return;
-    let active = null;
-    let dragMoved = false; // whether this press turned into a drag (used to suppress the follow-up click)
-
-    function onPointerDown(e) {
-      if (!canvasEligible() || e.button !== 0) return;
-      const card = e.target.closest('.card');
-      if (!card) return;
-      // Only the edit/delete buttons opt out of dragging; icon, title and blank space are all draggable - a movement threshold separates click from drag.
-      if (e.target.closest('.card-actions')) return;
-      const rr = grid.getBoundingClientRect();
-      const r = card.getBoundingClientRect();
-      dragMoved = false;
-      active = {
-        card,
-        id: card.dataset.id,
-        baseX: r.left - rr.left,
-        baseY: r.top - rr.top,
-        startX: e.clientX,
-        startY: e.clientY,
-        moved: false,
-        pointerId: e.pointerId
-      };
-      // Do not preventDefault yet, so a plain click can still open the link.
-    }
-
-    function onPointerMove(e) {
-      if (!active || e.pointerId !== active.pointerId) return;
-      const dx = e.clientX - active.startX;
-      const dy = e.clientY - active.startY;
-      if (!active.moved) {
-        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
-        active.moved = true;
-        dragMoved = true;
-        active.card.classList.add('card-dragging');
-        try { active.card.setPointerCapture(e.pointerId); } catch {}
-        e.preventDefault();
-      } else {
-        e.preventDefault();
-      }
-      const rr = grid.getBoundingClientRect();
-      let nx = Math.round(active.baseX + dx);
-      let ny = Math.round(active.baseY + dy);
-      nx = Math.max(0, nx);
-      ny = Math.max(0, ny);
-      active.card.style.left = nx + 'px';
-      active.card.style.top = ny + 'px';
-    }
-
-    function onPointerUp(e) {
-      if (!active || e.pointerId !== active.pointerId) return;
-      const { card, id, moved } = active;
-      active = null;
-      card.classList.remove('card-dragging');
-      try { card.releasePointerCapture(e.pointerId); } catch {}
-      if (!moved) { dragMoved = false; return; }
-      e.preventDefault();
-
-      const cell = getCardCellSize();
-      if (!cell) return;
-      const r = card.getBoundingClientRect();
-      const rr = grid.getBoundingClientRect();
-      let col = Math.max(0, Math.round((r.left - rr.left) / cell.stepX));
-      let row = Math.max(0, Math.round((r.top - rr.top) / cell.stepY));
-      // Swap with whatever card occupies the target cell, so neither ends up overlapping.
-      const map = getCardLayout();
-      let swapId = null;
-      for (const otherId in map) {
-        if (otherId === id) continue;
-        const p = map[otherId];
-        if (p && p.col === col && p.row === row) { swapId = otherId; break; }
-      }
-      if (swapId) {
-        map[swapId] = map[id] || { col: 0, row: 0 };
-      }
-      map[id] = { col, row };
-      setCardLayoutMap(map);
-      const lay = getLayout();
-      if (lay) lay.auto = false; // hand-arranged icon grid: stop auto re-deriving it
-      // Re-apply positions for every visible card, including the swapped one.
-      applyCardCanvas();
-      Store.set(K.settings, state.settings);
-    }
-
-    // Suppress the click that follows a drag, otherwise finishing a drag would open the link.
-    function onClickCapture(e) {
-      if (!dragMoved) return;
-      if (!e.target.closest('.card')) return;
-      e.preventDefault();
-      e.stopPropagation();
-      dragMoved = false;
-    }
-
-    grid.addEventListener('pointerdown', onPointerDown);
-    grid.addEventListener('pointermove', onPointerMove);
-    grid.addEventListener('pointerup', onPointerUp);
-    grid.addEventListener('pointercancel', onPointerUp);
-    grid.addEventListener('click', onClickCapture, true);
-  }
-
-  function injectDragHandles() {
-    for (const b of blockEls()) {
-      if (b.el.querySelector('.drag-handle')) continue;
-      const h = document.createElement('span');
-      h.className = 'drag-handle';
-      h.title = t('drag.block');
-      h.setAttribute('aria-hidden', 'true');
-      h.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>';
-      b.el.appendChild(h);
-    }
-  }
-
-  function bindBlockDrag() {
-    const root = canvasRoot();
-    if (!root) return;
-    let active = null;
-
-    function onPointerDown(e) {
-      if (!canvasEligible() || e.button !== 0) return;
-      const handle = e.target.closest('.drag-handle');
-      const block = blockEls().find(b => b.el === e.target.closest('.widget, #search, #grid-wrap'));
-      if (!block) return;
-      // Outside the handle: only blank areas start a drag (interactive elements keep normal click behaviour).
-      if (!handle && e.target.closest(DRAG_INTERACTIVE)) return;
-      e.preventDefault();
-      const rr = root.getBoundingClientRect();
-      const r = block.el.getBoundingClientRect();
-      active = {
-        block,
-        baseX: r.left - rr.left,
-        baseY: r.top - rr.top,
-        startX: e.clientX,
-        startY: e.clientY,
-        moved: false,
-        pointerId: e.pointerId
-      };
-      block.el.classList.add('block-dragging');
-      try { block.el.setPointerCapture(e.pointerId); } catch {}
-    }
-
-    function onPointerMove(e) {
-      if (!active || e.pointerId !== active.pointerId) return;
-      const dx = e.clientX - active.startX;
-      const dy = e.clientY - active.startY;
-      if (!active.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
-      active.moved = true;
-      const rootW = root.clientWidth;
-      const w = active.block.el.offsetWidth;
-      let nx = Math.round(active.baseX + dx);
-      let ny = Math.round(active.baseY + dy);
-      nx = Math.max(0, Math.min(nx, rootW - w));
-      ny = Math.max(0, ny);
-      active.block.el.style.left = nx + 'px';
-      active.block.el.style.top = ny + 'px';
-    }
-
-    function onPointerUp(e) {
-      if (!active || e.pointerId !== active.pointerId) return;
-      const { block, moved } = active;
-      active = null;
-      block.el.classList.remove('block-dragging');
-      try { block.el.releasePointerCapture(e.pointerId); } catch {}
-      if (!moved) return; // below the threshold: treat as a click and do not persist coordinates
-      const l = getLayout();
-      if (!l) return;
-      const rr = root.getBoundingClientRect();
-      const r = block.el.getBoundingClientRect();
-      l[block.key] = {
-        x: Math.round(r.left - rr.left),
-        y: Math.round(r.top - rr.top),
-        w: Math.round(r.width)
-      };
-      l.auto = false; // hand-placed from now on: never silently re-derive these coordinates
-      Store.set(K.settings, state.settings);
-      refreshCanvasHeight();
-    }
-
-    root.addEventListener('pointerdown', onPointerDown);
-    root.addEventListener('pointermove', onPointerMove);
-    root.addEventListener('pointerup', onPointerUp);
-    root.addEventListener('pointercancel', onPointerUp);
-  }
-
-  // True when the frozen canvas coordinates still describe a page whose left column looked different.
-  // Only auto layouts are considered — a hand-dragged arrangement is never second-guessed.
-  // The signal is exact rather than geometric: recaptureBlocksFromFlow drops the key of every hidden
-  // block, so a leftover key for a removed widget means these coordinates predate the removal.
-  // (Don't compare x against a constant — coordinates are relative to .layout's border box, so the
-  // left-most block legitimately sits at the container's 40px padding.)
-  function widgetLayoutStale() {
-    const l = getLayout();
-    if (!l || l.auto === false) return false;
-    const vis = normalizeWidgets(state.settings && state.settings.widgets);
-    return WIDGETS.some((id) => !vis[id] && l[id]);
-  }
-
-  // Removing a left-column widget leaves a hole in the frozen canvas coordinates, so re-derive the
-  // block positions from a fresh flow pass. Only ever applied to an auto layout — once the user has
-  // dragged a block or a card the arrangement is theirs and we leave it exactly as they left it.
-  function recaptureBlocksFromFlow() {
-    const root = canvasRoot();
-    if (!root || !root.classList.contains('canvas')) return; // flow layout reflows on its own
-    const l = getLayout();
-    if (!l || l.auto === false) return;
-    leaveCanvas(); // drop absolute positioning so the browser reflows around the hidden widgets
-    const rr = root.getBoundingClientRect();
-    const next = {};
-    for (const b of blockEls()) {
-      const r = b.el.getBoundingClientRect();
-      if (!r.width && !r.height) continue; // a removed widget contributes no coordinates
-      next[b.key] = { x: Math.round(r.left - rr.left), y: Math.round(r.top - rr.top), w: Math.round(r.width) };
-    }
-    // Card coordinates are (col, row) against the grid's track width. A collapsed left column makes
-    // the grid wider, which changes the track count — so the card map has to be re-derived too,
-    // otherwise old column indices scatter the icons across the new width.
-    next.cards = captureCardLayout();
-    next.auto = true;
-    state.settings.layout = next;
-    Store.set(K.settings, state.settings);
-    applyCanvas();
-  }
-
-  // Switch between flow and canvas based on window width and layout data (idempotent; reused after import/reset).
-  function reinitCanvas() {    leaveCanvas();
-    if (!canvasEligible()) return;
-    if (getLayout()) applyCanvas();
-    else { captureLayout(); applyCanvas(); }
-  }
-
-  function initCanvasLayout() {
-    injectDragHandles();
-    bindBlockDrag();
-    bindCardCanvasDrag();
-
-    if (window.ResizeObserver) {
-      // Several observed targets can fire in the same frame; coalesce with rAF to avoid re-measuring repeatedly.
-      let rafId = 0;
-      const ro = new ResizeObserver(() => {
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = requestAnimationFrame(() => { rafId = 0; refreshCanvasHeight(); });
-      });
-      blockEls().forEach(b => ro.observe(b.el));
-      const grid = document.getElementById('grid');
-      if (grid) ro.observe(grid);
-    }
-
-    window.addEventListener('resize', () => {
-      if (!canvasEligible()) { leaveCanvas(); return; }
-      if (getLayout()) {
-        if (!canvasRoot().classList.contains('canvas')) applyCanvas();
-        else refreshCanvasHeight();
-      }
-    });
-
-    reinitCanvas();
-  }
+  // Free canvas layout lives in js/canvas.js (window.LT_CANVAS; loaded before this file).
 
   // ---------- Language switching ----------
   function setLangOnly(l) {
@@ -2680,7 +1945,7 @@
     renderGrid();
     renderTodos();
     renderCalendar();
-    renderPromptManager();
+    window.LT_PROMPTS.renderPromptManager();
     setEngine(state.settings.engine);
     startClock();
     if (window.LT_SYNC) renderSyncPanel();
@@ -2739,7 +2004,7 @@
     const left = document.querySelector('.layout > .left');
     if (left) left.hidden = !WIDGETS.some((id) => vis[id]);
     // In free-canvas mode the block coordinates are frozen, so hiding a widget would leave a hole.
-    recaptureBlocksFromFlow();
+    window.LT_CANVAS.recaptureBlocksFromFlow();
   }
   // Remove one widget, with an undo toast — same affordance as deleting a shortcut card.
   function removeWidget(id) {
@@ -2808,7 +2073,7 @@
     document.getElementById('search-go').addEventListener('click', e => submitSearch(qEl.value, e));
     // Esc while a template is active: drop the template and go back to plain search.
     qEl.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && activePrompt) { e.stopPropagation(); clearActiveTemplate(); qEl.focus(); }
+      if (e.key === 'Escape' && activePrompt) { e.stopPropagation(); window.LT_PROMPTS.clearActiveTemplate(); qEl.focus(); }
     });
     const engineBtn = document.getElementById('engine-btn');
     engineBtn.addEventListener('click', e => {
@@ -2838,10 +2103,10 @@
       if (e.key === 'Escape') {
         document.querySelectorAll('.modal').forEach(m => m.hidden = true);
         document.getElementById('engine-list').hidden = true;
-        closePalette(false);
+        window.LT_PROMPTS.closePalette(false);
         if (activePrompt && isTypingTarget(document.activeElement)) {
           const qq = document.getElementById('q');
-          if (document.activeElement === qq) clearActiveTemplate();
+          if (document.activeElement === qq) window.LT_PROMPTS.clearActiveTemplate();
         }
       }
       const typing = isTypingTarget(document.activeElement);
@@ -2853,7 +2118,7 @@
         if (openable && !document.querySelector('.modal:not([hidden])')) {
           e.preventDefault();
           const pal = document.getElementById('palette');
-          if (pal.hidden) openPalette(); else closePalette();
+          if (pal.hidden) window.LT_PROMPTS.openPalette(); else window.LT_PROMPTS.closePalette();
         }
       }
       if (/^[1-9]$/.test(e.key) && !typing) {
@@ -2868,7 +2133,7 @@
     });
 
     bindSiteForm();
-    bindPalette();
+    window.LT_PROMPTS.bindPalette();
     bindSettings();
     sweepPending(); // sweep expired / corrupted pending leftovers on boot
 
@@ -2884,12 +2149,12 @@
     document.getElementById('add-float').addEventListener('click', () => openSiteModal(null));
 
     // Free canvas layout (draggable blocks): initialised last, once every block has rendered.
-    initCanvasLayout();
+    window.LT_CANVAS.initCanvasLayout();
     // Boot order note: applyWidgets() runs before the canvas exists, so its recapture is a no-op
     // there. If this profile arrived with widgets already removed (cloud sync, imported file, a
     // previous session), the frozen coordinates still describe the old three-widget page — fix
     // them up now that the canvas is live.
-    if (widgetLayoutStale()) recaptureBlocksFromFlow();
+    if (window.LT_CANVAS.widgetLayoutStale()) window.LT_CANVAS.recaptureBlocksFromFlow();
 
     // Self-check
     if (!hasChromeStorage) {
@@ -2904,6 +2169,17 @@
       }, 600);
     }
   }
+
+  // Shared context for the split-out modules js/canvas.js and js/prompts.js.
+  // They load before this file (see newtab.html) and only touch this object at call time.
+  window.LT_APP = {
+    state, Store, K, ENGINES, WIDGETS,
+    t, engName, escapeHtml, nid, showToast,
+    launchPrompt, setEngine, normalizeWidgets,
+    getCurrentEngine: () => currentEngine,
+    getActivePrompt: () => activePrompt,
+    setActivePrompt: (p) => { activePrompt = p; }
+  };
 
   // Pure-function exports for the offline assertions in scripts/smoke.cjs
   // (same convention as window.LT_LUNAR / window.LT_SYNC).
