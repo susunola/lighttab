@@ -1806,13 +1806,47 @@
       fr.readAsDataURL(file);
     });
   }
-  // Square the image at `size`x`size`. Two strategies:
-  //  - near-square source (aspect within ~0.85..1.18): full-bleed centre-crop so the tile stays tightly packed.
-  //  - non-square source: top-aligned crop for tall logos (icon at the top, tagline below dropped —
-  //    the card title underneath already names the site) or centre-crop for wide images. This keeps
-  //    the brand mark filling the tile instead of being shrunk to a thin letterboxed strip.
-  // Photos that still exceed the 96 KiB PNG budget are re-baked as JPEG q0.85 (JPEG has no alpha, so
-  //    the padding is filled with white to match a logo on a white card).
+  // Content-aware square crop rect for an uploaded card icon. Returns {sx, sy, side} in source pixels.
+  // `rows` is an optional per-row "inked pixel" fraction array of length `h` (null when unavailable).
+  // Strategy:
+  //  - near-square or wide source: plain centre-crop square (side = min(w, h)).
+  //  - tall source (aspect < 0.85): trim empty top/bottom margins, then cut at the first sustained
+  //    blank band so the tagline block below is dropped and only the brand icon remains. If no band
+  //    is found, fall back to a top-aligned square. When the remaining icon block is shorter than
+  //    the width (e.g. a cloud mark sitting over a tagline), the square shrinks to the block height
+  //    and is centred horizontally.
+  function iconCropRect(w, h, rows) {
+    const SQ_LO = 0.85;
+    const center = () => {
+      const side = Math.min(w, h);
+      return { sx: (w - side) / 2, sy: (h - side) / 2, side };
+    };
+    if (!rows || w / h >= SQ_LO) return center(); // square-ish / wide / no density data
+    const BLANK = 0.015;
+    const blank = (y) => rows[y] < BLANK;
+    let y0 = 0; while (y0 < h && blank(y0)) y0++;
+    let y1 = h - 1; while (y1 > y0 && blank(y1)) y1--;
+    if (y1 - y0 < 2) return center(); // effectively empty image
+    // First sustained blank run inside the trimmed content = boundary between icon and tagline.
+    const gapMin = Math.max(3, Math.round(h * 0.015));
+    let runStart = -1, gapStart = -1;
+    for (let y = y0; y <= y1; y++) {
+      if (blank(y)) { if (runStart < 0) runStart = y; }
+      else if (runStart >= 0) {
+        if (y - runStart >= gapMin) { gapStart = runStart; break; }
+        runStart = -1;
+      }
+    }
+    if (runStart >= 0 && y1 + 1 - runStart >= gapMin && gapStart < 0) gapStart = runStart;
+    const iconH = (gapStart >= 0 ? gapStart : y1 + 1) - y0;
+    if (iconH <= 1) return center();
+    if (iconH >= w) return { sx: 0, sy: y0, side: w }; // icon block is taller than wide: top square
+    // Icon block is wide-but-short (typical cloud-over-tagline mark): square at the block height,
+    // centred horizontally so the mark itself fills the tile without the internal whitespace band.
+    return { sx: (w - iconH) / 2, sy: y0, side: iconH };
+  }
+  // Square the image at `size`x`size` for a card tile (see iconCropRect for the strategy; this also
+  // re-bakes over-budget PNGs as JPEG q0.85 — JPEG has no alpha, so the pad is filled with white).
   function compressIconSquare(file, size) {
     return new Promise((resolve, reject) => {
       const fr = new FileReader();
@@ -1820,39 +1854,52 @@
         const img = new Image();
         img.onload = () => {
           if (!img.width || !img.height || !size) return reject(new Error('bad image'));
-          const aspect = img.width / img.height;
-          const SQ_LO = 0.85, SQ_HI = 1 / SQ_LO;
-          const c = document.createElement('canvas');
-          c.width = size; c.height = size;
-          const ctx = c.getContext('2d');
-          // Draw the source cropped into the square. `pad` is the canvas fill colour (null for
-          // transparent PNG padding, '#fff' for the JPEG fallback).
-          const draw = (pad) => {
-            if (pad) { ctx.fillStyle = pad; ctx.fillRect(0, 0, size, size); }
-            if (aspect >= SQ_LO && aspect <= SQ_HI) {
-              // Near square: full-bleed centre crop.
-              const side = Math.min(img.width, img.height);
-              const sx = (img.width - side) / 2;
-              const sy = (img.height - side) / 2;
-              ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
-            } else if (aspect < SQ_LO) {
-              // Tall: top-aligned crop so the icon at the top is kept and the tagline is dropped.
-              const side = img.width;
-              ctx.drawImage(img, 0, 0, side, side, 0, 0, size, size);
-            } else {
-              // Wide: centre crop.
-              const side = img.height;
-              const sx = (img.width - side) / 2;
-              ctx.drawImage(img, sx, 0, side, side, 0, 0, size, size);
+          const W = img.width, H = img.height;
+          let rows = null;
+          // Per-row inked fraction, computed at a capped resolution so huge photos stay cheap.
+          if (W / H < 0.85) {
+            const cap = 512 / Math.max(W, H);
+            const scale = Math.min(1, cap);
+            const sw = Math.max(1, Math.round(W * scale)), sh = Math.max(1, Math.round(H * scale));
+            const sc = document.createElement('canvas');
+            sc.width = sw; sc.height = sh;
+            const sg = sc.getContext('2d', { willReadFrequently: true });
+            sg.drawImage(img, 0, 0, sw, sh);
+            const sd = sg.getImageData(0, 0, sw, sh).data;
+            rows = new Array(sh);
+            for (let y = 0; y < sh; y++) {
+              let cnt = 0;
+              for (let x = 0; x < sw; x++) {
+                const i = (y * sw + x) * 4, a = sd[i + 3], r = sd[i], gg = sd[i + 1], b = sd[i + 2];
+                if (a > 10 && Math.min(r, gg, b) < 244) cnt++; // inked = visible & not near-white
+              }
+              rows[y] = cnt / sw;
             }
-          };
-          draw(null);
-          let url = c.toDataURL('image/png');
-          if (url.length > 96 * 1024) {
-            draw('#fff');
-            url = c.toDataURL('image/jpeg', 0.85);
+            // Native-pixel rect from the scaled analysis.
+            const r = iconCropRect(sw, sh, rows);
+            rows = null; // release
+            const inv = 1 / scale;
+            drawCrop(r.sx * inv, r.sy * inv, r.side * inv);
+          } else {
+            const r = iconCropRect(W, H, null);
+            drawCrop(r.sx, r.sy, r.side);
           }
-          resolve(url);
+          function drawCrop(sx, sy, side) {
+            const c = document.createElement('canvas');
+            c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            const draw = (pad) => {
+              if (pad) { ctx.fillStyle = pad; ctx.fillRect(0, 0, size, size); }
+              ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+            };
+            draw(null);
+            let url = c.toDataURL('image/png');
+            if (url.length > 96 * 1024) {
+              draw('#fff');
+              url = c.toDataURL('image/jpeg', 0.85);
+            }
+            resolve(url);
+          }
         };
         img.onerror = () => reject(new Error('decode failed'));
         img.src = fr.result;
@@ -1861,7 +1908,6 @@
       fr.readAsDataURL(file);
     });
   }
-
   // ---------- Toast ----------
   let toastTimer = 0; // auto-hide timer of the previous toast; cancelled by the next one so an old timer cannot close a new message
   function showToast(text, actionLabel, action, ttl) {
@@ -2718,7 +2764,7 @@
 
   // Pure-function exports for the offline assertions in scripts/smoke.cjs
   // (same convention as window.LT_LUNAR / window.LT_SYNC).
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, hostnameOf, iconFor, resolveTheme, todayStr, pickRotateCandidate };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, resolveTheme, todayStr, pickRotateCandidate };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
