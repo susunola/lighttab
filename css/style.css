@@ -1293,15 +1293,15 @@ svg.logo-tx text { font-family: inherit; }
   right: 90px; bottom: 30px;
   width: 52px; height: 52px;
   display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(120% 120% at 26% 20%, #ff5a93, #ff3d7c 55%, #f43f5e 100%);
+  background: radial-gradient(120% 120% at 28% 22%, #c084fc, #a855f7 52%, #7c3aed 100%);
   color: #fff;
   border-radius: 50%;
-  box-shadow: 0 10px 26px rgba(244, 63, 94, 0.46), 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+  box-shadow: 0 10px 26px rgba(139, 92, 246, 0.52), 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
   z-index: 50;
   transition: transform .15s ease, filter .15s ease;
 }
-.plum-float svg { filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.24)); }
-.plum-float:hover { transform: scale(1.07); filter: brightness(1.06); }
+.plum-float svg { filter: drop-shadow(0 1px 2px rgba(60, 0, 90, 0.35)); }
+.plum-float:hover { transform: scale(1.07); filter: brightness(1.08); }
 .plum-float:active { transform: scale(0.95); }
 .plum-float.spin { animation: plum-spin .52s ease; }
 @keyframes plum-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -1314,7 +1314,7 @@ svg.logo-tx text { font-family: inherit; }
   pointer-events: none;
   z-index: 70;
   opacity: 0;
-  background: radial-gradient(100% 100% at 35% 35%, #ffd9e6, #ff7aa9 68%, #ff4f8a 100%);
+  background: radial-gradient(100% 100% at 35% 35%, #f0d0ff, #c084fc 62%, #9333ea 100%);
   border-radius: 72% 72% 72% 72% / 82% 82% 62% 62%;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
   animation: plum-petal-fall var(--dur, 1.8s) ease-in forwards;

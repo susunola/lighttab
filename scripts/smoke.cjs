@@ -381,7 +381,7 @@ assert(/<\/html>\s*$/.test(html), '文档以 </html> 收尾（结构完整）');
 // ---------- 6) #48 主题静态结构 ----------
 console.log('[6] #48 主题');
 assert(/<html lang="en" data-theme="dark"/.test(html), 'html 标签默认 data-theme="dark"');
-const themeSel = html.match(/<select id="f-theme">([\s\S]*?)<\/select>/);
+const themeSel = html.match(/<select\s[^>]*id="f-theme"[^>]*>([\s\S]*?)<\/select>/);
 assert(!!themeSel, '设置页含 #f-theme 下拉');
 if (themeSel) {
   const opts = [...themeSel[1].matchAll(/<option value="(dark|light|system)"/g)].map(m => m[1]);
@@ -391,7 +391,7 @@ assert(/data-i18n="gen\.theme"/.test(html), '主题标签带 data-i18n="gen.them
 
 // ---------- 7) #49 壁纸轮换静态结构 ----------
 console.log('[7] #49 壁纸轮换');
-assert(/<input type="checkbox" id="f-wall-rotate">/.test(html), '设置页含 #f-wall-rotate 复选框');
+assert(/<input[^>]*type="checkbox"[^>]*id="f-wall-rotate"[^>]*>/.test(html), '设置页含 #f-wall-rotate 复选框');
 assert(/data-i18n="wall\.rotate"/.test(html), '轮换标签带 data-i18n="wall.rotate"');
 assert(/data-i18n="wall\.rotate_tip"/.test(html), '轮换提示带 data-i18n="wall.rotate_tip"');
 assert(/walllib:\s*'lt\.walllib'/.test(appSrc), 'K 映射含 lt.walllib（本地缓存池）');
