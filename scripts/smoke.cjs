@@ -391,6 +391,38 @@ assert(/if \(!l \|\| l\.auto === false\) return/.test(canvasSrc), '手动布局�
 assert(/next\.cards = captureCardLayout\(\)/.test(canvasSrc), '重算时卡片坐标一并重新推导（网格变宽会改列数）');
 assert(/if \(window\.LT_CANVAS\.widgetLayoutStale\(\)\) window\.LT_CANVAS\.recaptureBlocksFromFlow\(\)/.test(appSrc), '启动时修正陈旧的画布坐标');
 
+// ---------- 10) #61 WorkBuddy 本地探测 + 时钟位置 ----------
+console.log('[10] #61 WorkBuddy 探测 / 时钟位置');
+// 探测协议必须与 WorkBuddy Desktop 自带的一致（端口表 / 路径 / 超时）
+assert(/WB_PROBE_PORTS = \[18488, 18489, 18490\]/.test(appSrc), '端口表与 WorkBuddy 官方一致（18488-18490）');
+assert(/WB_PROBE_PATH = '\/workbuddy\/probe'/.test(appSrc), '探测路径为 /workbuddy/probe');
+assert(/WB_PROBE_TIMEOUT = 1500/.test(appSrc), '单端口超时 1500ms（与官方网页端一致）');
+assert(/j\.app === 'workbuddy-desktop'/.test(appSrc), '校验应答 app 字段，拒绝冒名服务');
+assert(/AbortController/.test(appSrc), '探测带 AbortController 超时，不会挂死页面');
+assert(/function probeWorkBuddy/.test(appSrc), 'app.js 定义 probeWorkBuddy()');
+assert(/function verifyWorkBuddyLaunch/.test(appSrc), 'app.js 定义 verifyWorkBuddyLaunch()（发射后回执）');
+assert(/if \(dlN\) verifyWorkBuddyLaunch\(\)/.test(appSrc), '深链发射后异步复验');
+assert(/window\.open\(deepLinkUrl/.test(appSrc), '深链仍在用户手势内同步 window.open');
+assert(/window\.LT_PROBE_WB = probeWorkBuddy/.test(appSrc), '探测函数导出供离线校验驱动');
+assert(/eng-state/.test(appSrc) && /\.eng-state\.on/.test(cssSrc), '引擎下拉有状态点样式');
+assert(!/host_permissions/.test(read('manifest.json')), '不申请 host_permissions（靠对方 CORS 放行）');
+for (const k of ['wb.running', 'wb.not_running', 'wb.not_detected', 'wb.get']) {
+  assert(i18nSrc.includes(`'${k}'`), `i18n 含 ${k}`);
+}
+// 时钟位置
+assert(/clockPos: 'left'/.test(appSrc), 'DEFAULT_SETTINGS 含 clockPos 默认左栏');
+assert(/function applyClockPos/.test(appSrc), 'app.js 定义 applyClockPos()');
+assert(/applyClockPos\(\);/.test(appSrc), 'applyWidgets 驱动 applyClockPos');
+assert(/id="f-clock-pos"/.test(html), '设置页含 #f-clock-pos 下拉');
+assert(/data-i18n="clockpos\.left"/.test(html) && /data-i18n="clockpos\.top"/.test(html), '时钟位置两个选项词条齐备');
+assert(/\.widget\.wclock-top/.test(cssSrc), 'CSS 定义 .widget.wclock-top');
+// 顶部态样式必须以 .widget 限定，否则被文件后面同特异性的 .wclock .clock-* 覆盖
+assert(!/^\.wclock-top /m.test(cssSrc), '顶部态选择器均以 .widget 限定（避免被后续同特异性规则覆盖）');
+assert(/wantTop !== sharesRightColumn/.test(canvasSrc), '陈旧检测覆盖时钟位置与坐标不一致的情况');
+// 卡片坐标 GC：已删除卡片的格位必须回收，否则新卡片被挤到后面
+assert(/for \(const id in map\) if \(!alive\.has\(id\)\)/.test(canvasSrc), 'assignInitialCardLayout 回收失效卡片坐标');
+assert(/if \(pruned\) \{ setCardLayoutMap\(map\);/.test(canvasSrc), '坐标回收后落盘一次');
+
 
 console.log('');
 if (failures) {

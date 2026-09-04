@@ -72,7 +72,10 @@
     // Left-column widgets the user kept. Removing one hides it in both the flow and canvas layouts;
     // removing all three collapses the whole left column so the icon grid spans the full width.
     // Lives inside settings on purpose — it then rides along with export / import / cloud sync for free.
-    widgets: { wclock: true, wcal: true, wtodo: true }
+    widgets: { wclock: true, wcal: true, wtodo: true },
+    // Clock placement: 'left' keeps it as the first left-column card, 'top' lifts it above the
+    // search box as a big centred time + date line (the phone-launcher look).
+    clockPos: 'left'
   };
   // Left-column widget ids, in render order. Single source of truth for visibility + settings UI.
   const WIDGETS = ['wclock', 'wcal', 'wtodo'];
@@ -549,13 +552,23 @@
   }
   function renderEngineList() {
     const ul = document.getElementById('engine-list');
-    ul.innerHTML = ENGINES.map((e, i) => `
+    if (!ul) return;
+    ul.innerHTML = ENGINES.map((e, i) => {
+      // WorkBuddy is a desktop deep link rather than a website, so show whether it is actually up.
+      let badge = '';
+      if (e.id === 'wbai' && wbStatus.checked) {
+        badge = wbStatus.running
+          ? `<span class="eng-state on" title="${escapeHtml(t('wb.running', { v: wbStatus.version || '?' }))}"></span>`
+          : `<span class="eng-state off" title="${escapeHtml(t('wb.not_running'))}"></span>`;
+      }
+      return `
       <li data-id="${e.id}" class="${e.id === currentEngine.id ? 'active' : ''}">
         <span class="eng-dot" style="background:${e.color}"></span>
-        <span>${engName(e)}</span>
+        <span>${engName(e)}</span>${badge}
         <span class="eng-key">${i + 1}</span>
       </li>
-    `).join('');
+    `;
+    }).join('');
   }
   // Open the result page: navigate in the current tab by default (no stray blank tabs); hold Cmd/Ctrl for a new tab.
   function openResult(url, ev) {
@@ -715,6 +728,10 @@
     else if (dlN) showToast(t('ai.wb_launched'), null, null, 3600);
     else showToast(t('ai.launched', { n: webN, names }), null, null, blocked ? 4200 : 2600);
     if (blocked) setTimeout(() => showToast(t('ai.blocked'), null, null, 3200), blocked ? 2600 : 0);
+    // The deep link already fired synchronously inside the gesture (never gate that on a network
+    // round-trip). Confirm out-of-band: if the probe still cannot see WorkBuddy a moment later the
+    // link most likely went nowhere - say so instead of leaving a false "launched".
+    if (dlN) verifyWorkBuddyLaunch();
     if (tpl) { tpl.lastUsedAt = Date.now(); window.LT_PROMPTS.savePrompts(); }
     sparkFx();
     sweepPending();
@@ -1979,6 +1996,76 @@
     bindThemeMQ();
   }
 
+  // ---------- WorkBuddy desktop detection (#61) ----------
+  // WorkBuddy Desktop runs a loopback probe server and answers
+  //   GET http://127.0.0.1:18488/workbuddy/probe
+  //   -> {"ok":true,"app":"workbuddy-desktop","version":"5.5.3","platform":"darwin"}
+  // It binds 127.0.0.1 only, sends Access-Control-Allow-Origin:*, and walks 18488->18490 when a
+  // port is taken (two Desktop instances). Same port table, path and timeout its own web landing
+  // page probes with, so this tracks the official behaviour instead of sniffing for the app.
+  // NOTE: the probe proves WorkBuddy is *running*, not merely installed - a closed app answers
+  // nothing yet its workbuddy:// deep link still cold-starts it. So a failed probe never blocks a
+  // launch; it only downgrades the toast to an honest "could not see it running".
+  const WB_PROBE_PORTS = [18488, 18489, 18490];
+  const WB_PROBE_PATH = '/workbuddy/probe';
+  const WB_PROBE_TIMEOUT = 1500;
+  const WB_PROBE_TTL = 20000; // re-probe at most every 20s; the app can be started mid-session
+  const wbStatus = { running: false, version: '', at: 0, checked: false };
+  let wbProbeInFlight = null;
+
+  async function probeWorkBuddyPort(port) {
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = setTimeout(() => ctrl && ctrl.abort(), WB_PROBE_TIMEOUT);
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}${WB_PROBE_PATH}`, {
+        method: 'GET', cache: 'no-store', signal: ctrl ? ctrl.signal : undefined
+      });
+      if (!r.ok) return null;
+      const j = await r.json();
+      return (j && j.ok && j.app === 'workbuddy-desktop') ? j : null;
+    } catch {
+      return null; // not listening / blocked / timed out - all mean "cannot see it"
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  // Resolves to the probe payload, or null. Concurrent callers share one in-flight probe.
+  function probeWorkBuddy(force) {
+    if (!force && wbStatus.checked && Date.now() - wbStatus.at < WB_PROBE_TTL) {
+      return Promise.resolve(wbStatus.running ? { version: wbStatus.version } : null);
+    }
+    if (wbProbeInFlight) return wbProbeInFlight;
+    wbProbeInFlight = (async () => {
+      let hit = null;
+      for (const port of WB_PROBE_PORTS) {
+        hit = await probeWorkBuddyPort(port);
+        if (hit) break;
+      }
+      wbStatus.running = !!hit;
+      wbStatus.version = hit ? String(hit.version || '') : '';
+      wbStatus.at = Date.now();
+      wbStatus.checked = true;
+      wbProbeInFlight = null;
+      renderEngineList();
+      return hit;
+    })();
+    return wbProbeInFlight;
+  }
+  // Post-launch confirmation. A cold start takes a moment, so retry a few times before concluding
+  // the app is not there, then offer the download page rather than leaving a dead end.
+  function verifyWorkBuddyLaunch() {
+    let tries = 0;
+    const tick = async () => {
+      tries++;
+      if (await probeWorkBuddy(true)) return; // it came up - the "launched" toast was right
+      if (tries < 3) return void setTimeout(tick, 1600);
+      showToast(t('wb.not_detected'), t('wb.get'), () => {
+        window.open('https://www.workbuddy.ai/', '_blank', 'noopener');
+      }, 7000);
+    };
+    setTimeout(tick, 1200);
+  }
+
   // ---------- Left-column widget visibility (#60) ----------
   // Coerce whatever came off disk / an imported file into a full {wclock,wcal,wtodo} boolean map.
   // Anything missing or non-boolean defaults to visible, so a corrupt file can never silently
@@ -1994,6 +2081,7 @@
   function applyWidgets() {
     const vis = normalizeWidgets(state.settings && state.settings.widgets);
     state.settings.widgets = vis;
+    applyClockPos();
     for (const id of WIDGETS) {
       const el = document.querySelector('.widget.' + id);
       if (el) el.hidden = !vis[id];
@@ -2001,10 +2089,33 @@
       if (box) box.checked = vis[id];
     }
     // All three gone → drop the column entirely so .right (flex:1) reclaims the full width.
+    // A clock lifted above the search box no longer counts towards keeping the column alive.
     const left = document.querySelector('.layout > .left');
-    if (left) left.hidden = !WIDGETS.some((id) => vis[id]);
+    if (left) {
+      left.hidden = !WIDGETS.some((id) =>
+        vis[id] && document.querySelector('.widget.' + id)?.closest('.left'));
+    }
     // In free-canvas mode the block coordinates are frozen, so hiding a widget would leave a hole.
     window.LT_CANVAS.recaptureBlocksFromFlow();
+  }
+  // Move the clock card between the left column and the slot above the search box. The clock's own
+  // DOM (and therefore startClock's element handles) is reused verbatim — only its parent and one
+  // class change, so nothing about the tick logic has to know this feature exists.
+  function applyClockPos() {
+    const el = document.querySelector('.widget.wclock');
+    if (!el) return;
+    const pos = (state.settings && state.settings.clockPos) === 'top' ? 'top' : 'left';
+    const left = document.querySelector('.layout > .left');
+    const right = document.querySelector('.layout > .right');
+    const search = document.getElementById('search');
+    if (pos === 'top' && right && search) {
+      if (el.parentElement !== right) right.insertBefore(el, search);
+    } else if (pos === 'left' && left && el.parentElement !== left) {
+      left.insertBefore(el, left.firstChild);
+    }
+    el.classList.toggle('wclock-top', pos === 'top');
+    const sel = document.getElementById('f-clock-pos');
+    if (sel && sel.value !== pos) sel.value = pos;
   }
   // Remove one widget, with an undo toast — same affordance as deleting a shortcut card.
   function removeWidget(id) {
@@ -2033,6 +2144,14 @@
       box.addEventListener('change', () => {
         state.settings.widgets = normalizeWidgets(state.settings.widgets);
         state.settings.widgets[id] = box.checked;
+        Store.set(K.settings, state.settings);
+        applyWidgets();
+      });
+    }
+    const posSel = document.getElementById('f-clock-pos');
+    if (posSel) {
+      posSel.addEventListener('change', () => {
+        state.settings.clockPos = posSel.value === 'top' ? 'top' : 'left';
         Store.set(K.settings, state.settings);
         applyWidgets();
       });
@@ -2156,6 +2275,10 @@
     // them up now that the canvas is live.
     if (window.LT_CANVAS.widgetLayoutStale()) window.LT_CANVAS.recaptureBlocksFromFlow();
 
+    // Probe WorkBuddy Desktop once at boot so the engine dropdown can show its real state.
+    // Fire-and-forget: nothing on the page blocks on the result.
+    probeWorkBuddy().catch(() => {});
+
     // Self-check
     if (!hasChromeStorage) {
       // Only warn on the first run.
@@ -2183,6 +2306,9 @@
 
   // Pure-function exports for the offline assertions in scripts/smoke.cjs
   // (same convention as window.LT_LUNAR / window.LT_SYNC).
+  // Exposed for the offline probe harness: it has to drive port fallback and timeout paths with a
+  // stubbed fetch, which is impossible from the outside.
+  window.LT_PROBE_WB = probeWorkBuddy;
   window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, resolveTheme, todayStr, pickRotateCandidate };
 
   if (document.readyState === 'loading') {
