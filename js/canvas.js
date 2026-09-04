@@ -461,15 +461,15 @@
     const st = A().state.settings;
     const vis = A().normalizeWidgets(st && st.widgets);
     if (A().WIDGETS.some((id) => !vis[id] && l[id])) return true;
-    // Clock placement has to agree with the frozen coordinates too. Lifted above the search box
-    // means the clock shares the right column's left edge; parked in the left column means it
-    // starts further left. Compare the two blocks against each other, never against a constant
-    // (coordinates are relative to .layout's border box, so the left-most block legitimately sits
-    // at the container's 40px padding).
-    if (l.wclock && l.search) {
-      const wantTop = (st && st.clockPos) === 'top';
-      const sharesRightColumn = Math.abs(l.wclock.x - l.search.x) <= 2;
-      if (wantTop !== sharesRightColumn) return true;
+    // Placement has to agree with the frozen coordinates too. Lifted above the search box means the
+    // widget shares the right column's left edge; parked in the left column means it starts further
+    // left. Compare blocks against each other, never against a constant (coordinates are relative to
+    // .layout's border box, so the left-most block legitimately sits at the container's 40px padding).
+    const pos = A().normalizeWidgetPos(st && st.widgetPos);
+    for (const id of A().WIDGETS) {
+      if (!l[id] || !l.search) continue;
+      const sharesRightColumn = Math.abs(l[id].x - l.search.x) <= 2;
+      if ((pos[id] === 'top') !== sharesRightColumn) return true;
     }
     return false;
   }
@@ -507,6 +507,40 @@
     else { captureLayout(); applyCanvas(); }
   }
 
+  // Blocks lifted above the search box stack vertically, but canvas coordinates are frozen at capture
+  // time. If one of them changes height afterwards — the calendar's lunar labels arrive late, a month
+  // needs six week rows instead of five, webfonts settle — the frozen y values stop stacking cleanly
+  // and blocks overlap. Detect that geometrically (cheap, no guessing) and re-derive once.
+  function topStackOverlaps() {
+    const st = A().state.settings;
+    const pos = A().normalizeWidgetPos(st && st.widgetPos);
+    const order = A().WIDGETS.filter((id) => pos[id] === 'top');
+    if (!order.length) return false;
+    const els = blockEls();
+    let prevBottom = -Infinity;
+    for (const key of [...order, 'search', 'grid']) {
+      const b = els.find((x) => x.key === key);
+      if (!b || b.el.hidden) continue;
+      const r = b.el.getBoundingClientRect();
+      if (!r.height) continue;
+      if (r.top < prevBottom - 0.5) return true;
+      prevBottom = r.bottom;
+    }
+    return false;
+  }
+  let relayoutBusy = false;
+  function relayoutTopStackIfNeeded() {
+    if (relayoutBusy) return;
+    const l = getLayout();
+    if (!l || l.auto === false) return; // a hand-dragged arrangement is the user's business
+    if (!topStackOverlaps()) return;
+    relayoutBusy = true;
+    try { recaptureBlocksFromFlow(); } finally {
+      // Release on the next frame: the reflow we just caused must not re-enter this.
+      requestAnimationFrame(() => { relayoutBusy = false; });
+    }
+  }
+
   function initCanvasLayout() {
     injectDragHandles();
     bindBlockDrag();
@@ -517,7 +551,7 @@
       let rafId = 0;
       const ro = new ResizeObserver(() => {
         if (rafId) cancelAnimationFrame(rafId);
-        rafId = requestAnimationFrame(() => { rafId = 0; refreshCanvasHeight(); });
+        rafId = requestAnimationFrame(() => { rafId = 0; refreshCanvasHeight(); relayoutTopStackIfNeeded(); });
       });
       blockEls().forEach(b => ro.observe(b.el));
       const grid = document.getElementById('grid');
@@ -533,11 +567,14 @@
     });
 
     reinitCanvas();
+    // First paint can still land mid-render (calendar cells, fonts); settle the stack once.
+    requestAnimationFrame(() => relayoutTopStackIfNeeded());
   }
 
 
   window.LT_CANVAS = {
     canvasRoot, canvasEligible, applyCardCanvas,
-    reinitCanvas, initCanvasLayout, widgetLayoutStale, recaptureBlocksFromFlow
+    reinitCanvas, initCanvasLayout, widgetLayoutStale, recaptureBlocksFromFlow,
+    topStackOverlaps, relayoutTopStackIfNeeded
   };
 })();

@@ -195,12 +195,11 @@
     // #60 left-column widget removal
     'widget.removed':      { zh: '组件已移除', en: 'Widget removed' },
     'widget.remove':       { zh: '移除该组件', en: 'Remove this widget' },
-    'gen.widgets':         { zh: '左栏组件', en: 'Left column widgets' },
-    'gen.widgets_tip':     { zh: '取消勾选即移除；三个都移除后左栏收起，图标网格自动占满整宽。', en: 'Uncheck to remove. With all three removed the left column collapses and the icon grid spans the full width.' },
+    'gen.widgets':         { zh: '组件', en: 'Widgets' },
+    'gen.widgets_tip':     { zh: '取消勾选即移除；右侧下拉可在「搜索框上方」与「左栏」之间搬动。左栏被搬空后自动收起，图标网格占满整宽。', en: 'Uncheck to remove a widget; the dropdown moves it between the top stack and the left column. With the left column emptied it collapses and the icon grid spans the full width.' },
     // #61 clock placement + WorkBuddy desktop detection
-    'gen.clock_pos':       { zh: '时钟位置', en: 'Clock placement' },
-    'clockpos.left':       { zh: '左栏卡片', en: 'Left column card' },
-    'clockpos.top':        { zh: '搜索框上方', en: 'Above the search box' },
+    'wpos.left':           { zh: '左栏', en: 'Left column' },
+    'wpos.top':            { zh: '搜索框上方', en: 'Above search' },
     'wb.running':          { zh: 'WorkBuddy 正在运行（v{v}）', en: 'WorkBuddy is running (v{v})' },
     'wb.not_running':      { zh: '未检测到 WorkBuddy 在运行', en: 'WorkBuddy not detected' },
     'wb.not_detected':     { zh: '没检测到 WorkBuddy 桌面端，可能未安装', en: 'Could not reach WorkBuddy Desktop — it may not be installed' },
