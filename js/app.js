@@ -238,7 +238,7 @@
   // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
   // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
   const SCHEMA_VERSION = 4;
-  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema' };
+  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', wallhist: 'lt.wallhist', schema: 'lt.schema' };
   // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
   // to the content script across tabs without ever putting it in the URL.
   const PENDING_PREFIX = 'lt.pending.';
@@ -345,10 +345,14 @@
     // Legacy compatibility: nothing saved -> fall back to the default gradient.
     return { type: 'gradient', value: WALLPAPERS[0].css };
   }
-  async function setWallpaper(wp) {
+  async function setWallpaper(wp, via) {
     state.wallpaper = wp;
     applyWallpaper(wp);
     await Store.set(K.wallpaper, wp);
+    // Every wallpaper change is a habit signal; record it locally so the recommendation engine can
+    // learn the user's taste. `via` tags how the change happened (swatch / library / auto / plum /
+    // reset / upload). Uploads' dataURLs are deliberately never persisted (sensitive + huge).
+    if (via) await recordWallpaperPick(via);
   }
 
   // ---------- Wallpaper library (Bing daily images, proxied by the backend to work around CORS) ----------
@@ -379,7 +383,7 @@
       el.addEventListener('click', () => {
         if (el.dataset.i === 'img') return;
         const w = WALLPAPERS[+el.dataset.i];
-        setWallpaper({ type: 'gradient', value: w.css });
+        setWallpaper({ type: 'gradient', value: w.css }, 'swatch');
         markManualPickToday(); // a manual pick wins for the rest of this calendar day
         renderSwatches();
       });
@@ -439,26 +443,39 @@
     }
   }
 
-  function renderWallLibGrid() {
+  async function renderWallLibGrid() {
     const grid = document.getElementById('wall-lib-grid');
     if (!grid) return;
     if (!wallLibImages || !wallLibImages.length) { grid.innerHTML = ''; return; }
+    const prefs = await getWallPrefs();
     const cur = state.wallpaper && state.wallpaper.type === 'image' ? state.wallpaper.value : '';
-    grid.innerHTML = wallLibImages.map(im => `
+    // Once enough picks have been observed, order the grid best-first and tag the single image the
+    // plum button / auto-rotate would choose next, so the "learned" recommendation is visible.
+    const hasSignal = !!(prefs && prefs.total >= WALL_RECO_MIN);
+    const ordered = hasSignal ? scoreWallCandidates(wallLibImages, prefs) : wallLibImages.slice();
+    const reco = hasSignal ? pickRecommended(wallLibImages, prefs, cur) : null;
+    const recoUrl = reco ? reco.url : null;
+    grid.innerHTML = ordered.map(im => {
+      const badge = (recoUrl && im.url === recoUrl)
+        ? `<span class="wall-reco-badge">${escapeHtml(t('wall.reco_badge'))}</span>` : '';
+      return `
       <div class="wall-thumb ${im.url === cur ? 'active' : ''}" data-url="${escapeHtml(im.url)}" title="${escapeHtml(im.copyright || im.title || '')}">
         <img src="${escapeHtml(im.url)}" alt="${escapeHtml(im.title || '')}" loading="lazy">
+        ${badge}
         <span class="wall-thumb-copy">${escapeHtml(im.title || im.copyright || '')}</span>
       </div>
-    `).join('');
+    `;
+    }).join('');
     grid.querySelectorAll('.wall-thumb').forEach(el => {
       el.addEventListener('click', async () => {
-        await setWallpaper({ type: 'image', value: el.dataset.url });
+        await setWallpaper({ type: 'image', value: el.dataset.url }, 'library');
         markManualPickToday(); // a manual pick wins for the rest of this calendar day
         renderSwatches();
         renderWallLibGrid();
         showToast(t('toast.wall_applied'));
       });
     });
+    renderWallRecoTip(prefs);
   }
 
   // Source capability: query the backend for which wallpaper sources are available and sync the
@@ -520,9 +537,9 @@
       const pool = Array.isArray(wallLibImages) ? wallLibImages : [];
       if (!pool.length) return;
       const cur = (state.wallpaper && state.wallpaper.type === 'image') ? state.wallpaper.value : '';
-      const next = pickRotateCandidate(pool, cur);
+      const next = pickRecommended(pool, await getWallPrefs(), cur);
       if (!next || !next.url) return;
-      await setWallpaper({ type: 'image', value: next.url });
+      await setWallpaper({ type: 'image', value: next.url }, 'auto');
       await localRawSet(K.rot, { date: today, url: next.url });
       renderSwatches();
       renderWallLibGrid(); // keep the modal's active markers honest if it happens to be open
@@ -534,6 +551,140 @@
     } catch (e) {
       console.warn('[LightTab] wallpaper auto-rotate failed', e);
     }
+  }
+
+  // ---------- Wallpaper habit tracking & recommendation ----------
+  // Every wallpaper pick is recorded to lt.wallhist (local-only, never synced/exported), and a light
+  // preference profile is derived from it. The plum button and the daily auto-rotate then use that
+  // profile to surface the image most likely to please the user (fresh content, no quick repeats,
+  // favorites boosted, preferred source favoured). No pixels / personal data ever leave the device.
+  const WALLHIST_CAP = 240;   // keep at most this many pick events
+  const WALL_RECO_MIN = 3;    // need at least this many picks before we claim a "learned" taste
+  let wallPrefs = null;       // cached preference profile (invalidated on every new pick)
+
+  // Stable source label for a wallpaper value: data: URLs are user uploads; gradient is the CSS path;
+  // otherwise it's an image from the currently-selected library source.
+  function wallSourceFor(wp) {
+    if (!wp) return 'gradient';
+    if (wp.type === 'gradient') return 'gradient';
+    const v = typeof wp.value === 'string' ? wp.value : '';
+    if (v.startsWith('data:image')) return 'upload';
+    return wallLibSource || 'bing';
+  }
+
+  async function recordWallpaperPick(via) {
+    const wp = state.wallpaper;
+    if (!wp) return;
+    const ev = { type: wp.type || 'gradient', via: via || 'other', source: wallSourceFor(wp), at: Date.now() };
+    // Persist the URL only for library images — never for uploads (dataURLs are huge and personal).
+    if (wp.type === 'image' && sanitizeWallpaperUrl(wp.value) && !wp.value.startsWith('data:image')) {
+      ev.url = wp.value;
+    }
+    if (typeof wp.light === 'boolean') ev.light = wp.light;
+    try {
+      const hist = (await localRawGet(K.wallhist)) || { events: [] };
+      const events = (Array.isArray(hist.events) ? hist.events : []).concat([ev]);
+      while (events.length > WALLHIST_CAP) events.shift();
+      await localRawSet(K.wallhist, { events, updatedAt: Date.now() });
+      wallPrefs = null; // drop the stale profile; re-derive lazily on next use
+    } catch (e) { /* best effort */ }
+  }
+
+  // Pure derivation (exported for offline smoke): turn a flat event list into a preference profile.
+  function deriveWallPrefs(events) {
+    const list = Array.isArray(events) ? events : [];
+    const prefs = {
+      total: 0,
+      imageCount: 0,
+      gradientCount: 0,
+      sourceCounts: { bing: 0, wallhaven: 0, unsplash: 0, upload: 0, gradient: 0 },
+      manualSourceCounts: { bing: 0, wallhaven: 0, unsplash: 0, upload: 0 },
+      urlCounts: {},          // url -> { picks, lastAt }
+      favoriteUrls: [],       // image URLs picked >=2 times, most-picked first
+      lastSeen: {},           // url -> lastAt (ms)
+      lightPicks: 0,
+      darkPicks: 0
+    };
+    const MANUAL = { library: 1, plum: 1, upload: 1 };
+    for (const e of list) {
+      if (!e || typeof e !== 'object') continue;
+      prefs.total++;
+      if (e.type === 'gradient') prefs.gradientCount++;
+      else if (e.type === 'image') prefs.imageCount++;
+      const src = (typeof e.source === 'string' && e.source in prefs.sourceCounts) ? e.source : null;
+      if (src) {
+        prefs.sourceCounts[src]++;
+        if (MANUAL[e.via] && src !== 'gradient') prefs.manualSourceCounts[src]++;
+      }
+      if (e.light === true) prefs.lightPicks++;
+      else if (e.light === false) prefs.darkPicks++;
+      if (e.url) {
+        const rec = prefs.urlCounts[e.url] || (prefs.urlCounts[e.url] = { picks: 0, lastAt: 0 });
+        rec.picks++;
+        rec.lastAt = Math.max(rec.lastAt, Number(e.at) || 0);
+      }
+    }
+    for (const url of Object.keys(prefs.urlCounts)) {
+      prefs.lastSeen[url] = prefs.urlCounts[url].lastAt;
+      if (prefs.urlCounts[url].picks >= 2) prefs.favoriteUrls.push(url);
+    }
+    prefs.favoriteUrls.sort((a, b) =>
+      (prefs.urlCounts[b].picks - prefs.urlCounts[a].picks) ||
+      ((prefs.urlCounts[b].lastAt || 0) - (prefs.urlCounts[a].lastAt || 0)));
+    return prefs;
+  }
+
+  // Pure scoring (exported for offline smoke): order the pool best-first given a preference profile.
+  // Signals: +favorite (re-picked) boost, +mild never-seen novelty bonus, −recency penalty for
+  // anything shown in the last 14 days (stronger the fresher it is). Deterministic tie-break by index.
+  function scoreWallCandidates(pool, prefs, opts) {
+    const arr = Array.isArray(pool) ? pool : [];
+    const p = prefs || {};
+    const now = Number((opts && opts.now)) || Date.now();
+    const fav = new Set(p.favoriteUrls || []);
+    const lastSeen = p.lastSeen || {};
+    const scored = arr.map((im, i) => {
+      const url = im && im.url ? im.url : '';
+      let score = 0;
+      if (url) {
+        const seenAt = Number(lastSeen[url]) || 0;
+        if (seenAt) {
+          const ageDays = (now - seenAt) / 86400000;
+          if (ageDays < 14) score -= Math.round(60 * (1 - ageDays / 14)); // -60 fresh → 0 at 14 days
+        } else {
+          score += 8; // never seen: mild novelty bonus
+        }
+        if (fav.has(url)) score += 40;
+      }
+      return { im, url, i, score };
+    });
+    scored.sort((a, b) => (b.score - a.score) || (a.i - b.i));
+    return scored.map(s => s.im);
+  }
+
+  // Pick the best next image, skipping the current one so a click / daily rotate always changes the
+  // wallpaper; falls back to the top candidate (and null when the pool is empty).
+  function pickRecommended(pool, prefs, currentUrl, opts) {
+    const ordered = scoreWallCandidates(pool, prefs, opts);
+    const best = ordered.find(im => im && im.url && im.url !== currentUrl);
+    return best || ordered[0] || null;
+  }
+
+  async function getWallPrefs() {
+    if (wallPrefs) return wallPrefs;
+    try {
+      const hist = await localRawGet(K.wallhist);
+      wallPrefs = deriveWallPrefs((hist && Array.isArray(hist.events)) ? hist.events : []);
+    } catch { wallPrefs = deriveWallPrefs([]); }
+    return wallPrefs;
+  }
+
+  function renderWallRecoTip(prefs) {
+    const el = document.getElementById('wall-reco-tip');
+    if (!el) return;
+    const n = prefs ? prefs.total : 0;
+    el.hidden = n < WALL_RECO_MIN;
+    if (n >= WALL_RECO_MIN) el.textContent = t('wall.reco_tip', { n });
   }
 
   // ---------- Plum blossom (bottom-right): rotate wallpaper + show an inspirational quote ----------
@@ -592,9 +743,9 @@
     const pool = Array.isArray(wallLibImages) ? wallLibImages : [];
     if (pool.length) {
       const cur = (state.wallpaper && state.wallpaper.type === 'image') ? state.wallpaper.value : '';
-      const next = pickRotateCandidate(pool, cur);
+      const next = pickRecommended(pool, await getWallPrefs(), cur);
       if (next && next.url) {
-        await setWallpaper({ type: 'image', value: next.url });
+        await setWallpaper({ type: 'image', value: next.url }, 'plum');
         markManualPickToday();
         renderSwatches();
         renderWallLibGrid();
@@ -1496,7 +1647,7 @@
     }));
     document.getElementById('f-upload').addEventListener('change', onUpload);
     document.getElementById('btn-reset-wall').addEventListener('click', () => {
-      setWallpaper({ type: 'gradient', value: WALLPAPERS[0].css });
+      setWallpaper({ type: 'gradient', value: WALLPAPERS[0].css }, 'reset');
       markManualPickToday(); // a manual pick wins for the rest of this calendar day
       renderSwatches();
       showToast(t('toast.wall_reset'));
@@ -1708,7 +1859,7 @@
     if (f.size > 4 * 1024 * 1024) return showToast(t('toast.image_too_big'));
     const dataUrl = await compressImage(f, 2560, 0.82);
     const light = await isLightImage(dataUrl);
-    await setWallpaper({ type: 'image', value: dataUrl, light });
+    await setWallpaper({ type: 'image', value: dataUrl, light }, 'upload');
     markManualPickToday(); // an upload is a manual pick: no auto-rotate for the rest of this day
     renderSwatches(); // a re-render already carries the active state - no manual class clearing, no reopening the modal
     showToast(t('toast.wall_applied'));
@@ -1987,6 +2138,20 @@
   // and it rolls over at midnight without any fetch. A "next" affordance browses the pool manually.
   // The backend may later serve a richer live list; the static pool keeps the widget fully offline.
   const DOUBAN_ANNUAL_BEST = [
+    {
+      y: 2009,
+      zh: '可爱的骨头',
+      en: 'The Lovely Bones',
+      rate: 7.2,
+      genre: '剧情 / 惊悚 / 家庭',
+      country: '美国 英国 新西兰',
+      director: '彼得·杰克逊',
+      cast: '西尔莎·罗南 / 马克·沃尔伯格 / 蕾切尔·薇兹 / 苏珊·萨兰登',
+      quote: '我曾在人世间昙花一现，然后消失。祝大家长寿快乐。',
+      summary: '14岁的女孩苏西在一次意外中离开人世。她从介于现实与彼岸的视角，目睹家人如何在失去与追寻中继续生活：父亲执着追查真相，母亲在崩塌与重建之间徘徊，妹妹被迫提前长大。影片用诗性影像讲述创伤、记忆与和解，关于“被夺走的人生”与“仍要向前的人生”。',
+      poster: 'https://upload.wikimedia.org/wikipedia/en/3/32/The_Lovely_Bones_Poster.jpg',
+      douban: 'https://movie.douban.com/subject/2028645/'
+    },
     { y: 1972, zh: '教父', en: 'The Godfather', rate: 9.3, genre: '剧情 / 犯罪', blurb: '权力与家族的史诗，黑帮电影难以逾越的丰碑。' },
     { y: 1993, zh: '霸王别姬', en: 'Farewell My Concubine', rate: 9.6, genre: '剧情 / 爱情', blurb: '一折京戏，半个世纪的人世浮沉与执念。' },
     { y: 1993, zh: '辛德勒的名单', en: "Schindler's List", rate: 9.6, genre: '剧情 / 历史', blurb: '黑白影像里，一个人如何用名单救下一千条命。' },
@@ -2030,41 +2195,223 @@
   ];
   // Local cursor: -1 = follow the deterministic daily pick; otherwise a manual index into the pool.
   let movieCursor = -1;
+
+  // Lightweight poster map (when a movie entry itself has no dedicated poster URL).
+  const MOVIE_POSTER_MAP = {
+    '肖申克的救赎': 'https://upload.wikimedia.org/wikipedia/en/8/81/ShawshankRedemptionMoviePoster.jpg',
+    '泰坦尼克号': 'https://upload.wikimedia.org/wikipedia/en/2/22/Titanic_poster.jpg',
+    '星际穿越': 'https://upload.wikimedia.org/wikipedia/en/b/bc/Interstellar_film_poster.jpg',
+    '盗梦空间': 'https://upload.wikimedia.org/wikipedia/en/7/7f/Inception_ver3.jpg',
+    '流浪地球2': 'https://upload.wikimedia.org/wikipedia/en/0/00/The_Wandering_Earth_2_poster.jpg'
+  };
+
   function movieIndexForToday() {
     const now = new Date();
     const start = new Date(now.getFullYear(), 0, 0);
     const doy = Math.floor((now - start) / 86400000);
     return ((doy % DOUBAN_ANNUAL_BEST.length) + DOUBAN_ANNUAL_BEST.length) % DOUBAN_ANNUAL_BEST.length;
   }
+  function movieWeekShort(day) {
+    return isEn()
+      ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]
+      : ['日', '一', '二', '三', '四', '五', '六'][day];
+  }
+  function moviePosterFallback(m) {
+    const zh = String(m && m.zh ? m.zh : '电影').slice(0, 8);
+    const en = String(m && m.en ? m.en : 'MOVIE').slice(0, 24);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1080"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1f2937"/><stop offset="55%" stop-color="#0f172a"/><stop offset="100%" stop-color="#334155"/></linearGradient></defs><rect width="720" height="1080" fill="url(#g)"/><rect x="34" y="34" width="652" height="1012" rx="26" fill="none" stroke="rgba(255,255,255,0.18)"/><text x="60" y="858" fill="rgba(255,255,255,0.94)" font-family="system-ui,-apple-system,Segoe UI,Roboto,PingFang SC,Microsoft YaHei,sans-serif" font-size="72" font-weight="700">${escapeHtml(zh)}</text><text x="60" y="925" fill="rgba(255,255,255,0.72)" font-family="Inter,system-ui,sans-serif" font-size="36" letter-spacing="2">${escapeHtml(en)}</text></svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }
+  function moviePoster(m) {
+    const own = sanitizeWallpaperUrl(m && m.poster);
+    if (own) return own;
+    const mapped = sanitizeWallpaperUrl(m && MOVIE_POSTER_MAP[m.zh]);
+    if (mapped) return mapped;
+    return moviePosterFallback(m || {});
+  }
+  function normalizeMovie(raw) {
+    const m = raw || {};
+    return {
+      ...m,
+      quote: m.quote || m.blurb || '',
+      summary: m.summary || m.blurb || '',
+      director: m.director || '',
+      cast: m.cast || '',
+      country: m.country || '',
+      douban: sanitizeWallpaperUrl(m.douban) || `https://www.douban.com/search?cat=1002&q=${encodeURIComponent(m.zh || m.en || '')}`,
+      poster: moviePoster(m)
+    };
+  }
+  function movieStars(rate) {
+    const n = Math.max(0, Math.min(10, Number(rate) || 0)) / 2;
+    const full = Math.floor(n);
+    const half = (n - full) >= 0.5 ? 1 : 0;
+    const empty = Math.max(0, 5 - full - half);
+    return {
+      full: '★'.repeat(full),
+      half: half ? '★' : '',
+      empty: '★'.repeat(empty)
+    };
+  }
+
+  let movieModalBound = false;
+  let movieDrag = null;
+  let movieCurrent = null;
+
+  function resetMovieWindowPos() {
+    const win = document.getElementById('movie-window');
+    if (!win) return;
+    win.style.left = '';
+    win.style.top = '';
+    win.style.transform = '';
+  }
+  function closeMovieDetail() {
+    const modal = document.getElementById('movie-modal');
+    if (!modal) return;
+    modal.hidden = true;
+    resetMovieWindowPos();
+  }
+  function bindMovieDetailWindow() {
+    if (movieModalBound) return;
+    movieModalBound = true;
+    const modal = document.getElementById('movie-modal');
+    const win = document.getElementById('movie-window');
+    const head = document.getElementById('movie-window-head');
+    const closeBtn = document.getElementById('movie-window-close');
+    if (!modal || !win || !head) return;
+
+    if (closeBtn) closeBtn.addEventListener('click', closeMovieDetail);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeMovieDetail(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.hidden) closeMovieDetail();
+    });
+
+    head.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest('.movie-window-close')) return;
+      const r = win.getBoundingClientRect();
+      // First drag: convert centered transform into absolute top/left coordinates.
+      if (win.style.transform !== 'none') {
+        win.style.left = `${Math.round(r.left)}px`;
+        win.style.top = `${Math.round(r.top)}px`;
+        win.style.transform = 'none';
+      }
+      movieDrag = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        baseLeft: parseFloat(win.style.left || '0') || 0,
+        baseTop: parseFloat(win.style.top || '0') || 0
+      };
+      win.classList.add('dragging');
+      try { head.setPointerCapture(e.pointerId); } catch {}
+      e.preventDefault();
+    });
+    head.addEventListener('pointermove', (e) => {
+      if (!movieDrag || movieDrag.pointerId !== e.pointerId) return;
+      const dx = e.clientX - movieDrag.startX;
+      const dy = e.clientY - movieDrag.startY;
+      const w = win.offsetWidth || 1120;
+      const h = win.offsetHeight || 620;
+      const maxLeft = Math.max(8, window.innerWidth - w - 8);
+      const maxTop = Math.max(8, window.innerHeight - h - 8);
+      const left = Math.max(8, Math.min(maxLeft, movieDrag.baseLeft + dx));
+      const top = Math.max(8, Math.min(maxTop, movieDrag.baseTop + dy));
+      win.style.left = `${Math.round(left)}px`;
+      win.style.top = `${Math.round(top)}px`;
+    });
+    function endDrag(e) {
+      if (!movieDrag || movieDrag.pointerId !== e.pointerId) return;
+      movieDrag = null;
+      win.classList.remove('dragging');
+      try { head.releasePointerCapture(e.pointerId); } catch {}
+    }
+    head.addEventListener('pointerup', endDrag);
+    head.addEventListener('pointercancel', endDrag);
+  }
+
+  function renderMovieDetail(m) {
+    const detail = document.getElementById('movie-detail');
+    const titleEl = document.getElementById('movie-window-title');
+    if (!detail) return;
+    const stars = movieStars(m.rate);
+    const now = new Date();
+    const dateLine = isEn()
+      ? `${now.getMonth() + 1}/${now.getDate()} ${movieWeekShort(now.getDay())}`
+      : `${now.getMonth() + 1}月${now.getDate()}日 周${movieWeekShort(now.getDay())}`;
+    if (titleEl) titleEl.textContent = `${t('widget.movie')} | ${dateLine}`;
+
+    detail.innerHTML =
+      `<div class="movie-detail-main">` +
+        `<div class="movie-detail-topline">${t('widget.movie')} | ${escapeHtml(dateLine)}</div>` +
+        `<h2 class="movie-detail-title">${escapeHtml(m.zh)}<span class="movie-detail-en">${escapeHtml(m.en || '')}</span></h2>` +
+        `<div class="movie-detail-rate">` +
+          `<span class="movie-stars">${stars.full}</span><span class="movie-stars half">${stars.half}</span><span class="movie-stars empty">${stars.empty}</span>` +
+          `<b>${Number(m.rate || 0).toFixed(1)}</b><span>${escapeHtml(t('movie.rating'))}</span>` +
+        `</div>` +
+        `<div class="movie-detail-meta">` +
+          `<span>${escapeHtml(m.genre || '')}</span>` +
+          `<span>${escapeHtml(String(m.y || ''))}</span>` +
+          `<span>${escapeHtml(m.country || t('movie.unknown'))}</span>` +
+        `</div>` +
+        `<div class="movie-detail-row"><strong>${escapeHtml(t('movie.director'))}</strong><span>${escapeHtml(m.director || t('movie.unknown'))}</span></div>` +
+        `<div class="movie-detail-row"><strong>${escapeHtml(t('movie.cast'))}</strong><span>${escapeHtml(m.cast || t('movie.unknown'))}</span></div>` +
+        `<div class="movie-detail-quote">${escapeHtml(m.quote || '')}</div>` +
+        `<div class="movie-detail-summary"><h3>${escapeHtml(t('movie.summary'))}</h3><p>${escapeHtml(m.summary || '')}</p></div>` +
+        `<a class="movie-detail-link" href="${escapeHtml(m.douban)}" target="_blank" rel="noopener">${escapeHtml(t('movie.source'))}</a>` +
+      `</div>` +
+      `<div class="movie-detail-poster-wrap"><img class="movie-detail-poster" src="${escapeHtml(m.poster)}" alt="${escapeHtml(m.zh)}"></div>`;
+  }
+
+  function openMovieDetailByIndex(i) {
+    const modal = document.getElementById('movie-modal');
+    if (!modal) return;
+    bindMovieDetailWindow();
+    const idx = ((i % DOUBAN_ANNUAL_BEST.length) + DOUBAN_ANNUAL_BEST.length) % DOUBAN_ANNUAL_BEST.length;
+    movieCurrent = normalizeMovie(DOUBAN_ANNUAL_BEST[idx]);
+    renderMovieDetail(movieCurrent);
+    modal.hidden = false;
+    resetMovieWindowPos();
+  }
+
   function renderMovie() {
     const card = document.getElementById('movie-card');
     if (!card) return;
     const i = movieCursor >= 0 ? (movieCursor % DOUBAN_ANNUAL_BEST.length) : movieIndexForToday();
-    const m = DOUBAN_ANNUAL_BEST[i];
-    const douban = 'https://www.douban.com/search?cat=1002&q=' + encodeURIComponent(m.zh);
-    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const m = normalizeMovie(DOUBAN_ANNUAL_BEST[i]);
     const dateEl = document.getElementById('movie-date');
-    if (dateEl) {
-      const now = new Date();
-      dateEl.textContent = isEn() ? `${now.getMonth() + 1}/${now.getDate()}` : `${now.getMonth() + 1}月${now.getDate()}日`;
-    }
+    const now = new Date();
+    const day = pad2(now.getDate());
+    const week = movieWeekShort(now.getDay());
+    const dateLine = isEn()
+      ? `${now.getMonth() + 1}/${now.getDate()} ${week}`
+      : `${now.getMonth() + 1}月${now.getDate()}日 周${week}`;
+    if (dateEl) dateEl.textContent = dateLine;
+
     card.innerHTML =
-      '<div class="movie-top">' +
-        '<div class="movie-rate" aria-label="' + t('movie.rating') + ' ' + m.rate + '">' + m.rate.toFixed(1) + '</div>' +
-        '<div class="movie-body">' +
-          '<div class="movie-title">' + esc(m.zh) + '<span class="movie-year">' + m.y + '</span></div>' +
-          '<div class="movie-en">' + esc(m.en) + '</div>' +
-          '<div class="movie-genre">' + esc(m.genre) + '</div>' +
-          '<p class="movie-blurb">' + esc(m.blurb) + '</p>' +
-        '</div>' +
-      '</div>' +
-      '<div class="movie-actions">' +
-        '<a class="movie-link" href="' + douban + '" target="_blank" rel="noopener" data-i18n="movie.douban">豆瓣</a>' +
-        '<button type="button" class="movie-next" id="movie-next" data-i18n="movie.next">换一部</button>' +
-      '</div>';
+      `<button type="button" class="movie-tile" id="movie-open" aria-label="${escapeHtml(t('movie.open'))}">` +
+        `<img class="movie-tile-bg" src="${escapeHtml(m.poster)}" alt="${escapeHtml(m.zh)}">` +
+        `<span class="movie-tile-date"><b>${day}</b><i>${escapeHtml(isEn() ? `${now.getMonth() + 1}/${week}` : `${now.getMonth() + 1}月/周${week}`)}</i></span>` +
+        `<span class="movie-tile-info">` +
+          `<span class="movie-tile-title">《${escapeHtml(m.zh)}》</span>` +
+          `<span class="movie-tile-rate" aria-label="${escapeHtml(t('movie.rating'))} ${Number(m.rate || 0).toFixed(1)}">${escapeHtml(t('movie.rating_short'))} ${Number(m.rate || 0).toFixed(1)}</span>` +
+          `<span class="movie-tile-quote">${escapeHtml(m.quote || '')}</span>` +
+        `</span>` +
+        `<span class="movie-tile-tag">${escapeHtml(t('widget.movie'))}</span>` +
+      `</button>` +
+      `<div class="movie-actions">` +
+        `<button type="button" class="movie-link" id="movie-open-detail" data-i18n="movie.open">${escapeHtml(t('movie.open'))}</button>` +
+        `<button type="button" class="movie-next" id="movie-next" data-i18n="movie.next">${escapeHtml(t('movie.next'))}</button>` +
+      `</div>`;
+
+    const open = card.querySelector('#movie-open');
+    const open2 = card.querySelector('#movie-open-detail');
     const next = card.querySelector('#movie-next');
+    if (open) open.addEventListener('click', () => openMovieDetailByIndex(i));
+    if (open2) open2.addEventListener('click', () => openMovieDetailByIndex(i));
     if (next) next.addEventListener('click', () => { movieCursor = i + 1; renderMovie(); });
-    // Re-apply any i18n labels injected above (t() already localized the aria; data-i18n handles the rest).
+
+    // Re-apply i18n labels injected above (t() already localized most fields; data-i18n handles static labels).
     if (window.LT_I18N && window.LT_I18N.applyStatic) window.LT_I18N.applyStatic();
   }
 
@@ -2702,7 +3049,7 @@
   // Exposed for the offline probe harness: it has to drive port fallback and timeout paths with a
   // stubbed fetch, which is impossible from the outside.
   window.LT_PROBE_WB = probeWorkBuddy;
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, deriveWallPrefs, scoreWallCandidates, pickRecommended };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

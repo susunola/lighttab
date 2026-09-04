@@ -50,8 +50,15 @@
 
     // ---------- Movie-of-the-day ----------
     'movie.rating': { zh: '豆瓣评分', en: 'Rating' },
+    'movie.rating_short': { zh: '豆瓣', en: 'Rate' },
     'movie.douban': { zh: '豆瓣', en: 'Douban' },
     'movie.next':   { zh: '换一部', en: 'Next' },
+    'movie.open':   { zh: '点开详情', en: 'Open details' },
+    'movie.source': { zh: '查看电影源', en: 'Open source page' },
+    'movie.summary':{ zh: '剧情简介', en: 'Synopsis' },
+    'movie.director':{ zh: '导演', en: 'Director' },
+    'movie.cast':   { zh: '主演', en: 'Cast' },
+    'movie.unknown':{ zh: '未知', en: 'Unknown' },
 
     // ---------- To-dos ----------
     'todo.placeholder': { zh: '添加一件事…', en: 'Add a task…' },
@@ -172,6 +179,8 @@
     'wall.src_wallhaven':{ zh: 'Wallhaven · 4K 社区', en: 'Wallhaven · 4K' },
     'wall.src_unsplash': { zh: 'Unsplash · 摄影', en: 'Unsplash · Photos' },
     'wall.src_unsplash_key': { zh: 'Unsplash 需在服务端配置 API Key（LT_UNSPLASH_KEY），未配置时该源不可用。', en: 'Unsplash requires a server-side API key (LT_UNSPLASH_KEY); unavailable until configured.' },
+    'wall.reco_badge': { zh: '推荐', en: 'For you' },
+    'wall.reco_tip':   { zh: '已根据你最近 {n} 次选择学习你的壁纸偏好，为你优先推荐。', en: 'Learned your wallpaper taste from {n} recent picks and prioritized them for you.' },
 
     // ---------- General tab ----------
     'gen.name':     { zh: '显示名称（问候语用）', en: 'Display name (used in greeting)' },

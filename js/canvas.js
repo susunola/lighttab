@@ -13,6 +13,7 @@
     { key: 'wclock', sel: '.wclock' },
     { key: 'wcal',   sel: '.wcal' },
     { key: 'wtodo',  sel: '#todo-widget' },
+    { key: 'wmovie', sel: '#movie-widget' },
     { key: 'search', sel: '#search' },
     { key: 'grid',   sel: '#grid-wrap' }
   ];

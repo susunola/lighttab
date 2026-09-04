@@ -100,7 +100,7 @@
         <ul class="todo-list" id="todo-list"></ul>
       </section>
 
-      <section class="widget wmovie" data-i18n-aria="widget.movie" aria-label="Movie of the day">
+      <section class="widget wmovie" id="movie-widget" data-i18n-aria="widget.movie" aria-label="Movie of the day">
         <button type="button" class="w-del" data-widget="wmovie" data-i18n-aria="widget.remove" aria-label="Remove this widget">
           <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
         </button>
@@ -244,6 +244,7 @@
               <button type="button" class="btn ghost sm" id="btn-wall-fetch" data-i18n="wall.fetch">Get latest</button>
             </div>
             <div class="wall-lib-grid" id="wall-lib-grid"></div>
+            <p class="form-tip wall-reco-tip" id="wall-reco-tip" hidden></p>
             <p class="form-tip wall-lib-tip" id="wall-lib-tip" data-i18n="wall.lib_tip">Curated Bing daily wallpapers; click to apply. Requires network (see credits).</p>
           </div>
           <div class="upload-row">
@@ -360,6 +361,20 @@
           <div id="sync-panel"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Movie detail window -->
+  <div class="movie-modal" id="movie-modal" hidden>
+    <div class="movie-window" id="movie-window" role="dialog" aria-modal="true" data-i18n-aria="widget.movie" aria-label="Movie of the day">
+      <div class="movie-window-head" id="movie-window-head">
+        <div class="movie-window-dots" aria-hidden="true">
+          <span class="dot green"></span><span class="dot red"></span>
+        </div>
+        <span class="movie-window-title" id="movie-window-title">每日电影</span>
+        <button type="button" class="movie-window-close" id="movie-window-close" data-i18n-aria="set.close" aria-label="Close">×</button>
+      </div>
+      <div class="movie-detail" id="movie-detail"></div>
     </div>
   </div>
 

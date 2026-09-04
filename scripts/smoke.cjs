@@ -221,6 +221,46 @@ console.log('[4] 纯函数');
     const qi = P.pickQuoteIndex(5, 2);
     assert(qi >= 0 && qi < 5 && qi !== 2, 'pickQuoteIndex 跳过上一条（5 中 2）');
     assert(P.pickQuoteIndex(5, -1) >= 0 && P.pickQuoteIndex(5, -1) < 5, 'pickQuoteIndex 无上次随机取一条');
+    // #66 wallpaper habit recommendation: derive preference profile from pick events
+    const ev = (o) => Object.assign({ type: 'image', via: 'library', source: 'bing', at: 0 }, o);
+    let prefs = P.deriveWallPrefs([]);
+    assert(prefs.total === 0 && prefs.favoriteUrls.length === 0, 'deriveWallPrefs 空事件 → 全零画像');
+    prefs = P.deriveWallPrefs([
+      ev({ type: 'gradient', source: 'gradient', via: 'swatch' }),
+      ev({ url: 'https://x/1.jpg', source: 'bing', via: 'library', at: 1000 }),
+      ev({ url: 'https://x/1.jpg', source: 'bing', via: 'plum', at: 2000 }),
+      ev({ url: 'https://x/2.jpg', source: 'wallhaven', via: 'library', at: 3000 }),
+      ev({ type: 'image', source: 'upload', via: 'upload', light: true })
+    ]);
+    assert(prefs.total === 5, 'deriveWallPrefs 事件计数', String(prefs.total));
+    assert(prefs.imageCount === 4 && prefs.gradientCount === 1, 'deriveWallPrefs 图/渐变计数');
+    assert(prefs.sourceCounts.bing === 2 && prefs.sourceCounts.wallhaven === 1 && prefs.sourceCounts.upload === 1 && prefs.sourceCounts.gradient === 1, 'deriveWallPrefs 来源计数');
+    assert(prefs.manualSourceCounts.bing === 2 && prefs.manualSourceCounts.upload === 1, 'deriveWallPrefs 手动来源计数');
+    assert(prefs.lightPicks === 1 && prefs.darkPicks === 0, 'deriveWallPrefs 明暗计数');
+    assert(prefs.favoriteUrls.length === 1 && prefs.favoriteUrls[0] === 'https://x/1.jpg', 'deriveWallPrefs 重复选择 = 收藏');
+    assert(prefs.lastSeen['https://x/1.jpg'] === 2000, 'deriveWallPrefs lastSeen 取最新时间戳');
+    // scoreWallCandidates: favorite boost + recency penalty + novelty bonus
+    const pool2 = [
+      { url: 'https://x/fav.jpg' },
+      { url: 'https://x/recent.jpg' },
+      { url: 'https://x/fresh.jpg' },
+      { url: 'https://x/old.jpg' }
+    ];
+    const prefs2 = P.deriveWallPrefs([
+      ev({ url: 'https://x/fav.jpg', via: 'library', at: 0 }),
+      ev({ url: 'https://x/fav.jpg', via: 'plum', at: 0 }),
+      ev({ url: 'https://x/recent.jpg', via: 'library', at: Date.now() }),
+      ev({ url: 'https://x/old.jpg', via: 'library', at: Date.now() - 20 * 86400000 })
+    ]);
+    const ordered = P.scoreWallCandidates(pool2, prefs2);
+    assert(Array.isArray(ordered) && ordered.length === 4, 'scoreWallCandidates 返回同长度数组');
+    assert(ordered[0].url === 'https://x/fav.jpg', 'scoreWallCandidates 收藏优先', ordered.map(i => i.url).join(','));
+    assert(ordered[3].url === 'https://x/recent.jpg', 'scoreWallCandidates 最近看过排末位', ordered.map(i => i.url).join(','));
+    assert(P.pickRecommended(pool2, prefs2, '').url === 'https://x/fav.jpg', 'pickRecommended 空当前值取最优');
+    assert(P.pickRecommended(pool2, prefs2, 'https://x/fav.jpg').url !== 'https://x/fav.jpg', 'pickRecommended 跳过当前');
+    assert(P.pickRecommended([], prefs2, '') === null, 'pickRecommended 空池 null');
+    assert(P.pickRecommended(null, prefs2, '') === null, 'pickRecommended 非数组池 null');
+    assert(P.pickRecommended([{ url: 'https://x/only.jpg' }], prefs2, 'https://x/only.jpg').url === 'https://x/only.jpg', 'pickRecommended 全部为当前时回退');
   }
   void elStub;
 }
@@ -592,21 +632,38 @@ assert(/function renderMovie/.test(appSrc) && /function movieIndexForToday/.test
   'app.js 定义 renderMovie / movieIndexForToday（按一年第几天确定性取片）');
 assert(/movieCursor/.test(appSrc), 'app.js 维护 movieCursor 手动浏览游标');
 assert(/renderMovie\(\);/.test(appSrc), 'boot / reset 均调用 renderMovie');
-assert(/encodeURIComponent\(m\.zh\)/.test(appSrc), '豆瓣跳转链接对片名做 URL 编码');
+assert(/encodeURIComponent\(m\.zh \|\| m\.en \|\| ''\)/.test(appSrc), '豆瓣跳转链接对片名做 URL 编码');
 assert(/escape|&amp;/.test(appSrc), '片名/简介渲染前做 HTML 转义');
-// CSS：卡片布局（评分徽章 + 正文 + 动作行）
-for (const sel of ['.movie-card', '.movie-rate', '.movie-title', '.movie-en', '.movie-genre', '.movie-blurb', '.movie-actions', '.movie-link', '.movie-next']) {
+// 详情窗口：静态结构 + 可拖拽窗口壳
+for (const id of ['movie-modal', 'movie-window', 'movie-window-head', 'movie-window-title', 'movie-window-close', 'movie-detail']) {
+  assert(new RegExp(`id="${id}"`).test(html), `newtab.html 含 #${id}`);
+}
+assert(/id="movie-widget"/.test(html), '电影 widget 含 #movie-widget（供 canvas 拖拽识别）');
+assert(/wmovie', sel: '#movie-widget'/.test(read('js/canvas.js')), 'canvas BLOCK_DEFS 含 wmovie，可拖拽');
+assert(/function bindMovieDetailWindow/.test(appSrc) && /function openMovieDetailByIndex/.test(appSrc),
+  'app.js 定义 bindMovieDetailWindow / openMovieDetailByIndex');
+assert(/movie-window-head/.test(appSrc) && /pointerdown/.test(appSrc) && /pointermove/.test(appSrc),
+  '详情窗口头部支持 pointer 拖拽');
+assert(/const MOVIE_POSTER_MAP/.test(appSrc) && /function moviePoster/.test(appSrc),
+  'app.js 定义海报映射与海报回退逻辑');
+assert(/The Lovely Bones/.test(appSrc) && /The_Lovely_Bones_Poster/.test(appSrc), '片单含可爱的骨头与海报');
+
+// CSS：新电影卡片 + 固定尺寸详情窗口
+for (const sel of ['.movie-card', '.movie-tile', '.movie-tile-bg', '.movie-tile-date', '.movie-tile-title', '.movie-tile-rate', '.movie-tile-quote', '.movie-modal', '.movie-window', '.movie-window-head', '.movie-detail']) {
   assert(cssSrc.includes(sel), `CSS 定义 ${sel}`);
 }
+assert(/\.movie-window\s*\{[\s\S]*width:\s*min\(1120px/.test(cssSrc), '详情窗口固定主尺寸宽度 1120px（含小屏兜底）');
+assert(/\.movie-window\s*\{[\s\S]*height:\s*min\(620px/.test(cssSrc), '详情窗口固定主尺寸高度 620px（含小屏兜底）');
 assert(/\.widget\.wmovie\.w-top/.test(cssSrc), '电影顶部态有专属样式');
 assert(/\.widget\.wmovie\.w-top \{\s*--wtop-del:\s*176px/.test(cssSrc), '电影顶部态定义 --wtop-del');
-// i18n：标题 / 评分 / 豆瓣 / 换一部 中英各一份且非空
+
+// i18n：电影详情词条中英各一份且非空
 {
   const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
   vm.createContext(sandbox);
   vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
   const I = sandbox.window.LT_I18N;
-  const mvKeys = ['widget.movie', 'movie.rating', 'movie.douban', 'movie.next'];
+  const mvKeys = ['widget.movie', 'movie.rating', 'movie.rating_short', 'movie.next', 'movie.open', 'movie.source', 'movie.summary', 'movie.director', 'movie.cast', 'movie.unknown'];
   const mvOk = (lang) => mvKeys.every(k => I.t(k) !== k && I.t(k).length > 0);
   I.setLang('zh');
   assert(mvOk('zh'), '电影词条 中文已译', mvKeys.map(k => I.t(k)).join(' | '));
@@ -627,7 +684,7 @@ assert(/function pickQuoteIndex/.test(appSrc), 'app.js 定义 pickQuoteIndex()')
 assert(/function showQuote/.test(appSrc), 'app.js 定义 showQuote()');
 assert(/function rotateWallpaperAndQuote/.test(appSrc), 'app.js 定义 rotateWallpaperAndQuote()');
 assert(/getElementById\('btn-plum'\)\.addEventListener\('click', rotateWallpaperAndQuote\)/.test(appSrc), 'boot 绑定梅花点击');
-assert(/pickRotateCandidate\(pool, cur\)/.test(appSrc), '梅花复用 pickRotateCandidate（与每日轮换同源）');
+assert(/pickRecommended\(pool, await getWallPrefs\(\), cur\)/.test(appSrc), '梅花复用 pickRecommended（基于已学习偏好推荐）');
 assert(/markManualPickToday\(\)/.test(appSrc), '梅花点击后标记当日手动选择');
 assert(/pickQuoteIndex/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'pickQuoteIndex 已导出到 LT_PURE');
 // 名句池：中英各一份且数量充足
@@ -646,6 +703,44 @@ assert(/@keyframes quote-in/.test(cssSrc) && /\.quote\.quote-out/.test(cssSrc), 
   assert(I.t('plum.tip') === '换一张壁纸 · 励志名句', 'plum.tip 中文', I.t('plum.tip'));
   I.setLang('en');
   assert(I.t('plum.tip') === 'New wallpaper · a quote', 'plum.tip 英文', I.t('plum.tip'));
+  I.setLang('zh');
+}
+
+// ---------- 15) #66 壁纸习惯收集 + 个性化推荐 ----------
+console.log('[15] #66 壁纸习惯 · 学习偏好 + 推荐');
+// 存储键：lt.wallhist 为本地独占（不入同步/导出，与 walllib/rot 同源）
+assert(/wallhist:\s*'lt\.wallhist'/.test(appSrc), 'K 映射含 wallhist → lt.wallhist');
+// 记录点：六处壁纸变更都带 via 标签（swatch/library/auto/plum/reset/upload）
+for (const via of ['swatch', 'library', 'auto', 'plum', 'reset', 'upload']) {
+  assert(new RegExp(`setWallpaper\\([^)]*, '${via}'\\)`).test(appSrc), `setWallpaper 记录 via='${via}'`);
+}
+// 核心函数齐备且纯函数导出到 LT_PURE
+for (const fn of ['recordWallpaperPick', 'deriveWallPrefs', 'scoreWallCandidates', 'pickRecommended', 'getWallPrefs', 'renderWallRecoTip']) {
+  assert(new RegExp(`function ${fn}`).test(appSrc), `app.js 定义 ${fn}()`);
+}
+assert(/deriveWallPrefs, scoreWallCandidates, pickRecommended/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), '推荐纯函数已导出到 LT_PURE');
+// 上传 dataURL 永不落盘（隐私 + 体积）
+assert(/never persist|startsWith\('data:image'\)/.test(appSrc), '上传 dataURL 不写入习惯记录');
+// 梅花 / 每日轮换改为基于推荐，而非简单顺序轮换
+assert(/pickRecommended\(pool, await getWallPrefs\(\), cur\)/.test(appSrc), '每日自动轮换复用 pickRecommended');
+// 壁纸库网格按推荐排序 + 顶部推荐角标 + 学习提示行
+assert(/scoreWallCandidates\(wallLibImages, prefs\)/.test(appSrc), '壁纸库网格按推荐排序');
+assert(/wall-reco-badge/.test(appSrc) && /wall-reco-tip/.test(appSrc), '推荐角标 + 学习提示行注入');
+assert(/id="wall-reco-tip"/.test(html), 'newtab.html 含 #wall-reco-tip 提示行');
+// CSS：推荐角标 / 学习提示行样式
+assert(/\.wall-reco-badge/.test(cssSrc) && /\.wall-reco-tip/.test(cssSrc), 'CSS 定义 .wall-reco-badge / .wall-reco-tip');
+// i18n：推荐角标 + 学习提示中英各一份且非空
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  I.setLang('zh');
+  assert(I.t('wall.reco_badge') === '推荐', 'wall.reco_badge 中文', I.t('wall.reco_badge'));
+  assert(/\{n\}/.test(I.t('wall.reco_tip')), 'wall.reco_tip 中文含 {n} 占位', I.t('wall.reco_tip'));
+  I.setLang('en');
+  assert(I.t('wall.reco_badge') === 'For you', 'wall.reco_badge 英文', I.t('wall.reco_badge'));
+  assert(/\{n\}/.test(I.t('wall.reco_tip')), 'wall.reco_tip 英文含 {n} 占位', I.t('wall.reco_tip'));
   I.setLang('zh');
 }
 
