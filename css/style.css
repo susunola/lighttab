@@ -735,6 +735,30 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .file-btn { position: relative; display: inline-flex; cursor: pointer; }
 
 /* ====== Wallpaper swatches ====== */
+/* #49 daily auto-rotate row: the shared .modal-body input rule is full-width, so a checkbox needs an override. */
+.modal-body input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+.modal-body .check-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 4px;
+  cursor: pointer;
+}
+.modal-body .check-row > span {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+  transition: color .12s ease;
+}
+.modal-body .check-row:hover > span { color: var(--ink); }
 .swatches {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

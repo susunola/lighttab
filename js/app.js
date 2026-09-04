@@ -60,6 +60,9 @@
     // Theme: 'dark' | 'light' | 'system' (follow the OS scheme).
     theme: 'dark',
     wallpaper: WALLPAPERS[0],
+    // Daily Bing wallpaper auto-rotate: when on, one Bing daily image from the local pool is
+    // applied per calendar day. Manual picks always win for the rest of that day.
+    wallRotate: false,
     // Groups: array of { id, name }. Empty = grouping disabled (group bar hidden, and the
     // shortcut dialog does not show the group dropdown).
     groups: [],
@@ -195,7 +198,7 @@
   // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
   // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
   const SCHEMA_VERSION = 3;
-  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', schema: 'lt.schema' };
+  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema' };
   // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
   // to the content script across tabs without ever putting it in the URL.
   const PENDING_PREFIX = 'lt.pending.';
@@ -243,6 +246,20 @@
     const v = localStorage.getItem(k);
     if (v == null) return undefined;
     try { return JSON.parse(v); } catch { return undefined; }
+  }
+  // Direct chrome.storage.local / localStorage access that deliberately skips Store.set, so pure-local
+  // caches (Bing wallpaper pool, daily-rotate bookkeeping) never get marked dirty for cloud sync or export.
+  async function localRawGet(k) {
+    try {
+      if (hasChromeStorage) return (await chrome.storage.local.get(k))[k];
+      return readJSON(k);
+    } catch { return undefined; }
+  }
+  async function localRawSet(k, v) {
+    try {
+      if (hasChromeStorage) await chrome.storage.local.set({ [k]: v });
+      else localStorage.setItem(k, JSON.stringify(v));
+    } catch (e) { console.warn('[LightTab] local write failed', k, e); }
   }
 
   // ---------- State ----------
@@ -297,7 +314,8 @@
   // The backend origin is shared with sync.js via window.LT_API_BASE (sync.js loads first and defines it);
   // the literal here is a defensive fallback in case the load order ever changes.
   const WALL_LIB_BASE = window.LT_API_BASE || 'https://lighttab.atomwangnus.com';
-  let wallLibImages = null;
+  let wallLibImages = null;    // [{url,title,copyright}] of the current pool (null = not loaded yet)
+  let wallLibSavedAt = 0;      // ms epoch of the last successful fetch (drives the once-a-day silent refresh)
 
   // Gradient swatch rendering (top level so bindSettings and the wallpaper library can both reuse it).
   function renderSwatches() {
@@ -320,29 +338,59 @@
         if (el.dataset.i === 'img') return;
         const w = WALLPAPERS[+el.dataset.i];
         setWallpaper({ type: 'gradient', value: w.css });
+        markManualPickToday(); // a manual pick wins for the rest of this calendar day
         renderSwatches();
       });
     });
   }
 
-  async function fetchWallLib() {
+  // Wallpaper-library cache lives in lt.walllib (chrome.storage.local), deliberately NOT in the synced /
+  // exported key set: it is a pure convenience pool that each device refetches on its own.
+  async function loadWallLibCache() {
+    try {
+      const raw = await localRawGet(K.walllib);
+      if (raw && Array.isArray(raw.images)) {
+        const imgs = raw.images.filter(im => im && sanitizeWallpaperUrl(im.url));
+        if (imgs.length) {
+          wallLibSavedAt = Number(raw.savedAt) || 0;
+          return imgs;
+        }
+      }
+    } catch { /* fall through */ }
+    return null;
+  }
+  async function saveWallLibCache(images) {
+    wallLibSavedAt = Date.now();
+    await localRawSet(K.walllib, { savedAt: wallLibSavedAt, images });
+  }
+
+  async function fetchWallLib(opts) {
+    const o = opts || {};
     const btn = document.getElementById('btn-wall-fetch');
     const tip = document.getElementById('wall-lib-tip');
-    if (btn) btn.disabled = true;
-    if (tip) tip.textContent = t('wall.loading');
+    if (!o.silent && btn) btn.disabled = true;
+    if (!o.silent && tip) tip.textContent = t('wall.loading');
     try {
       const res = await fetch(WALL_LIB_BASE + '/v1/wallpapers?idx=0&n=8&mkt=' + (isEn() ? 'en-US' : 'zh-CN'));
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
-      wallLibImages = (data.images || []).filter(im => im && im.url);
+      wallLibImages = (data.images || []).filter(im => im && sanitizeWallpaperUrl(im.url));
+      if (wallLibImages.length) await saveWallLibCache(wallLibImages);
       renderWallLibGrid();
-      if (tip) tip.textContent = t('wall.got', { n: wallLibImages.length });
+      if (!o.silent && tip) tip.textContent = t('wall.got', { n: wallLibImages.length });
     } catch (e) {
-      wallLibImages = null;
+      // Offline / backend hiccup: fall back to the last cached pool so the grid and the daily rotate
+      // still have something to work with. The failure is only surfaced on an explicit user fetch.
+      const cached = await loadWallLibCache();
+      wallLibImages = cached;
       renderWallLibGrid();
-      if (tip) tip.textContent = t('wall.fail', { err: (e && e.message || e) });
+      if (!o.silent && tip) {
+        tip.textContent = cached
+          ? t('wall.got_cached', { n: cached.length })
+          : t('wall.fail', { err: (e && e.message) || e });
+      }
     } finally {
-      if (btn) btn.disabled = false;
+      if (!o.silent && btn) btn.disabled = false;
     }
   }
 
@@ -360,11 +408,64 @@
     grid.querySelectorAll('.wall-thumb').forEach(el => {
       el.addEventListener('click', async () => {
         await setWallpaper({ type: 'image', value: el.dataset.url });
+        markManualPickToday(); // a manual pick wins for the rest of this calendar day
         renderSwatches();
         renderWallLibGrid();
         showToast(t('toast.wall_applied'));
       });
     });
+  }
+
+  // ---------- Wallpaper daily auto-rotate (local bookkeeping only; never synced/exported) ----------
+  // Contract: when the user enables it in Settings, exactly one Bing pool image is applied per calendar
+  // day. Any manual pick (gradient swatch / library thumb / upload / reset) marks today as "decided",
+  // so an auto-rotate never overrides a choice the user made this same day.
+  function todayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+  async function rotRead() {
+    const r = await localRawGet(K.rot);
+    return (r && typeof r === 'object') ? r : null;
+  }
+  async function markManualPickToday() {
+    try { await localRawSet(K.rot, { date: todayStr() }); } catch { /* best effort */ }
+  }
+  // Pure picker (exported for offline smoke): prefer the first pool image that differs from the current
+  // one so two consecutive days never show the same photo; fall back to pool[0]; null when pool is empty.
+  function pickRotateCandidate(pool, currentUrl) {
+    const arr = Array.isArray(pool) ? pool : [];
+    const hit = arr.find(im => im && im.url && im.url !== currentUrl);
+    return hit || arr[0] || null;
+  }
+  async function maybeAutoRotate() {
+    try {
+      if (!state.settings.wallRotate) return;
+      const today = todayStr();
+      const rot = await rotRead();
+      if (rot && rot.date === today) return; // already rotated or manually picked today
+      // Make sure a pool exists: silent network attempt, cached pool as fallback. Failures leave the
+      // guard unset, so the next boot / day rollover simply retries.
+      if (!Array.isArray(wallLibImages) || !wallLibImages.length) {
+        await fetchWallLib({ silent: true });
+      }
+      const pool = Array.isArray(wallLibImages) ? wallLibImages : [];
+      if (!pool.length) return;
+      const cur = (state.wallpaper && state.wallpaper.type === 'image') ? state.wallpaper.value : '';
+      const next = pickRotateCandidate(pool, cur);
+      if (!next || !next.url) return;
+      await setWallpaper({ type: 'image', value: next.url });
+      await localRawSet(K.rot, { date: today, url: next.url });
+      renderSwatches();
+      renderWallLibGrid(); // keep the modal's active markers honest if it happens to be open
+      // Keep the pool fresh for the coming days: one silent background refresh per ~18h window,
+      // never blocking the apply above and never retried while the pool is already loaded.
+      if (wallLibImages.length && Date.now() - (wallLibSavedAt || 0) > 18 * 3600 * 1000) {
+        fetchWallLib({ silent: true });
+      }
+    } catch (e) {
+      console.warn('[LightTab] wallpaper auto-rotate failed', e);
+    }
   }
 
   // ---------- Clock / greeting ----------
@@ -400,6 +501,9 @@
         lastDay = dayKey;
         dateEl.textContent = dateLine(d);
         if (lunarEl) lunarEl.textContent = lunarLine(d);
+        // Runs on boot (lastDay starts empty) and again on every midnight rollover, so a tab left open
+        // across days still rotates the wallpaper. Guarded internally by settings + the today marker.
+        maybeAutoRotate();
       }
     }
     tick();
@@ -1358,6 +1462,7 @@
     document.getElementById('f-upload').addEventListener('change', onUpload);
     document.getElementById('btn-reset-wall').addEventListener('click', () => {
       setWallpaper({ type: 'gradient', value: WALLPAPERS[0].css });
+      markManualPickToday(); // a manual pick wins for the rest of this calendar day
       renderSwatches();
       showToast(t('toast.wall_reset'));
     });
@@ -1409,6 +1514,18 @@
       await Store.set(K.settings, state.settings);
       applyTheme(); // flips the whole page instantly — no toast needed
     });
+    // Wallpaper daily auto-rotate toggle (Wallpaper pane). Turning it on clears today's marker so the
+    // very first rotate applies immediately instead of being blocked by an earlier manual pick.
+    const wallRotCb = document.getElementById('f-wall-rotate');
+    if (wallRotCb) wallRotCb.addEventListener('change', async () => {
+      state.settings.wallRotate = !!wallRotCb.checked;
+      await Store.set(K.settings, state.settings);
+      if (wallRotCb.checked) {
+        await localRawSet(K.rot, null);
+        showToast(t('toast.wall_rotate_on'));
+        maybeAutoRotate();
+      }
+    });
 
     document.getElementById('btn-wall').addEventListener('click', () => openSet('wall'));
     document.getElementById('btn-set').addEventListener('click', () => openSet('gen'));
@@ -1422,6 +1539,9 @@
       applyTheme(); // keep the theme select in sync with state (covers remote sync changes)
       renderSwatches();
       renderWallLibGrid();
+      const wallRotCb = document.getElementById('f-wall-rotate');
+      if (wallRotCb) wallRotCb.checked = !!state.settings.wallRotate;
+      if (tab === 'wall' && wallLibImages === null) fetchWallLib(); // warm the pool (cached fallback when offline)
       modal.hidden = false;
     }
   }
@@ -1547,6 +1667,7 @@
     const dataUrl = await compressImage(f, 2560, 0.82);
     const light = await isLightImage(dataUrl);
     await setWallpaper({ type: 'image', value: dataUrl, light });
+    markManualPickToday(); // an upload is a manual pick: no auto-rotate for the rest of this day
     renderSwatches(); // a re-render already carries the active state - no manual class clearing, no reopening the modal
     showToast(t('toast.wall_applied'));
   }
@@ -1808,6 +1929,7 @@
     renderTodos();
     renderCalendar();
     startClock(); // greeting/name may have been updated remotely
+    maybeAutoRotate(); // a remote settings flip may have just enabled the daily rotate
     const nameInput = document.getElementById('f-name');
     if (nameInput) nameInput.value = state.settings.name || '';
     const engineSel = document.getElementById('f-engine');
@@ -2451,7 +2573,7 @@
 
   // Pure-function exports for the offline assertions in scripts/smoke.cjs
   // (same convention as window.LT_LUNAR / window.LT_SYNC).
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, hostnameOf, iconFor, resolveTheme };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, hostnameOf, iconFor, resolveTheme, todayStr, pickRotateCandidate };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

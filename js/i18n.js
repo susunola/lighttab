@@ -139,6 +139,9 @@
     'wall.loading':   { zh: '加载中…', en: 'Loading…' },
     'wall.got':       { zh: '已获取 {n} 张必应每日壁纸 · 点击应用（图片来源见版权信息）', en: 'Got {n} Bing daily wallpapers · click to apply (see credits)' },
     'wall.fail':      { zh: '壁纸库加载失败：{err}（需联网）', en: 'Wallpaper library failed to load: {err} (requires network)' },
+    'wall.got_cached':{ zh: '离线模式：显示上次缓存的 {n} 张壁纸（「获取最新」需联网）', en: 'Offline — showing {n} cached wallpapers (Get latest needs network)' },
+    'wall.rotate':    { zh: '每日自动更换必应壁纸', en: 'Daily Bing wallpaper auto-rotate' },
+    'wall.rotate_tip':{ zh: '开启后，每个自然日自动应用一张壁纸库中的必应图片；当天手动选择的壁纸不会被自动覆盖。', en: 'When on, a Bing image from the library is applied each calendar day. Manual picks are kept for the rest of that day.' },
 
     // ---------- General tab ----------
     'gen.name':     { zh: '显示名称（问候语用）', en: 'Display name (used in greeting)' },
@@ -180,6 +183,7 @@
     // ---------- Toasts / notices ----------
     'toast.wall_applied':  { zh: '已应用壁纸', en: 'Wallpaper applied' },
     'toast.wall_reset':    { zh: '已恢复默认渐变', en: 'Default gradient restored' },
+    'toast.wall_rotate_on':{ zh: '已开启每日壁纸轮换', en: 'Daily wallpaper rotation on' },
     'toast.copied':        { zh: '已复制到剪贴板', en: 'Copied to clipboard' },
     'toast.deleted':       { zh: '已删除', en: 'Deleted' },
     'toast.undo':          { zh: '撤销', en: 'Undo' },
