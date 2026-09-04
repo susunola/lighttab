@@ -733,9 +733,39 @@
       quoteTimer = setTimeout(() => { el.hidden = true; el.classList.remove('quote-out'); quoteTimer = 0; }, 360);
     }, 4200);
   }
+  function spawnPlumPetals(btn) {
+    if (!btn || !document.body) return;
+    const r = btn.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const n = 16;
+    for (let i = 0; i < n; i++) {
+      const petal = document.createElement('span');
+      petal.className = 'plum-petal';
+      const base = (i / n) * Math.PI * 2;
+      const spread = (Math.random() - 0.5) * 0.9;
+      const travelX = Math.cos(base + spread) * (26 + Math.random() * 90);
+      const travelY = 76 + Math.random() * 160;
+      petal.style.left = `${cx + (Math.random() - 0.5) * 18}px`;
+      petal.style.top = `${cy + (Math.random() - 0.5) * 10}px`;
+      petal.style.setProperty('--dx', `${Math.round(travelX)}px`);
+      petal.style.setProperty('--dy', `${Math.round(travelY)}px`);
+      petal.style.setProperty('--rot', `${Math.round(Math.random() * 240 - 120)}deg`);
+      petal.style.setProperty('--spin', `${Math.round(Math.random() * 680 - 340)}deg`);
+      petal.style.setProperty('--dur', `${(1.25 + Math.random() * 1.15).toFixed(2)}s`);
+      document.body.appendChild(petal);
+      petal.addEventListener('animationend', () => petal.remove(), { once: true });
+    }
+  }
+
   async function rotateWallpaperAndQuote() {
     const btn = document.getElementById('btn-plum');
-    if (btn) { btn.classList.remove('spin'); void btn.offsetWidth; btn.classList.add('spin'); }
+    if (btn) {
+      btn.classList.remove('spin');
+      void btn.offsetWidth;
+      btn.classList.add('spin');
+      spawnPlumPetals(btn);
+    }
     // Ensure a pool exists (silent network attempt, cached pool as fallback).
     if (!Array.isArray(wallLibImages) || !wallLibImages.length) {
       await fetchWallLib({ silent: true });
@@ -2011,8 +2041,71 @@
       fr.readAsDataURL(file);
     });
   }
-  // Avatar upload should preserve the whole photo (no content-aware crop): fit the entire source
-  // into a square canvas with transparent padding, then cap payload size like icon uploads.
+  // For pasted screenshots, users often capture a round avatar with a large matte border.
+  // Detect a near-solid border color from edges and trim it away so the real portrait fills the circle.
+  function trimSolidMatteRect(ctx, w, h) {
+    if (!ctx || w < 8 || h < 8) return null;
+    const data = ctx.getImageData(0, 0, w, h).data;
+    const picks = [
+      [0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1],
+      [Math.floor(w / 2), 0], [Math.floor(w / 2), h - 1],
+      [0, Math.floor(h / 2)], [w - 1, Math.floor(h / 2)]
+    ];
+    let r0 = 0, g0 = 0, b0 = 0, n = 0;
+    for (const [x, y] of picks) {
+      const i = (y * w + x) * 4;
+      const a = data[i + 3];
+      if (a < 10) continue;
+      r0 += data[i];
+      g0 += data[i + 1];
+      b0 += data[i + 2];
+      n++;
+    }
+    if (!n) return null;
+    r0 /= n; g0 /= n; b0 /= n;
+    let spread = 0;
+    for (const [x, y] of picks) {
+      const i = (y * w + x) * 4;
+      const a = data[i + 3];
+      if (a < 10) continue;
+      const dr = data[i] - r0;
+      const dg = data[i + 1] - g0;
+      const db = data[i + 2] - b0;
+      spread = Math.max(spread, Math.sqrt(dr * dr + dg * dg + db * db));
+    }
+    if (spread > 18) return null;
+
+    const edgeTol = 26;
+    let minX = w, minY = h, maxX = -1, maxY = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        const a = data[i + 3];
+        if (a < 12) continue;
+        const dr = data[i] - r0;
+        const dg = data[i + 1] - g0;
+        const db = data[i + 2] - b0;
+        const d = Math.sqrt(dr * dr + dg * dg + db * db);
+        if (d <= edgeTol) continue;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+    if (maxX < minX || maxY < minY) return null;
+    const pad = 2;
+    minX = Math.max(0, minX - pad);
+    minY = Math.max(0, minY - pad);
+    maxX = Math.min(w - 1, maxX + pad);
+    maxY = Math.min(h - 1, maxY + pad);
+    const trimW = maxX - minX + 1;
+    const trimH = maxY - minY + 1;
+    if (trimW * trimH >= w * h * 0.97) return null;
+    return { sx: minX, sy: minY, sw: trimW, sh: trimH };
+  }
+
+  // Avatar upload preserves the full portrait; before fitting, try trimming screenshot matte borders.
   function compressAvatarFit(file, size) {
     return new Promise((resolve, reject) => {
       const fr = new FileReader();
@@ -2020,22 +2113,36 @@
         const img = new Image();
         img.onload = () => {
           if (!img.width || !img.height || !size) return reject(new Error('bad image'));
+
+          let sx = 0, sy = 0, sw = img.width, sh = img.height;
+          const probe = document.createElement('canvas');
+          probe.width = img.width;
+          probe.height = img.height;
+          const pg = probe.getContext('2d', { willReadFrequently: true });
+          pg.drawImage(img, 0, 0);
+          const trimmed = trimSolidMatteRect(pg, img.width, img.height);
+          if (trimmed) {
+            sx = trimmed.sx;
+            sy = trimmed.sy;
+            sw = trimmed.sw;
+            sh = trimmed.sh;
+          }
+
           const c = document.createElement('canvas');
           c.width = size; c.height = size;
           const ctx = c.getContext('2d');
-          const scale = Math.min(size / img.width, size / img.height);
-          const dw = img.width * scale;
-          const dh = img.height * scale;
+          const scale = Math.min(size / sw, size / sh);
+          const dw = sw * scale;
+          const dh = sh * scale;
           const dx = (size - dw) / 2;
           const dy = (size - dh) / 2;
           ctx.clearRect(0, 0, size, size);
-          ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, dw, dh);
+          ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
           let url = c.toDataURL('image/png');
           if (url.length > 96 * 1024) {
-            // JPEG fallback for oversized blobs: fill a neutral backdrop (JPEG has no alpha).
             ctx.fillStyle = '#0f172a';
             ctx.fillRect(0, 0, size, size);
-            ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, dw, dh);
+            ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
             url = c.toDataURL('image/jpeg', 0.88);
           }
           resolve(url);

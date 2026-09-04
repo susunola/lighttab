@@ -682,15 +682,18 @@ assert(/data-i18n-title="plum\.tip"/.test(html) && /data-i18n-aria="plum\.tip"/.
 assert(/const QUOTES = \[/.test(appSrc), 'app.js 定义 QUOTES 励志名句池');
 assert(/function pickQuoteIndex/.test(appSrc), 'app.js 定义 pickQuoteIndex()');
 assert(/function showQuote/.test(appSrc), 'app.js 定义 showQuote()');
+assert(/function spawnPlumPetals/.test(appSrc), 'app.js 定义 spawnPlumPetals()');
 assert(/function rotateWallpaperAndQuote/.test(appSrc), 'app.js 定义 rotateWallpaperAndQuote()');
 assert(/getElementById\('btn-plum'\)\.addEventListener\('click', rotateWallpaperAndQuote\)/.test(appSrc), 'boot 绑定梅花点击');
 assert(/pickRecommended\(pool, await getWallPrefs\(\), cur\)/.test(appSrc), '梅花复用 pickRecommended（基于已学习偏好推荐）');
+assert(/spawnPlumPetals\(btn\)/.test(appSrc), '梅花点击触发花瓣飘落特效');
 assert(/markManualPickToday\(\)/.test(appSrc), '梅花点击后标记当日手动选择');
 assert(/pickQuoteIndex/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'pickQuoteIndex 已导出到 LT_PURE');
 // 名句池：中英各一份且数量充足
 assert((appSrc.match(/zh: '[^']*', en: '/g) || []).length >= 10, `励志名句池条目充足（当前 ${(appSrc.match(/zh: '[^']*', en: '/g) || []).length} 条）`);
 // CSS：梅花按钮 + 名句浮层样式齐备
 assert(/\.plum-float/.test(cssSrc) && /@keyframes plum-spin/.test(cssSrc), 'CSS 定义 .plum-float 及旋转动效');
+assert(/\.plum-petal/.test(cssSrc) && /@keyframes plum-petal-fall/.test(cssSrc), 'CSS 定义花瓣飘落特效');
 assert(/\.quote/.test(cssSrc) && /\.quote-text/.test(cssSrc) && /\.quote-src/.test(cssSrc), 'CSS 定义 .quote / .quote-text / .quote-src');
 assert(/@keyframes quote-in/.test(cssSrc) && /\.quote\.quote-out/.test(cssSrc), 'CSS 定义名句入场/退场动画');
 // i18n：plum.tip 中英各一份且非空（不 echo key 回显）

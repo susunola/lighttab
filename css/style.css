@@ -1291,19 +1291,44 @@ svg.logo-tx text { font-family: inherit; }
 .plum-float {
   position: fixed;
   right: 90px; bottom: 30px;
-  width: 48px; height: 48px;
+  width: 52px; height: 52px;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #f43f5e, #ec4899);
+  background: radial-gradient(120% 120% at 26% 20%, #ff5a93, #ff3d7c 55%, #f43f5e 100%);
   color: #fff;
   border-radius: 50%;
-  box-shadow: 0 8px 24px rgba(236, 72, 153, 0.45);
+  box-shadow: 0 10px 26px rgba(244, 63, 94, 0.46), 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
   z-index: 50;
   transition: transform .15s ease, filter .15s ease;
 }
-.plum-float:hover { transform: scale(1.06) rotate(18deg); filter: brightness(1.08); }
+.plum-float svg { filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.24)); }
+.plum-float:hover { transform: scale(1.07); filter: brightness(1.06); }
 .plum-float:active { transform: scale(0.95); }
-.plum-float.spin { animation: plum-spin .5s ease; }
+.plum-float.spin { animation: plum-spin .52s ease; }
 @keyframes plum-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Click effect: plum petals drifting down */
+.plum-petal {
+  position: fixed;
+  left: 0; top: 0;
+  width: 12px; height: 10px;
+  pointer-events: none;
+  z-index: 70;
+  opacity: 0;
+  background: radial-gradient(100% 100% at 35% 35%, #ffd9e6, #ff7aa9 68%, #ff4f8a 100%);
+  border-radius: 72% 72% 72% 72% / 82% 82% 62% 62%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  animation: plum-petal-fall var(--dur, 1.8s) ease-in forwards;
+  transform: translate(0, 0) rotate(var(--rot, 0deg));
+}
+@keyframes plum-petal-fall {
+  0% { opacity: 0; transform: translate(0, 0) rotate(var(--rot, 0deg)) scale(0.8); }
+  10% { opacity: 0.95; }
+  75% { opacity: 0.8; }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0px), var(--dy, 140px)) rotate(var(--spin, 180deg)) scale(0.6);
+  }
+}
 
 /* ====== Menus ====== */
 .menu {
