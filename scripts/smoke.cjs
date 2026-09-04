@@ -473,6 +473,22 @@ assert(/for \(const id in map\) if \(!alive\.has\(id\)\)/.test(canvasSrc), 'assi
 assert(/if \(pruned\) \{ setCardLayoutMap\(map\);/.test(canvasSrc), '坐标回收后落盘一次');
 
 
+// ---------- 11) 玻璃质感 token ----------
+console.log('[11] 玻璃质感');
+// 深色主题的玻璃必须是「暗色微透」而不是白色叠加：白色会把亮壁纸越提越亮，
+// 实测白 7% 时白字对比度只有 1.72:1（WCAG AA 要 4.5）
+assert(/--glass: rgba\(12, 16, 28, 0\.48\)/.test(cssSrc), '深色玻璃为暗色微透 rgba(12,16,28,.48)');
+assert(!/:root[\s\S]{0,900}--glass: rgba\(255, 255, 255/.test(cssSrc), '深色主题不再用白色玻璃');
+assert(/--glass: rgba\(255, 255, 255, 0\.50\)/.test(cssSrc), '浅色玻璃降到 0.50（原 0.66 近乎不透明）');
+// 单一 blur token + saturate：纯 blur 会把背景去色，观感变塑料
+assert(/--glass-blur: blur\(20px\) saturate\(155%\)/.test(cssSrc), '深色 glass-blur 带 saturate');
+assert(/--glass-blur: blur\(26px\) saturate\(185%\)/.test(cssSrc), '浅色 glass-blur 带 saturate');
+assert((cssSrc.match(/backdrop-filter: var\(--glass-blur\)/g) || []).length >= 10,
+  '主要玻璃面统一走 --glass-blur');
+assert(!/backdrop-filter: blur\(1[468]px\)/.test(cssSrc), '不再有硬编码的 14/16/18px 模糊');
+assert(/--glass-hl:/.test(cssSrc) && (cssSrc.match(/inset 0 1px 0 var\(--glass-hl\)/g) || []).length >= 3,
+  '内高光走 --glass-hl（原先硬编码值在浅色主题下不可见）');
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} 项失败`);
