@@ -1400,19 +1400,21 @@ svg.logo-tx text { font-family: inherit; }
 }
 .quote .quote-text {
   position: relative;
-  font-size: clamp(22px, 4vw, 34px);
+  font-size: clamp(16px, 2.4vw, 22px);
   font-weight: 600;
-  line-height: 1.55;
+  line-height: 1.6;
   letter-spacing: .02em;
   color: #fff;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
 }
 .quote .quote-src {
   position: relative;
-  margin-top: 16px;
-  font-size: 14px;
-  letter-spacing: .14em;
-  color: rgba(255, 255, 255, 0.86);
+  display: block;
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .12em;
+  color: rgba(255, 255, 255, 0.72);
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
 }
 @keyframes quote-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); } }
