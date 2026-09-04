@@ -2198,6 +2198,7 @@
 
   // Lightweight poster map (when a movie entry itself has no dedicated poster URL).
   const MOVIE_POSTER_MAP = {
+    '教父': 'https://upload.wikimedia.org/wikipedia/en/1/1c/Godfather_ver1.jpg',
     '肖申克的救赎': 'https://upload.wikimedia.org/wikipedia/en/8/81/ShawshankRedemptionMoviePoster.jpg',
     '泰坦尼克号': 'https://upload.wikimedia.org/wikipedia/en/2/22/Titanic_poster.jpg',
     '星际穿越': 'https://upload.wikimedia.org/wikipedia/en/b/bc/Interstellar_film_poster.jpg',

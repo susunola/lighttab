@@ -683,6 +683,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 }
+.wmovie .w-head .w-title > span { white-space: nowrap; }
 .movie-card {
   display: flex;
   flex-direction: column;
@@ -770,6 +771,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   font-size: 16px;
   line-height: 1.46;
   text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .movie-tile-tag {
   position: absolute;

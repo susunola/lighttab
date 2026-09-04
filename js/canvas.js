@@ -462,6 +462,13 @@
     const st = A().state.settings;
     const vis = A().normalizeWidgets(st && st.widgets);
     if (A().WIDGETS.some((id) => !vis[id] && l[id])) return true;
+    // Any visible block missing coordinates means this layout predates a structure change
+    // (for example, a newly-added widget in BLOCK_DEFS). Re-capture once from flow, otherwise the
+    // missing absolute block shrinks to content width in canvas mode and looks "挤在一条窄条里".
+    for (const b of blockEls()) {
+      if (b.el.hidden) continue;
+      if (!l[b.key]) return true;
+    }
     // Placement has to agree with the frozen coordinates too. Lifted above the search box means the
     // widget shares the right column's left edge; parked in the left column means it starts further
     // left. Compare blocks against each other, never against a constant (coordinates are relative to
