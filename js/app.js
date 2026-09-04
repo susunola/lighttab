@@ -1018,11 +1018,14 @@
     const host = hostnameOf(it.url) || it.title;
     const icon = iconFor(it.url);
     const customIcon = sanitizeIconDataUrl(it.icon);
-    let bg, ink, ico;
+    let bg, ink, ico, customCls = '';
     if (customIcon) {
-      // User-uploaded image wins over the brand icon; the tile keeps the card colour underneath so
-      // transparent PNGs still read as a coloured tile (same look as brand tiles).
-      bg = it.color || pickColor(host);
+      // User-uploaded image wins over the brand icon. The tile background defaults to a CSS-picked
+      // neutral (theme-aware) so uploaded logos — usually white-bg corporate marks or transparent
+      // marks — read as the visual focus instead of competing with a saturated host colour. Users
+      // can still set it.color (e.g. via import) for an explicit coloured frame.
+      customCls = ' has-custom-icon';
+      bg = it.color || null;
       ico = `<img class="logo-img" src="${customIcon}" alt="" draggable="false">`;
     } else if (icon) {
       bg = icon.c;
@@ -1037,11 +1040,12 @@
       }
       ico = `<span class="ini">${escapeHtml(letter)}</span>`;
     }
-    ink = inkOn(bg);
+    ink = bg ? inkOn(bg) : '#1f2937';
     const safeTitle = escapeHtml(it.title);
+    const bgStyle = bg ? `background:${bg};` : '';
     return `
       <a class="card" href="${escapeHtml(it.url)}" data-id="${it.id}" draggable="true" target="_blank" rel="noopener" title="${safeTitle}">
-        <div class="ico" style="background:${bg};color:${ink}">
+        <div class="ico${customCls}" style="${bgStyle}color:${ink}">
           ${ico}
         </div>
         <div class="title">${safeTitle}</div>
@@ -1802,27 +1806,50 @@
       fr.readAsDataURL(file);
     });
   }
-  // Square centre-crop any image to `size`x`size` as PNG (transparency kept). Photo-like PNGs that would
-  // exceed the 128 KiB icon budget are re-baked onto white as JPEG so the stored icon stays small.
+  // Square the image at `size`x`size`. Two strategies:
+  //  - near-square source (aspect within ~0.85..1.18): full-bleed centre-crop so the tile stays tightly packed.
+  //  - non-square source: top-aligned crop for tall logos (icon at the top, tagline below dropped —
+  //    the card title underneath already names the site) or centre-crop for wide images. This keeps
+  //    the brand mark filling the tile instead of being shrunk to a thin letterboxed strip.
+  // Photos that still exceed the 96 KiB PNG budget are re-baked as JPEG q0.85 (JPEG has no alpha, so
+  //    the padding is filled with white to match a logo on a white card).
   function compressIconSquare(file, size) {
     return new Promise((resolve, reject) => {
       const fr = new FileReader();
       fr.onload = () => {
         const img = new Image();
         img.onload = () => {
-          const side = Math.min(img.width, img.height);
-          if (!side || !size) return reject(new Error('bad image'));
+          if (!img.width || !img.height || !size) return reject(new Error('bad image'));
+          const aspect = img.width / img.height;
+          const SQ_LO = 0.85, SQ_HI = 1 / SQ_LO;
           const c = document.createElement('canvas');
           c.width = size; c.height = size;
           const ctx = c.getContext('2d');
-          const sx = (img.width - side) / 2;
-          const sy = (img.height - side) / 2;
-          ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+          // Draw the source cropped into the square. `pad` is the canvas fill colour (null for
+          // transparent PNG padding, '#fff' for the JPEG fallback).
+          const draw = (pad) => {
+            if (pad) { ctx.fillStyle = pad; ctx.fillRect(0, 0, size, size); }
+            if (aspect >= SQ_LO && aspect <= SQ_HI) {
+              // Near square: full-bleed centre crop.
+              const side = Math.min(img.width, img.height);
+              const sx = (img.width - side) / 2;
+              const sy = (img.height - side) / 2;
+              ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+            } else if (aspect < SQ_LO) {
+              // Tall: top-aligned crop so the icon at the top is kept and the tagline is dropped.
+              const side = img.width;
+              ctx.drawImage(img, 0, 0, side, side, 0, 0, size, size);
+            } else {
+              // Wide: centre crop.
+              const side = img.height;
+              const sx = (img.width - side) / 2;
+              ctx.drawImage(img, sx, 0, side, side, 0, 0, size, size);
+            }
+          };
+          draw(null);
           let url = c.toDataURL('image/png');
           if (url.length > 96 * 1024) {
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(0, 0, size, size);
-            ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+            draw('#fff');
             url = c.toDataURL('image/jpeg', 0.85);
           }
           resolve(url);
