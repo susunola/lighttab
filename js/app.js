@@ -2462,14 +2462,13 @@
       return d;
     },
     // v2 -> v3: prompt library (lt.prompts). Existing users get the built-in set injected; an empty array means the user cleared it, so do not re-inject.
-    // v3 -> v4: per-widget placement. The old single settings.clockPos becomes widgetPos.wclock and
-    // everything else keeps its left-column home.
+    // v3 -> v4: per-widget placement. Default policy changed to keep the clock above the search bar
+    // (wclock='top') for a cleaner launcher-like first impression.
     3: (d) => {
       const st = d.settings || {};
       if (!st.widgetPos || typeof st.widgetPos !== 'object') {
-        // Carry the clock's old placement over; never move a widget the user never asked about.
         st.widgetPos = {
-          wclock: st.clockPos === 'left' ? 'left' : 'top',
+          wclock: 'top',
           wcal: 'left',
           wtodo: 'left'
         };
