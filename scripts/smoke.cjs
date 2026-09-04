@@ -375,7 +375,7 @@ assert(/function removeWidget/.test(appSrc), 'app.js 定义 removeWidget()');
 assert(/normalizeWidgets/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'normalizeWidgets 已导出到 LT_PURE');
 assert(/\.widget \.w-del/.test(cssSrc) && /\.widget:hover \.w-del/.test(cssSrc), 'CSS 定义悬停出现的 .w-del');
 assert(/@media \(hover: none\)[\s\S]{0,120}\.w-del/.test(cssSrc), '触屏无 hover 时移除按钮常驻');
-assert(/\.wgt-checks/.test(cssSrc), 'CSS 定义设置页勾选组 .wgt-checks');
+assert(/\.wgt-rows/.test(cssSrc), 'CSS 定义设置页勾选组 .wgt-rows');
 // widgets 必须存活在 settings 内，这样导出/导入/云同步零成本带上它
 assert(!/'lt\.widgets'/.test(appSrc), 'widgets 不另开存储键（随 settings 走同步与导出）');
 assert(/state\.settings\.widgets = normalizeWidgets\(state\.settings\.widgets\)/.test(appSrc), 'doImport 校验 widgets 字段');
@@ -481,12 +481,26 @@ assert(/--glass: rgba\(12, 16, 28, 0\.48\)/.test(cssSrc), '深色玻璃为暗色
 assert(!/:root[\s\S]{0,900}--glass: rgba\(255, 255, 255/.test(cssSrc), '深色主题不再用白色玻璃');
 assert(/--glass: rgba\(255, 255, 255, 0\.50\)/.test(cssSrc), '浅色玻璃降到 0.50（原 0.66 近乎不透明）');
 // 单一 blur token + saturate：纯 blur 会把背景去色，观感变塑料
-assert(/--glass-blur: blur\(20px\) saturate\(155%\)/.test(cssSrc), '深色 glass-blur 带 saturate');
-assert(/--glass-blur: blur\(26px\) saturate\(185%\)/.test(cssSrc), '浅色 glass-blur 带 saturate');
+assert(/--glass-blur: blur\(16px\) saturate\(155%\)/.test(cssSrc), '深色 glass-blur 带 saturate');
+assert(/--glass-blur: blur\(16px\) saturate\(185%\)/.test(cssSrc), '浅色 glass-blur 带 saturate');
+// 磨砂三要素：仅有 blur + 半透明色 = 塑料感。必须再有颗粒、斜向高光、边缘反光
+assert(/--frost-grain:\s*url\("data:image\/svg\+xml/.test(cssSrc), '定义了磨砂颗粒（内联 SVG 噪声，无网络请求）');
+assert(/feTurbulence/.test(cssSrc), '颗粒用 feTurbulence 生成');
+assert(/--frost-sheen: linear-gradient\(135deg/.test(cssSrc), '定义了斜向高光 --frost-sheen');
+assert((cssSrc.match(/--frost-sheen:/g) || []).length === 2, '深浅两套主题各有自己的高光强度');
+assert((cssSrc.match(/--frost-edge:/g) || []).length === 2, '深浅两套主题各有自己的边缘反光');
+assert((cssSrc.match(/box-shadow: var\(--frost-edge\)/g) || []).length >= 3, '主要玻璃面用 --frost-edge 做边缘');
+assert(/background-image: var\(--frost-sheen\), var\(--frost-grain\)/.test(cssSrc), '高光+颗粒作为背景层叠加');
+assert(/background-blend-mode: normal, var\(--frost-grain-blend\)/.test(cssSrc), '颗粒用 blend-mode 融入表面');
+// 用背景层而不是 ::before：组件里已有绝对定位子元素（.w-del / 拖拽把手），
+// 绝对定位的伪元素会盖在它们上面
+assert(!/\.(widget|card|search)::before\s*\{/.test(cssSrc), '磨砂层不用 ::before（会压住绝对定位子元素）');
+// shorthand background 会清掉 background-image，三大面必须用 background-color
+assert(!/^\s*background: var\(--glass\);/m.test(cssSrc), '玻璃面用 background-color，避免 shorthand 清掉磨砂层');
 assert((cssSrc.match(/backdrop-filter: var\(--glass-blur\)/g) || []).length >= 10,
   '主要玻璃面统一走 --glass-blur');
 assert(!/backdrop-filter: blur\(1[468]px\)/.test(cssSrc), '不再有硬编码的 14/16/18px 模糊');
-assert(/--glass-hl:/.test(cssSrc) && (cssSrc.match(/inset 0 1px 0 var\(--glass-hl\)/g) || []).length >= 3,
+assert(/--glass-hl:/.test(cssSrc) && (cssSrc.match(/inset 0 1px 0 var\(--glass-hl\)/g) || []).length >= 2,
   '内高光走 --glass-hl（原先硬编码值在浅色主题下不可见）');
 
 console.log('');
