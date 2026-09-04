@@ -410,8 +410,20 @@ for (const k of ['wb.running', 'wb.not_running', 'wb.not_detected', 'wb.get']) {
   assert(i18nSrc.includes(`'${k}'`), `i18n 含 ${k}`);
 }
 // ---------- #62 每组件位置（时钟 / 日历 / 待办 可各自放到搜索框上方）----------
-assert(/widgetPos: \{ wclock: 'top', wcal: 'top', wtodo: 'left' \}/.test(appSrc),
-  'DEFAULT_SETTINGS 的 widgetPos 默认时钟+日历在顶、待办在左栏');
+assert(/widgetPos: \{ wclock: 'top', wcal: 'left', wtodo: 'left' \}/.test(appSrc),
+  'DEFAULT_SETTINGS 的 widgetPos 默认只有时钟在顶，日历/待办在左栏');
+// 顶部槽位要的是一眼可读的「时间 + 一行日期」，不是完整日期+农历+干支那句话
+assert(/function compactDateLine/.test(appSrc), 'app.js 定义 compactDateLine()（顶部态紧凑日期行）');
+assert(/function clockIsTop/.test(appSrc), 'app.js 定义 clockIsTop()');
+assert(/top \? compactDateLine\(d\) : dateLine\(d\)/.test(appSrc), '时钟按位置切换日期行格式');
+assert(/if \(lunarEl\) lunarEl\.textContent = top \? '' : lunarLine\(d\)/.test(appSrc),
+  '顶部态不再单独渲染农历行（已并入紧凑行）');
+// tick 只在跨天时改写文案，位置一变必须强制重画，否则日期行停留在旧格式
+assert(/\|\$\{clockIsTop\(\) \? 't' : 'l'\}/.test(appSrc), '日期缓存键带上位置，位置变化即失效');
+assert(/if \(clockTimer\) startClock\(\);/.test(appSrc), 'applyWidgetPos 后强制重画时钟');
+assert(/\.widget\.wclock\.w-top \.clock-greet \{ display: none/.test(cssSrc)
+  || /clock-lunar,\n\.widget\.wclock\.w-top \.clock-greet \{ display: none/.test(cssSrc),
+  '顶部态隐藏农历行与问候语');
 assert(/function normalizeWidgetPos/.test(appSrc), 'app.js 定义 normalizeWidgetPos()');
 assert(/function applyWidgetPos/.test(appSrc), 'app.js 定义 applyWidgetPos()');
 assert(/applyWidgetPos\(\);/.test(appSrc), 'applyWidgets 驱动 applyWidgetPos');

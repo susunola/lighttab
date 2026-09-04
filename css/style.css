@@ -237,25 +237,27 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .widget.wcal.w-top { --wtop-del: 168px; }   /* 320px month strip */
 .widget.wtodo.w-top { --wtop-del: 218px; }  /* 420px list */
 
-/* --- clock in the top stack: big time, date and lunar on one line --- */
-.widget.wclock.w-top { padding: clamp(4px, 1.6vh, 18px) 0 clamp(6px, 1.2vh, 14px); }
+/* --- clock in the top stack: big time over one compact date line (launcher convention) --- */
+.widget.wclock.w-top { padding: clamp(4px, 1.4vh, 14px) 0 clamp(8px, 1.4vh, 16px); }
 .widget.wclock.w-top .clock-row { justify-content: center; gap: 6px; }
 .widget.wclock.w-top .clock-hhmm {
-  font-size: clamp(56px, 6vw, 88px);
+  font-size: clamp(48px, 4.4vw, 68px);
   font-weight: 300;
-  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.28);
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.3);
 }
-.widget.wclock.w-top .clock-sec { display: none; } /* seconds are noise at this size */
-.widget.wclock.w-top .clock-date,
-.widget.wclock.w-top .clock-lunar {
-  display: inline;
-  margin: 0;
-  font-size: clamp(13px, 1.15vw, 15.5px);
+.widget.wclock.w-top .clock-sec { display: none; }  /* seconds are noise at this size */
+/* The compact line already carries weekday + lunar, so the separate lunar row and the greeting
+ * would just repeat / crowd it (see compactDateLine in app.js). */
+.widget.wclock.w-top .clock-lunar,
+.widget.wclock.w-top .clock-greet { display: none; }
+.widget.wclock.w-top .clock-date {
+  margin: 4px 0 0;
+  font-size: clamp(12.5px, 1vw, 14.5px);
+  letter-spacing: 0.04em;
   color: var(--ink-2);
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.28);
 }
-.widget.wclock.w-top .clock-lunar::before { content: ''; display: inline-block; width: 12px; }
-.widget.wclock.w-top .clock-greet { margin-top: 6px; }
 
 /* --- calendar in the top stack: compact month strip, no card, header inline --- */
 .widget.wcal.w-top { padding: 2px 0 14px; }

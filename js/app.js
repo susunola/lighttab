@@ -75,9 +75,9 @@
     widgets: { wclock: true, wcal: true, wtodo: true },
     // Per-widget placement: 'left' keeps the widget as a left-column card, 'top' lifts it into the
     // stack above the search box (centred, card chrome dropped — the phone-launcher look).
-    // Clock and calendar default to the top stack; the to-do list stays a left-column card because
-    // it is interactive and taller.
-    widgetPos: { wclock: 'top', wcal: 'top', wtodo: 'left' }
+    // Only the clock rides up top by default — that slot wants a glanceable time + date line, not a
+    // month grid. Calendar and to-do stay left-column cards; both can still be lifted from Settings.
+    widgetPos: { wclock: 'top', wcal: 'left', wtodo: 'left' }
   };
   // Left-column widget ids, in render order. Single source of truth for visibility + settings UI.
   const WIDGETS = ['wclock', 'wcal', 'wtodo'];
@@ -191,6 +191,23 @@
     }
     const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
     return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 周${week}`;
+  }
+  // The slot above the search box wants one glanceable line, not the full date + lunar + ganzhi
+  // sentence the left-column card shows. Mirrors the launcher convention: 9月4日 星期五 七月廿三.
+  function compactDateLine(d) {
+    if (isEn()) {
+      const wk = EN_WEEKS_S[d.getDay()];
+      const base = `${wk}, ${EN_MONTHS_S[d.getMonth()]} ${d.getDate()}`;
+      if (!window.LT_LUNAR) return base;
+      const lu = window.LT_LUNAR.toLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
+      return lu ? `${base}  ${window.LT_LUNAR.dayNameEn(lu.day)}` : base;
+    }
+    const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+    const base = `${d.getMonth() + 1}月${d.getDate()}日 星期${week}`;
+    if (!window.LT_LUNAR) return base;
+    const lu = window.LT_LUNAR.toLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    if (!lu) return base;
+    return `${base} ${window.LT_LUNAR.monthName(lu.month, lu.isLeap)}${window.LT_LUNAR.dayName(lu.day)}`;
   }
   function chipDate(d) {
     if (isEn()) return `${EN_MONTHS_S[d.getMonth()]} ${d.getDate()}`;
@@ -517,11 +534,13 @@
         greetEl.textContent = `${greetingFor(d)}${nm}`;
         chipEl.textContent = `${chipDate(d)} · ${chipFor(d)}`;
       }
-      const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}|${clockIsTop() ? 't' : 'l'}`;
       if (dayKey !== lastDay) {
         lastDay = dayKey;
-        dateEl.textContent = dateLine(d);
-        if (lunarEl) lunarEl.textContent = lunarLine(d);
+        // Lifted above the search box: one compact line. Left-column card: the full date + lunar pair.
+        const top = clockIsTop();
+        dateEl.textContent = top ? compactDateLine(d) : dateLine(d);
+        if (lunarEl) lunarEl.textContent = top ? '' : lunarLine(d);
         // Runs on boot (lastDay starts empty) and again on every midnight rollover, so a tab left open
         // across days still rotates the wallpaper. Guarded internally by settings + the today marker.
         maybeAutoRotate();
@@ -1890,17 +1909,17 @@
       return d;
     },
     // v2 -> v3: prompt library (lt.prompts). Existing users get the built-in set injected; an empty array means the user cleared it, so do not re-inject.
-    // v3 -> v4: per-widget placement. The old single settings.clockPos becomes widgetPos.wclock;
-    // the calendar joins the clock in the top stack (the layout this release ships with) unless the
-    // user had already parked the clock in the left column, in which case keep the familiar
-    // left-column layout for both instead of moving their calendar behind their back.
+    // v3 -> v4: per-widget placement. The old single settings.clockPos becomes widgetPos.wclock and
+    // everything else keeps its left-column home.
     3: (d) => {
       const st = d.settings || {};
       if (!st.widgetPos || typeof st.widgetPos !== 'object') {
-        const clock = st.clockPos === 'top' ? 'top' : (st.clockPos === 'left' ? 'left' : null);
-        st.widgetPos = clock === 'left'
-          ? { wclock: 'left', wcal: 'left', wtodo: 'left' }
-          : { wclock: 'top', wcal: 'top', wtodo: 'left' };
+        // Carry the clock's old placement over; never move a widget the user never asked about.
+        st.widgetPos = {
+          wclock: st.clockPos === 'left' ? 'left' : 'top',
+          wcal: 'left',
+          wtodo: 'left'
+        };
       }
       delete st.clockPos;
       d.settings = st;
@@ -2131,6 +2150,9 @@
   // Move each widget card between the left column and the slot above the search box. The widget's
   // own DOM is reused verbatim — only its parent and one class change — so the clock's tick logic
   // and the calendar's month renderer never have to know this feature exists.
+  function clockIsTop() {
+    return normalizeWidgetPos(state.settings && state.settings.widgetPos).wclock === 'top';
+  }
   function applyWidgetPos() {
     const pos = normalizeWidgetPos(state.settings && state.settings.widgetPos);
     state.settings.widgetPos = pos;
@@ -2151,6 +2173,9 @@
       const sel = document.getElementById('f-pos-' + id);
       if (sel && sel.value !== pos[id]) sel.value = pos[id];
     }
+    // The clock renders a different date line per placement, and its tick only rewrites text when the
+    // day rolls over — so force a redraw whenever the placement changes.
+    if (clockTimer) startClock();
   }
   // Remove one widget, with an undo toast — same affordance as deleting a shortcut card.
   function removeWidget(id) {
