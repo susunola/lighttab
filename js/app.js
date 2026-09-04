@@ -2105,7 +2105,8 @@
     return { sx: minX, sy: minY, sw: trimW, sh: trimH };
   }
 
-  // Avatar upload preserves the full portrait; before fitting, try trimming screenshot matte borders.
+  // Avatar upload: store a size-capped version of the image; the CSS renders it with object-fit:cover
+  // to fill the circle without distortion. We do not crop — let the browser handle the cover fill.
   function compressAvatarFit(file, size) {
     return new Promise((resolve, reject) => {
       const fr = new FileReader();
@@ -2114,35 +2115,26 @@
         img.onload = () => {
           if (!img.width || !img.height || !size) return reject(new Error('bad image'));
 
+          // Detect and trim solid matte border (common in screenshots with white/grey background)
           let sx = 0, sy = 0, sw = img.width, sh = img.height;
           const probe = document.createElement('canvas');
-          probe.width = img.width;
-          probe.height = img.height;
+          probe.width = img.width; probe.height = img.height;
           const pg = probe.getContext('2d', { willReadFrequently: true });
           pg.drawImage(img, 0, 0);
           const trimmed = trimSolidMatteRect(pg, img.width, img.height);
-          if (trimmed) {
-            sx = trimmed.sx;
-            sy = trimmed.sy;
-            sw = trimmed.sw;
-            sh = trimmed.sh;
-          }
+          if (trimmed) { sx = trimmed.sx; sy = trimmed.sy; sw = trimmed.sw; sh = trimmed.sh; }
 
+          // Down-scale to max size*3 to keep payload small, preserve aspect ratio
+          const maxPx = size * 3;
+          const scale = Math.min(1, maxPx / Math.max(sw, sh));
+          const dw = Math.round(sw * scale);
+          const dh = Math.round(sh * scale);
           const c = document.createElement('canvas');
-          c.width = size; c.height = size;
+          c.width = dw; c.height = dh;
           const ctx = c.getContext('2d');
-          const scale = Math.min(size / sw, size / sh);
-          const dw = sw * scale;
-          const dh = sh * scale;
-          const dx = (size - dw) / 2;
-          const dy = (size - dh) / 2;
-          ctx.clearRect(0, 0, size, size);
-          ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
           let url = c.toDataURL('image/png');
           if (url.length > 96 * 1024) {
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(0, 0, size, size);
-            ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
             url = c.toDataURL('image/jpeg', 0.88);
           }
           resolve(url);
@@ -2750,12 +2742,21 @@
   }
   function renderAvatar() {
     const s = avatarState();
-    const img = document.getElementById('avatar-img');
     const ini = document.getElementById('avatar-initial');
     const fb = document.getElementById('avatar-fallback');
-    if (img) { img.style.backgroundImage = s.avatar ? `url("${s.avatar}")` : ''; img.hidden = !s.avatar; }
-    if (ini) { ini.textContent = s.initial; ini.hidden = !(!s.avatar && s.initial); }
-    if (fb) fb.hidden = !!(s.avatar || s.initial);
+    const imgEl = document.getElementById('avatar-img');
+    if (s.avatar) {
+      if (imgEl) {
+        imgEl.innerHTML = `<img src="${s.avatar}" alt="" aria-hidden="true">`;
+        imgEl.hidden = false;
+      }
+      if (ini) ini.hidden = true;
+      if (fb) fb.hidden = true;
+    } else {
+      if (imgEl) { imgEl.innerHTML = ''; imgEl.hidden = true; }
+      if (ini) { ini.textContent = s.initial; ini.hidden = !s.initial; }
+      if (fb) fb.hidden = !!s.initial;
+    }
     const big = document.getElementById('avatar-big');
     if (big) {
       if (s.avatar) big.innerHTML = `<img src="${s.avatar}" alt="">`;

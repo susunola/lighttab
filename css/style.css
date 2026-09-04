@@ -161,6 +161,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink-2);
   cursor: pointer;
   overflow: hidden;
+  position: relative;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
@@ -168,9 +169,23 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .avatar-btn:hover { border-color: var(--line-2); box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.16); }
 .avatar-btn:active { transform: scale(0.95); }
 .avatar-btn .avatar-img {
+  position: absolute;
+  inset: 0;
   width: 100%; height: 100%;
-  background: center/contain no-repeat;
   display: block;
+  z-index: 1;
+}
+.avatar-btn .avatar-img img {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-btn .avatar-initial,
+.avatar-btn .avatar-fallback {
+  position: relative;
+  z-index: 0;
 }
 .avatar-btn .avatar-initial {
   font-size: 14px; font-weight: 600;
