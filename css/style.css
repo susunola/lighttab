@@ -682,6 +682,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink-3);
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .wmovie .w-head .w-title > span { white-space: nowrap; }
 .movie-card {
@@ -772,7 +773,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   line-height: 1.46;
   text-shadow: 0 2px 12px rgba(0,0,0,0.45);
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
