@@ -179,6 +179,16 @@
     const visible = Array.from(grid.querySelectorAll('.card'));
     const cols = getCardCols(grid.clientWidth);
     const map = getCardLayout();
+    // Garbage-collect coordinates whose card is gone. Without this their cells stay marked occupied
+    // forever, so freshly added cards get pushed into later rows and the grid looks scrambled
+    // (a short first row above a full one). Keyed on the whole state.items set rather than the
+    // currently rendered subset, so switching groups never discards a coordinate.
+    const alive = new Set((A().state.items || []).map((it) => it.id));
+    let pruned = 0;
+    for (const id in map) if (!alive.has(id)) { delete map[id]; pruned++; }
+    // map is the live layout.cards object, so persist once when something was actually dropped -
+    // otherwise every deleted shortcut would leave a coordinate behind on disk forever.
+    if (pruned) { setCardLayoutMap(map); A().Store.set(A().K.settings, A().state.settings); }
     // Existing coordinates are marked occupied; missing ones take the first free cell, scanning column by column then row by row.
     const occupied = new Set();
     for (const id in map) {
@@ -448,8 +458,20 @@
   function widgetLayoutStale() {
     const l = getLayout();
     if (!l || l.auto === false) return false;
-    const vis = A().normalizeWidgets(A().state.settings && A().state.settings.widgets);
-    return A().WIDGETS.some((id) => !vis[id] && l[id]);
+    const st = A().state.settings;
+    const vis = A().normalizeWidgets(st && st.widgets);
+    if (A().WIDGETS.some((id) => !vis[id] && l[id])) return true;
+    // Clock placement has to agree with the frozen coordinates too. Lifted above the search box
+    // means the clock shares the right column's left edge; parked in the left column means it
+    // starts further left. Compare the two blocks against each other, never against a constant
+    // (coordinates are relative to .layout's border box, so the left-most block legitimately sits
+    // at the container's 40px padding).
+    if (l.wclock && l.search) {
+      const wantTop = (st && st.clockPos) === 'top';
+      const sharesRightColumn = Math.abs(l.wclock.x - l.search.x) <= 2;
+      if (wantTop !== sharesRightColumn) return true;
+    }
+    return false;
   }
 
   // Removing a left-column widget leaves a hole in the frozen canvas coordinates, so re-derive the

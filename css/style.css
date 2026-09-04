@@ -197,6 +197,52 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .wgt-check input { width: 15px; height: 15px; accent-color: var(--accent-2); cursor: pointer; }
 
+/* #61 clock lifted above the search box: drop the card chrome and centre it, phone-launcher style.
+ * Same DOM as the left-column card, so the tick logic is untouched — only presentation changes.
+ * Every selector here is qualified with .widget so it outranks the plain `.wclock .clock-*` block
+ * further down the file (equal specificity would otherwise let the later rules win). The box is
+ * clamped to the search box's own max-width and left margin so the two read as one centred group. */
+.widget.wclock-top {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: clamp(6px, 2vh, 22px) 0 clamp(10px, 2vh, 20px);
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto 0 0;
+}
+.widget.wclock-top .clock-row { justify-content: center; gap: 6px; }
+.widget.wclock-top .clock-hhmm {
+  font-size: clamp(56px, 6vw, 88px);
+  font-weight: 300;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.28);
+}
+.widget.wclock-top .clock-sec { display: none; } /* seconds are noise at this size */
+/* Date and lunar sit on one line, matching the phone lock-screen reference. */
+.widget.wclock-top .clock-date,
+.widget.wclock-top .clock-lunar {
+  display: inline;
+  margin: 0;
+  font-size: clamp(13px, 1.15vw, 15.5px);
+  color: var(--ink-2);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.25);
+}
+.widget.wclock-top .clock-lunar::before { content: ''; display: inline-block; width: 12px; }
+.widget.wclock-top .clock-greet { margin-top: 6px; }
+.widget.wclock-top .w-del { top: 4px; right: 4px; }
+
+/* WorkBuddy desktop reachability dot in the engine dropdown (#61) */
+.eng-state {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-left: 6px;
+  flex: 0 0 auto;
+}
+.eng-state.on { background: #22c55e; box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22); }
+.eng-state.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+
 /* Clock widget */
 .wclock .clock-row {
   display: flex; align-items: baseline; gap: 8px;
