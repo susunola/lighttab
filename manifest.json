@@ -3,7 +3,7 @@
   "version": "1.18.0",
   "name": "LightTab - Minimal New Tab",
   "short_name": "LightTab",
-  "description": "Minimal new tab: clock and greeting (with the Chinese lunar calendar), month view, one-box search, AI prompt launcher, grouped icon grid, to-dos and wallpapers. Local-first storage, free-canvas drag layout, a built-in Bing daily wallpaper library, optional multi-device cloud sync over HTTPS, plus bookmark and JSON backup. English / Chinese UI.",
+  "description": "Minimal new tab: clock, lunar calendar, search, AI prompts, shortcuts, to-dos, Bing wallpapers. Local-first, optional cloud sync.",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },
