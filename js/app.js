@@ -2011,6 +2011,42 @@
       fr.readAsDataURL(file);
     });
   }
+  // Avatar upload should preserve the whole photo (no content-aware crop): fit the entire source
+  // into a square canvas with transparent padding, then cap payload size like icon uploads.
+  function compressAvatarFit(file, size) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          if (!img.width || !img.height || !size) return reject(new Error('bad image'));
+          const c = document.createElement('canvas');
+          c.width = size; c.height = size;
+          const ctx = c.getContext('2d');
+          const scale = Math.min(size / img.width, size / img.height);
+          const dw = img.width * scale;
+          const dh = img.height * scale;
+          const dx = (size - dw) / 2;
+          const dy = (size - dh) / 2;
+          ctx.clearRect(0, 0, size, size);
+          ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, dw, dh);
+          let url = c.toDataURL('image/png');
+          if (url.length > 96 * 1024) {
+            // JPEG fallback for oversized blobs: fill a neutral backdrop (JPEG has no alpha).
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, size, size);
+            ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, dw, dh);
+            url = c.toDataURL('image/jpeg', 0.88);
+          }
+          resolve(url);
+        };
+        img.onerror = () => reject(new Error('decode failed'));
+        img.src = fr.result;
+      };
+      fr.onerror = () => reject(new Error('read failed'));
+      fr.readAsDataURL(file);
+    });
+  }
   // ---------- Toast ----------
   let toastTimer = 0; // auto-hide timer of the previous toast; cancelled by the next one so an old timer cannot close a new message
   function showToast(text, actionLabel, action, ttl) {
@@ -2672,7 +2708,7 @@
         openSettingsTab('sync');
       }
     });
-    // Avatar upload (Settings → General): reuse the content-aware square crop, then bake to a 96px round.
+    // Avatar upload (Settings → General): keep the full uploaded photo (fit, no smart crop).
     const avatarInput = document.getElementById('f-avatar');
     if (avatarInput) avatarInput.addEventListener('change', async e => {
       const f = e.target.files && e.target.files[0];
@@ -2680,7 +2716,7 @@
       if (!f) return;
       if (f.size > 4 * 1024 * 1024) return showToast(t('toast.image_too_big'));
       try {
-        state.settings.avatar = await compressIconSquare(f, 96);
+        state.settings.avatar = await compressAvatarFit(f, 96);
         await Store.set(K.settings, state.settings);
         renderAvatar();
         showToast(t('toast.avatar_saved'));

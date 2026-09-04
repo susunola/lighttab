@@ -169,7 +169,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .avatar-btn:active { transform: scale(0.95); }
 .avatar-btn .avatar-img {
   width: 100%; height: 100%;
-  background: center/cover no-repeat;
+  background: center/contain no-repeat;
   display: block;
 }
 .avatar-btn .avatar-initial {
@@ -215,7 +215,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink);
   font-size: 20px; font-weight: 600;
 }
-.avatar-big img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-big img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .avatar-big svg { color: var(--ink-2); }
 .avatar-item {
   display: flex; align-items: center; gap: 10px;
@@ -247,7 +247,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink);
   font-size: 17px; font-weight: 600;
 }
-.avatar-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 /* ====== Two-column layout ====== */
 .layout {

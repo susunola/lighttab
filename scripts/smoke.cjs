@@ -591,7 +591,7 @@ assert(/function avatarState/.test(appSrc) && /function renderAvatar/.test(appSr
 assert(/function openSettingsTab/.test(appSrc) && /function bindAvatar/.test(appSrc), 'app.js 定义 openSettingsTab / bindAvatar');
 assert(/const AVATAR_FALLBACK_SVG = '<svg/.test(appSrc), 'app.js 定义 AVATAR_FALLBACK_SVG 默认人形');
 assert(/avatar = sanitizeIconDataUrl\(state\.settings\.avatar\)/.test(appSrc), '头像渲染前经 sanitizeIconDataUrl 守卫');
-assert(/state\.settings\.avatar = await compressIconSquare\(f, 96\)/.test(appSrc), '上传走 compressIconSquare 裁成 96px 方形');
+assert(/state\.settings\.avatar = await compressAvatarFit\(f, 96\)/.test(appSrc), '上传走 compressAvatarFit 保留完整照片（96px 画布）');
 assert(/f\.size > 4 \* 1024 \* 1024/.test(appSrc), '上传限 4MB（超限提示 toast.image_too_big）');
 assert(/bindAvatar\(\);\s*renderAvatar\(\)/.test(appSrc), 'boot 里绑定并首次渲染头像');
 assert((appSrc.match(/renderAvatar\(\)/g) || []).length >= 6, 'renderAvatar 在启动/改名/导入/重置/云拉取/同步面板均被调用');
