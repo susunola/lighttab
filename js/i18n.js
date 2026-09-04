@@ -31,9 +31,6 @@
 
     // ---------- Profile / avatar (top-right) ----------
     'avatar.title':        { zh: '个人资料', en: 'Profile' },
-    'avatar.guest':        { zh: '未登录', en: 'Guest' },
-    'avatar.local':        { zh: '本地资料', en: 'Local profile' },
-    'avatar.logged_in':    { zh: '已登录', en: 'Logged in' },
     'avatar.open_settings':{ zh: '打开设置', en: 'Open settings' },
     'avatar.export':       { zh: '导出数据', en: 'Export data' },
     'avatar.sync':         { zh: '登录 / 云同步', en: 'Log in / Sync' },

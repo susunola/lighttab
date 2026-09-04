@@ -199,33 +199,24 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   text-align: left;
 }
 .avatar-menu-head {
-  display: flex; align-items: center; gap: 11px;
-  padding: 8px 8px 12px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 12px 8px 14px;
   border-bottom: 1px solid var(--line);
   margin-bottom: 6px;
 }
 .avatar-big {
-  width: 42px; height: 42px;
-  flex: 0 0 42px;
+  width: 48px; height: 48px;
+  flex: 0 0 48px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   background: var(--tint-3);
   border: 1px solid var(--line);
   overflow: hidden;
   color: var(--ink);
-  font-size: 17px; font-weight: 600;
+  font-size: 20px; font-weight: 600;
 }
 .avatar-big img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar-big svg { color: var(--ink-2); }
-.avatar-id { display: flex; flex-direction: column; min-width: 0; }
-.avatar-name {
-  font-size: 14px; font-weight: 600; color: var(--ink);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.avatar-sub {
-  font-size: 11.5px; color: var(--ink-3); margin-top: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
 .avatar-item {
   display: flex; align-items: center; gap: 10px;
   width: 100%;
