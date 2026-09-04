@@ -1014,6 +1014,27 @@
     iconCache.set(host, res);
     return res;
   }
+  // Render the inner glyph markup for an ICONDB entry. Three entry shapes are supported, all vector
+  // (crisp at any tile size) and all fully local:
+  //   1. { d, c }            monochrome simple-icons path, auto-inked against the brand tile `c`
+  //   2. { p: [{d,f}], c }   multi-colour brand logo — each sub-path carries its own literal fill,
+  //                          `c` is only the tile background (usually #FFFFFF for corporate marks)
+  //   3. { tx, c, f }        wordmark tile — some brands (51CTO, 小鹅通, 艾威教育…) *are* set type;
+  //                          drawing them as text is more faithful than a hand-traced silhouette
+  // ICONDB is static, authored data — never user input — so the markup below is not sanitised.
+  function iconGlyphHtml(icon) {
+    if (icon.p) {
+      const paths = icon.p.map((s) => `<path fill="${s.f}" d="${s.d}"/>`).join('');
+      return `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
+    }
+    if (icon.tx) {
+      // Shrink the type as the wordmark gets longer so 51CTO / 小鹅通 both fit the same tile.
+      const n = [...icon.tx].length;
+      const size = n <= 1 ? 14 : n === 2 ? 11 : n === 3 ? 7.6 : n <= 5 ? 5.8 : 4.6;
+      return `<svg class="logo logo-tx" viewBox="0 0 24 24" aria-hidden="true"><text x="12" y="12.6" fill="${icon.f || inkOn(icon.c)}" font-size="${size}" font-weight="700" text-anchor="middle" dominant-baseline="middle">${escapeHtml(icon.tx)}</text></svg>`;
+    }
+    return `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="${inkOn(icon.c)}" d="${icon.d}"/></svg>`;
+  }
   function cardHtml(it) {
     const host = hostnameOf(it.url) || it.title;
     const icon = iconFor(it.url);
@@ -1029,7 +1050,7 @@
       ico = `<img class="logo-img" src="${customIcon}" alt="" draggable="false">`;
     } else if (icon) {
       bg = icon.c;
-      ico = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="${inkOn(icon.c)}" d="${icon.d}"/></svg>`;
+      ico = iconGlyphHtml(icon);
     } else {
       bg = it.color || pickColor(host);
       // Letter fallback: CJK titles use their first character, otherwise the first letter of the hostname, uppercased.
@@ -1240,8 +1261,9 @@
     const host = url ? hostnameOf(url) : '';
     const icon = url ? iconFor(url) : null;
     if (icon) {
-      box.innerHTML = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="${inkOn(icon.c)}" d="${icon.d}"/></svg>`;
+      box.innerHTML = iconGlyphHtml(icon);
       box.style.background = icon.c;
+      box.style.color = inkOn(icon.c);
     } else if (host) {
       const titleVal = document.getElementById('f-title').value.trim();
       let letter = (titleVal || '').charAt(0) || host.charAt(0);
@@ -2764,7 +2786,7 @@
 
   // Pure-function exports for the offline assertions in scripts/smoke.cjs
   // (same convention as window.LT_LUNAR / window.LT_SYNC).
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, resolveTheme, todayStr, pickRotateCandidate };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, resolveTheme, todayStr, pickRotateCandidate };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
