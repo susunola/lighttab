@@ -550,6 +550,11 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   position: relative;
 }
 .card .ico .logo { width: 60%; height: 60%; display: block; }
+/* Wordmark tiles (#59): brands whose logo *is* set type (51CTO, 小鹅通, 艾威教育…). Text needs more
+ * of the tile than a glyph does, and it must pick up the UI font stack rather than the SVG default. */
+.card .ico .logo-tx,
+.icon-preview svg.logo-tx { width: 86%; height: 86%; }
+svg.logo-tx text { font-family: inherit; }
 .card .ico .ini { display: block; line-height: 1; user-select: none; }
 /* Custom uploaded icon (#50): full-bleed cover inside the tile (the icon canvas is already square
  * thanks to smart crop, so cover and contain are equivalent — cover keeps the original intent of

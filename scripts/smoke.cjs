@@ -159,6 +159,20 @@ console.log('[4] 纯函数');
     assert(P.iconFor('https://github.com/susunola')?.d === 'M0 0', 'iconFor 精确匹配 github.com');
     assert(P.iconFor('https://zh.wikipedia.org/wiki/X')?.d === 'M1 1', 'iconFor 尾缀匹配 wikipedia.org');
     assert(P.iconFor('https://no-such-host-zzz.example/') === null, 'iconFor 未收录返回 null');
+    // #59 iconGlyphHtml：三种条目形态各自渲染成正确的矢量标记
+    assert(P.iconGlyphHtml({ d: 'M0 0', c: '#1f2937' }).includes('<path fill="'), 'iconGlyphHtml 单色 → 单 path');
+    const gMulti = P.iconGlyphHtml({ p: [{ d: 'M0 0', f: '#EA4335' }, { d: 'M1 1', f: '#4285F4' }], c: '#FFFFFF' });
+    assert((gMulti.match(/<path /g) || []).length === 2 && gMulti.includes('#EA4335') && gMulti.includes('#4285F4'),
+      'iconGlyphHtml 多色 → 每个子路径带自己的 fill', gMulti);
+    const gTx = P.iconGlyphHtml({ tx: '51CTO', c: '#FFFFFF', f: '#E60012' });
+    assert(gTx.includes('logo-tx') && gTx.includes('>51CTO<') && gTx.includes('#E60012'),
+      'iconGlyphHtml 字标 → <text> + 品牌色', gTx);
+    assert(P.iconGlyphHtml({ tx: '<img src=x>', c: '#fff', f: '#000' }).includes('&lt;img'),
+      'iconGlyphHtml 字标转义 HTML');
+    // 字数越多字号越小，保证长字标不溢出图标框
+    const fsOf = (s) => Number(/font-size="([\d.]+)"/.exec(P.iconGlyphHtml({ tx: s, c: '#fff', f: '#000' }))[1]);
+    assert(fsOf('O') > fsOf('文档') && fsOf('文档') > fsOf('小鹅通') && fsOf('小鹅通') > fsOf('51CTO'),
+      'iconGlyphHtml 字标字号随字数递减');
     // resolveTheme：'dark'/'light' 直接映射；'system' 在无 matchMedia 时回退深色，有 matchMedia 时跟随系统
     assert(P.resolveTheme('dark') === 'dark' && P.resolveTheme('light') === 'light', 'resolveTheme 固定 dark/light');
     assert(P.resolveTheme('bogus') === 'dark', 'resolveTheme 未知值回退 dark');
@@ -184,6 +198,74 @@ console.log('[4] 纯函数');
     assert(P.pickRotateCandidate(null, '') === null, 'pickRotateCandidate 非数组池返回 null');
   }
   void elStub;
+}
+
+// 4b-2) icondb.js：真实图标库的数据完整性（#59 起库内混有单色/多色/字标三种形态）
+{
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  const src = read('js/icondb.js');
+  vm.runInContext(src, sandbox, { filename: 'icondb.js' });
+  const DB = sandbox.window.LT_ICONDB;
+  assert(!!DB, 'icondb.js 暴露 window.LT_ICONDB');
+  if (DB) {
+    const keys = Object.keys(DB);
+    // 字面量条目数 === 运行时 key 数，否则说明有重名 host 被后者静默覆盖
+    const literal = (src.match(/^ {2}"[^"]+":/gm) || []).length;
+    assert(literal === keys.length, `图标库无重复 host（字面 ${literal} / 运行时 ${keys.length}）`);
+    assert(keys.length >= 100, `图标库收录 ≥100 个站点（当前 ${keys.length}）`);
+
+    const HEX = /^#[0-9a-fA-F]{6}$/;
+    const bad = [];
+    let mono = 0, multi = 0, tx = 0;
+    // 与 iconGlyphHtml 中的对比度守卫同源：整张图都融进底色 = 渲染出一块空白板
+    const lum = (h) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+        .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a, b) => {
+      const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+      return (x + 0.05) / (y + 0.05);
+    };
+    for (const [host, e] of Object.entries(DB)) {
+      if (!HEX.test(e.c)) { bad.push(`${host}: c=${e.c}`); continue; }
+      if (e.p) {
+        multi++;
+        if (!Array.isArray(e.p) || !e.p.length) bad.push(`${host}: 空 p[]`);
+        else {
+          for (const s of e.p) {
+            if (!s.d) bad.push(`${host}: 子路径缺 d`);
+            if (!HEX.test(s.f)) bad.push(`${host}: 子路径 fill=${s.f}`);
+          }
+          const best = Math.max(...e.p.map((s) => (HEX.test(s.f) ? contrast(s.f, e.c) : 0)));
+          if (best < 1.35) bad.push(`${host}: 全部填色融进底色 ${e.c}`);
+        }
+      } else if (e.tx) {
+        tx++;
+        if (!HEX.test(e.f)) bad.push(`${host}: 字标 f=${e.f}`);
+        else if (contrast(e.f, e.c) < 1.35) bad.push(`${host}: 字标与底色无对比`);
+        if ([...e.tx].length > 6) bad.push(`${host}: 字标过长 ${e.tx}`);
+      } else if (e.d) {
+        mono++;
+      } else {
+        bad.push(`${host}: 三种形态都不匹配`);
+      }
+    }
+    assert(bad.length === 0, '图标库每条都结构完整且与底色有对比', bad.slice(0, 4).join(' | '));
+    assert(mono > 0 && multi > 0 && tx > 0, `三种形态均有收录（单色 ${mono} / 多色 ${multi} / 字标 ${tx}）`);
+
+    // #59 用户明确点名的站点必须在库里
+    const MUST = ['cloud.tencent.com', 'intl.cloud.tencent.com', 'aws.amazon.com', 'azure.microsoft.com',
+      'cloud.google.com', 'huaweicloud.com', 'console-intl.huaweicloud.com', 'aliyun.com', 'alibabacloud.com',
+      'doubao.com', 'kimi.com', 'weread.qq.com', 'chat.google.com', 'outlook.com', 'docs.qq.com',
+      'imooc.com', '51cto.com', 'time.geekbang.org', 'xiaoe-tech.com'];
+    const missing = MUST.filter((h) => !DB[h]);
+    assert(missing.length === 0, `#59 点名的 ${MUST.length} 个站点全部收录`, missing.join(', '));
+
+    // 零网络：库内不得出现任何远程引用
+    assert(!/https?:\/\//.test(src.replace(/^\/\*[\s\S]*?\*\//, '')), '图标库正文无远程 URL（保持零网络请求）');
+  }
 }
 
 // 4c) i18n.js：字典 zh/en 完整性（每个 key 两份都有值），含本批新增的 sync.applied
