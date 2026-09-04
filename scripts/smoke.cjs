@@ -246,6 +246,8 @@ assert(/let pendingIcon/.test(appSrc), 'app.js 定义 pendingIcon 模态暂存�
 assert(/logo-img/.test(appSrc) && /logo-img/.test(cssSrc), '卡片渲染/样式支持 .logo-img（img 分支）');
 assert(/icon:\s*sanitizeIconDataUrl\(it\.icon\)/.test(appSrc), 'doImport 校验并保留 icon 字段');
 assert(/it\.icon = icon/.test(appSrc), '编辑保存写入 icon 字段');
+assert(/has-custom-icon/.test(appSrc) && /\.has-custom-icon/.test(cssSrc), '自定义图标卡片挂 has-custom-icon 类，CSS 给主题感知中性底');
+assert(/aspect\s*<\s*SQ_LO/.test(appSrc), 'compressIconSquare 对竖图取 top-crop（保留图标、丢弃 tagline）');
 
 console.log('');
 if (failures) {
