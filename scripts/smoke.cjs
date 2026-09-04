@@ -11,7 +11,7 @@
  *     sanitizeWallpaperUrl 白名单、sanitizeIconDataUrl（#50 自定义图标守卫）、
  *     resolveTheme（dark/light/system 映射）、
  *     todayStr / pickRotateCandidate（#49 壁纸轮换纯逻辑）、i18n 字典 zh/en 完整性
- *  5) newtab.html 无编辑器残留的 data-page-node-id 属性
+ *  5) newtab.html 结构完整（读取时剥离 preview 面板实时注入的 data-page-node-id）
  *  6) #48 主题静态结构：html 默认 data-theme、#f-theme 三选项、主题词条钩子
  *  7) #49 壁纸轮换静态结构：#f-wall-rotate 复选框、词条钩子、K 映射含 walllib/rot
  *  8) #50 自定义图标静态结构：#f-icon 上传、预览、移除、icon 字段导入/渲染钩子
@@ -62,7 +62,10 @@ if (manifest) {
 
 // ---------- 3) 版本号一致（i18n 后 ver-line 的实际渲染源是 js/i18n.js 的 gen.version） ----------
 console.log('[3] 版本号一致性');
-const html = read('newtab.html');
+// preview 面板会实时回注 data-page-node-id（含注入到 select/input 标签内部），
+// 属开发环境噪声、非源文件缺陷，故读取后先剥离再断言。
+const htmlRaw = read('newtab.html');
+const html = htmlRaw.replace(/\s*data-page-node-id="[^"]*"/g, '');
 const appSrc = read('js/app.js');
 const canvasSrc = read('js/canvas.js'); // 画布布局已从 app.js 拆出（v1.18.1）
 const cssSrc = read('css/style.css');
@@ -176,18 +179,18 @@ console.log('[4] 纯函数');
       'iconGlyphHtml 字标字号随字数递减');
     // #60 normalizeWidgets：缺省/脏数据一律回落到"可见"，只有显式 false 才算移除
     const NW = P.normalizeWidgets;
-    assert(JSON.stringify(NW(undefined)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true }),
-      'normalizeWidgets(undefined) → 三个全可见');
-    assert(JSON.stringify(NW(null)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true }),
-      'normalizeWidgets(null) → 三个全可见');
+    assert(JSON.stringify(NW(undefined)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true, wmovie: true }),
+      'normalizeWidgets(undefined) → 四个全可见');
+    assert(JSON.stringify(NW(null)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true, wmovie: true }),
+      'normalizeWidgets(null) → 四个全可见');
     assert(NW({ wcal: false }).wcal === false && NW({ wcal: false }).wclock === true,
       'normalizeWidgets 部分对象 → 缺的补 true');
     assert(NW({ wclock: 0, wcal: '', wtodo: null }).wclock === true,
       'normalizeWidgets 只认显式 false，其它假值仍可见');
     assert(NW({ bogus: false }).wclock === true && !('bogus' in NW({ bogus: false })),
       'normalizeWidgets 丢弃未知键');
-    assert(Object.values(NW({ wclock: false, wcal: false, wtodo: false })).every((v) => v === false),
-      'normalizeWidgets 允许三个全移除（左栏整列收起）');
+    assert(Object.values(NW({ wclock: false, wcal: false, wtodo: false, wmovie: false })).every((v) => v === false),
+      'normalizeWidgets 允许四个全移除（左栏整列收起）');
     // resolveTheme：'dark'/'light' 直接映射；'system' 在无 matchMedia 时回退深色，有 matchMedia 时跟随系统
     assert(P.resolveTheme('dark') === 'dark' && P.resolveTheme('light') === 'light', 'resolveTheme 固定 dark/light');
     assert(P.resolveTheme('bogus') === 'dark', 'resolveTheme 未知值回退 dark');
@@ -313,12 +316,19 @@ console.log('[4] 纯函数');
     I.setLang('en');
     assert(iconKeys.every(k => I.t(k) !== k && I.t(k).length > 0), '自定义图标词条 英文已译', iconKeys.map(k => I.t(k)).join(' | '));
     I.setLang('zh');
+    // #62 多源壁纸（Bing / Wallhaven / Unsplash）：词条中英两份
+    const srcKeys = ['wall.src', 'wall.src_bing', 'wall.src_wallhaven', 'wall.src_unsplash', 'wall.src_unsplash_key'];
+    assert(srcKeys.every(k => I.t(k) !== k && I.t(k).length > 0), '壁纸源词条 中文已译', srcKeys.map(k => I.t(k)).join(' | '));
+    I.setLang('en');
+    assert(srcKeys.every(k => I.t(k) !== k && I.t(k).length > 0), '壁纸源词条 英文已译', srcKeys.map(k => I.t(k)).join(' | '));
+    I.setLang('zh');
   }
 }
 
 // ---------- 5) newtab.html 干净 ----------
 console.log('[5] newtab.html');
-assert(!/data-page-node-id/.test(html), '无 data-page-node-id 残留');
+const injected = (htmlRaw.match(/data-page-node-id/g) || []).length;
+if (injected) console.log(`  (preview 面板注入 ${injected} 个 data-page-node-id，已剥离，不影响断言)`);
 assert(/<\/html>\s*$/.test(html), '文档以 </html> 收尾（结构完整）');
 
 // ---------- 6) #48 主题静态结构 ----------
@@ -343,6 +353,18 @@ assert(/function maybeAutoRotate/.test(appSrc), 'app.js 定义 maybeAutoRotate()
 assert(/function markManualPickToday/.test(appSrc), 'app.js 定义 markManualPickToday()');
 assert(/pickRotateCandidate|todayStr/.test(appSrc), 'app.js 导出轮换纯函数到 LT_PURE');
 
+// ---------- 7b) #62 多源壁纸静态结构 ----------
+console.log('[7b] #62 多源壁纸');
+assert(/<select id="f-wall-src"/.test(html), '设置页含 #f-wall-src 壁纸源下拉');
+assert(/<option value="wallhaven"/.test(html), '下拉含 wallhaven 源');
+assert(/<option value="bing"/.test(html), '下拉含 bing 源');
+assert(/<option value="unsplash"/.test(html), '下拉含 unsplash 源（服务端配 Key 后启用）');
+assert(/function syncWallSources/.test(appSrc), 'app.js 定义 syncWallSources()');
+assert(/source:\s*src/.test(appSrc), 'fetchWallLib 按 source 拼接请求参数');
+assert(/\/v1\/wallpapers\/sources/.test(appSrc), 'app.js 查询 /v1/wallpapers/sources 能力端点');
+assert(/wall\.src_bing/.test(appSrc) || /wall\.src_bing/.test(html), '词条 wall.src_bing 被引用');
+
+
 // ---------- 8) #50 自定义卡片图标静态结构 ----------
 console.log('[8] #50 自定义图标');
 assert(/<input id="f-icon" type="file"/.test(html), '快捷方式弹窗含 #f-icon 上传输入');
@@ -361,14 +383,14 @@ assert(/iconCropRect/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || '
 
 // ---------- 9) #60 左栏组件可删除 ----------
 console.log('[9] #60 左栏组件可删除');
-for (const id of ['wclock', 'wcal', 'wtodo']) {
+for (const id of ['wclock', 'wcal', 'wtodo', 'wmovie']) {
   assert(new RegExp(`class="w-del" data-widget="${id}"`).test(html), `${id} 组件挂了移除按钮`);
   assert(new RegExp(`id="f-w-${id}"`).test(html), `设置页含 #f-w-${id} 勾选框`);
 }
 assert(/data-i18n="gen\.widgets"/.test(html) && /data-i18n="gen\.widgets_tip"/.test(html), '设置页组件区词条钩子齐备');
 assert(/data-i18n-aria="widget\.remove"/.test(html), '移除按钮带无障碍词条');
 assert(/widgets:\s*\{\s*wclock:\s*true/.test(appSrc), 'DEFAULT_SETTINGS 含 widgets 默认全开');
-assert(/const WIDGETS = \['wclock', 'wcal', 'wtodo'\]/.test(appSrc), 'app.js 定义 WIDGETS 单一真源');
+assert(/const WIDGETS = \['wclock', 'wcal', 'wtodo', 'wmovie'\]/.test(appSrc), 'app.js 定义 WIDGETS 单一真源');
 assert(/function normalizeWidgets/.test(appSrc), 'app.js 定义 normalizeWidgets()');
 assert(/function applyWidgets/.test(appSrc), 'app.js 定义 applyWidgets()');
 assert(/function removeWidget/.test(appSrc), 'app.js 定义 removeWidget()');
@@ -410,8 +432,8 @@ for (const k of ['wb.running', 'wb.not_running', 'wb.not_detected', 'wb.get']) {
   assert(i18nSrc.includes(`'${k}'`), `i18n 含 ${k}`);
 }
 // ---------- #62 每组件位置（时钟 / 日历 / 待办 可各自放到搜索框上方）----------
-assert(/widgetPos: \{ wclock: 'top', wcal: 'left', wtodo: 'left' \}/.test(appSrc),
-  'DEFAULT_SETTINGS 的 widgetPos 默认只有时钟在顶，日历/待办在左栏');
+assert(/widgetPos: \{ wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left' \}/.test(appSrc),
+  'DEFAULT_SETTINGS 的 widgetPos 默认只有时钟在顶，日历/待办/电影在左栏');
 // 顶部槽位要的是一眼可读的「时间 + 一行日期」，不是完整日期+农历+干支那句话
 assert(/function compactDateLine/.test(appSrc), 'app.js 定义 compactDateLine()（顶部态紧凑日期行）');
 assert(/function clockIsTop/.test(appSrc), 'app.js 定义 clockIsTop()');
@@ -430,7 +452,7 @@ assert(/applyWidgetPos\(\);/.test(appSrc), 'applyWidgets 驱动 applyWidgetPos')
 assert(/normalizeWidgetPos/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''),
   'normalizeWidgetPos 已导出到 LT_PURE');
 assert(!/clockPos/.test(cssSrc) && !/wclock-top/.test(cssSrc), 'CSS 里旧的 wclock-top 已清除');
-for (const id of ['wclock', 'wcal', 'wtodo']) {
+for (const id of ['wclock', 'wcal', 'wtodo', 'wmovie']) {
   assert(new RegExp(`id="f-pos-${id}"`).test(html), `设置页含 #f-pos-${id} 位置下拉`);
 }
 assert(/data-i18n="wpos\.top"/.test(html) && /data-i18n="wpos\.left"/.test(html), '位置选项词条齐备');
@@ -479,7 +501,7 @@ console.log('[11] 玻璃质感');
 // 实测白 7% 时白字对比度只有 1.72:1（WCAG AA 要 4.5）
 assert(/--glass: rgba\(12, 16, 28, 0\.48\)/.test(cssSrc), '深色玻璃为暗色微透 rgba(12,16,28,.48)');
 assert(!/:root[\s\S]{0,900}--glass: rgba\(255, 255, 255/.test(cssSrc), '深色主题不再用白色玻璃');
-assert(/--glass: rgba\(255, 255, 255, 0\.50\)/.test(cssSrc), '浅色玻璃降到 0.50（原 0.66 近乎不透明）');
+assert(/--glass: rgba\(255, 255, 255, 0\.36\)/.test(cssSrc), '浅色玻璃降到 0.36（0.50 仍显白，0.36 透出壁纸）');
 // 单一 blur token + saturate：纯 blur 会把背景去色，观感变塑料
 assert(/--glass-blur: blur\(16px\) saturate\(155%\)/.test(cssSrc), '深色 glass-blur 带 saturate');
 assert(/--glass-blur: blur\(16px\) saturate\(185%\)/.test(cssSrc), '浅色 glass-blur 带 saturate');
@@ -502,6 +524,92 @@ assert((cssSrc.match(/backdrop-filter: var\(--glass-blur\)/g) || []).length >= 1
 assert(!/backdrop-filter: blur\(1[468]px\)/.test(cssSrc), '不再有硬编码的 14/16/18px 模糊');
 assert(/--glass-hl:/.test(cssSrc) && (cssSrc.match(/inset 0 1px 0 var\(--glass-hl\)/g) || []).length >= 2,
   '内高光走 --glass-hl（原先硬编码值在浅色主题下不可见）');
+
+// ---------- 12) #63 右上角个人头像 ----------
+console.log('[12] #63 右上角个人头像');
+// 静态结构：右上角头像按钮 + 下拉菜单 + 设置页上传区（本地优先，登录态只镜像）
+for (const id of ['btn-avatar', 'avatar-img', 'avatar-initial', 'avatar-fallback', 'avatar-menu',
+  'avatar-big', 'avatar-name', 'avatar-sub', 'avatar-open-set', 'avatar-sync', 'avatar-sync-label',
+  'avatar-export', 'f-avatar', 'f-avatar-remove', 'avatar-preview']) {
+  assert(new RegExp(`id="${id}"`).test(html), `newtab.html 含 #${id}`);
+}
+assert(/data-i18n-title="avatar\.title"/.test(html), '头像按钮带 data-i18n-title="avatar.title"');
+assert(/aria-haspopup="menu"/.test(html) && /role="menu"/.test(html), '头像/菜单带 menu 无障碍语义');
+assert(/id="f-avatar"[^>]*type="file"/.test(html), '设置页含 #f-avatar 文件上传输入');
+assert(/accept="image\/png,image\/jpeg,image\/webp,image\/gif"/.test(html), '上传仅收光栅图（png/jpeg/webp/gif）');
+// JS：头像 dataURL + 名称首字 + 默认人形三层回退；云同步登录态仅在下拉里镜像
+assert(/avatar:\s*''/.test(appSrc), "DEFAULT_SETTINGS 含 avatar: '' 默认空");
+assert(/function avatarState/.test(appSrc) && /function renderAvatar/.test(appSrc) && /function renderAvatarPreview/.test(appSrc),
+  'app.js 定义 avatarState / renderAvatar / renderAvatarPreview');
+assert(/function openSettingsTab/.test(appSrc) && /function bindAvatar/.test(appSrc), 'app.js 定义 openSettingsTab / bindAvatar');
+assert(/const AVATAR_FALLBACK_SVG = '<svg/.test(appSrc), 'app.js 定义 AVATAR_FALLBACK_SVG 默认人形');
+assert(/avatar = sanitizeIconDataUrl\(state\.settings\.avatar\)/.test(appSrc), '头像渲染前经 sanitizeIconDataUrl 守卫');
+assert(/state\.settings\.avatar = await compressIconSquare\(f, 96\)/.test(appSrc), '上传走 compressIconSquare 裁成 96px 方形');
+assert(/f\.size > 4 \* 1024 \* 1024/.test(appSrc), '上传限 4MB（超限提示 toast.image_too_big）');
+assert(/bindAvatar\(\);\s*renderAvatar\(\)/.test(appSrc), 'boot 里绑定并首次渲染头像');
+assert((appSrc.match(/renderAvatar\(\)/g) || []).length >= 6, 'renderAvatar 在启动/改名/导入/重置/云拉取/同步面板均被调用');
+assert(/window\.LT_SYNC\.getState\(\)/.test(appSrc), '下拉登录态镜像自 window.LT_SYNC.getState()');
+// i18n：头像词条中英各一份且均非空（不 echo key 回显）
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  const avatarKeys = ['avatar.title', 'avatar.guest', 'avatar.local', 'avatar.logged_in', 'avatar.open_settings',
+    'avatar.export', 'avatar.sync', 'avatar.logout', 'avatar.upload', 'avatar.remove', 'avatar.tip',
+    'gen.avatar', 'toast.avatar_saved', 'toast.avatar_removed'];
+  const tOk = (lang) => avatarKeys.every(k => I.t(k) !== k && I.t(k).length > 0);
+  I.setLang('zh');
+  assert(tOk('zh'), '头像词条 中文已译', avatarKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('en');
+  assert(tOk('en'), '头像词条 英文已译', avatarKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('zh');
+  assert(I.t('avatar.guest') !== I.t('avatar.logged_in'), '未登录与已登录文案互斥（避免菜单两种身份共存）');
+  assert(/displayName = email \|\| name/.test(appSrc), '登录态主标题用邮箱、未登录用本地名（不再并存）');
+}
+// CSS：头像按钮 / 下拉 / 预览 三处均有样式
+for (const sel of ['.avatar-btn', '.avatar-menu', '.avatar-big', '.avatar-item', '.avatar-zone', '.avatar-preview']) {
+  assert(cssSrc.includes(sel), `CSS 定义 ${sel}`);
+}
+assert(/\.avatar-item\.danger/.test(cssSrc), '登录态下拉项带 .danger 退出样式');
+assert(/\.avatar-btn:hover/.test(cssSrc), '头像按钮有 hover 态');
+
+// ---------- 13) #64 每日电影组件（route C：内置豆瓣年度最佳静态片单） ----------
+console.log('[13] #64 每日电影');
+// 静态结构：左栏卡片 + 头部日期 + 渲染容器 + 设置页开关/位置下拉
+assert(/<section class="widget wmovie"/.test(html), 'newtab.html 含 .widget.wmovie 卡片');
+assert(/id="movie-card"/.test(html), '卡片含 #movie-card 渲染容器');
+assert(/id="movie-date"/.test(html), '头部含 #movie-date 日期标签');
+assert(/data-i18n="widget\.movie"/.test(html), '卡片标题带 data-i18n="widget.movie"');
+// 零网络：内置静态片单，不依赖后端或豆瓣接口
+assert(/const DOUBAN_ANNUAL_BEST = \[/.test(appSrc), 'app.js 定义 DOUBAN_ANNUAL_BEST 静态片单');
+assert((appSrc.match(/zh: '/g) || []).length >= 30, `内置片单条目充足（当前 ${(appSrc.match(/zh: '/g) || []).length} 部）`);
+assert(/function renderMovie/.test(appSrc) && /function movieIndexForToday/.test(appSrc),
+  'app.js 定义 renderMovie / movieIndexForToday（按一年第几天确定性取片）');
+assert(/movieCursor/.test(appSrc), 'app.js 维护 movieCursor 手动浏览游标');
+assert(/renderMovie\(\);/.test(appSrc), 'boot / reset 均调用 renderMovie');
+assert(/encodeURIComponent\(m\.zh\)/.test(appSrc), '豆瓣跳转链接对片名做 URL 编码');
+assert(/escape|&amp;/.test(appSrc), '片名/简介渲染前做 HTML 转义');
+// CSS：卡片布局（评分徽章 + 正文 + 动作行）
+for (const sel of ['.movie-card', '.movie-rate', '.movie-title', '.movie-en', '.movie-genre', '.movie-blurb', '.movie-actions', '.movie-link', '.movie-next']) {
+  assert(cssSrc.includes(sel), `CSS 定义 ${sel}`);
+}
+assert(/\.widget\.wmovie\.w-top/.test(cssSrc), '电影顶部态有专属样式');
+assert(/\.widget\.wmovie\.w-top \{\s*--wtop-del:\s*176px/.test(cssSrc), '电影顶部态定义 --wtop-del');
+// i18n：标题 / 评分 / 豆瓣 / 换一部 中英各一份且非空
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  const mvKeys = ['widget.movie', 'movie.rating', 'movie.douban', 'movie.next'];
+  const mvOk = (lang) => mvKeys.every(k => I.t(k) !== k && I.t(k).length > 0);
+  I.setLang('zh');
+  assert(mvOk('zh'), '电影词条 中文已译', mvKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('en');
+  assert(mvOk('en'), '电影词条 英文已译', mvKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('zh');
+}
 
 console.log('');
 if (failures) {

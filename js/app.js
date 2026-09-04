@@ -56,6 +56,9 @@
   const DEFAULT_SETTINGS = {
     engine: 'baidu',
     name: '',
+    // Top-right profile avatar: a local raster dataURL (data:image/png|jpeg|webp|gif;base64,…).
+    // Empty = show the name initial, or a default person glyph when no name is set.
+    avatar: '',
     lang: 'zh',
     // Theme: 'dark' | 'light' | 'system' (follow the OS scheme).
     theme: 'dark',
@@ -72,15 +75,15 @@
     // Left-column widgets the user kept. Removing one hides it in both the flow and canvas layouts;
     // removing all three collapses the whole left column so the icon grid spans the full width.
     // Lives inside settings on purpose — it then rides along with export / import / cloud sync for free.
-    widgets: { wclock: true, wcal: true, wtodo: true },
+    widgets: { wclock: true, wcal: true, wtodo: true, wmovie: true },
     // Per-widget placement: 'left' keeps the widget as a left-column card, 'top' lifts it into the
     // stack above the search box (centred, card chrome dropped — the phone-launcher look).
     // Only the clock rides up top by default — that slot wants a glanceable time + date line, not a
-    // month grid. Calendar and to-do stay left-column cards; both can still be lifted from Settings.
-    widgetPos: { wclock: 'top', wcal: 'left', wtodo: 'left' }
+    // month grid. Calendar, to-do and movie stay left-column cards; all can still be lifted from Settings.
+    widgetPos: { wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left' }
   };
   // Left-column widget ids, in render order. Single source of truth for visibility + settings UI.
-  const WIDGETS = ['wclock', 'wcal', 'wtodo'];
+  const WIDGETS = ['wclock', 'wcal', 'wtodo', 'wmovie'];
 
   // Built-in prompt templates.
   //   name    display name
@@ -354,6 +357,7 @@
   const WALL_LIB_BASE = window.LT_API_BASE || 'https://lighttab.atomwangnus.com';
   let wallLibImages = null;    // [{url,title,copyright}] of the current pool (null = not loaded yet)
   let wallLibSavedAt = 0;      // ms epoch of the last successful fetch (drives the once-a-day silent refresh)
+  let wallLibSource = 'bing';  // current wallpaper source: bing | wallhaven | unsplash
 
   // Gradient swatch rendering (top level so bindSettings and the wallpaper library can both reuse it).
   function renderSwatches() {
@@ -409,7 +413,10 @@
     if (!o.silent && btn) btn.disabled = true;
     if (!o.silent && tip) tip.textContent = t('wall.loading');
     try {
-      const res = await fetch(WALL_LIB_BASE + '/v1/wallpapers?idx=0&n=8&mkt=' + (isEn() ? 'en-US' : 'zh-CN'));
+      const src = wallLibSource || 'bing';
+      const params = new URLSearchParams({ source: src, idx: '0', n: '8' });
+      if (src === 'bing') params.set('mkt', isEn() ? 'en-US' : 'zh-CN');
+      const res = await fetch(WALL_LIB_BASE + '/v1/wallpapers?' + params.toString());
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       wallLibImages = (data.images || []).filter(im => im && sanitizeWallpaperUrl(im.url));
@@ -452,6 +459,29 @@
         showToast(t('toast.wall_applied'));
       });
     });
+  }
+
+  // Source capability: query the backend for which wallpaper sources are available and sync the
+  // selector. Unsplash is only offered when the server has an LT_UNSPLASH_KEY configured (its Source
+  // API is deprecated and the official API needs a key), so we hide that option otherwise.
+  async function syncWallSources() {
+    const sel = document.getElementById('f-wall-src');
+    if (!sel) return;
+    let list = ['bing', 'wallhaven'];
+    try {
+      const res = await fetch(WALL_LIB_BASE + '/v1/wallpapers/sources');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.sources) && data.sources.length) list = data.sources;
+      }
+    } catch { /* keep defaults when offline */ }
+    const unsplashOpt = sel.querySelector('option[value="unsplash"]');
+    if (unsplashOpt) unsplashOpt.hidden = !list.includes('unsplash');
+    if (unsplashOpt && !list.includes('unsplash') && sel.value === 'unsplash') {
+      sel.value = 'bing';
+      wallLibSource = 'bing';
+    }
+    if (sel.value !== wallLibSource) sel.value = wallLibSource;
   }
 
   // ---------- Wallpaper daily auto-rotate (local bookkeeping only; never synced/exported) ----------
@@ -1289,6 +1319,7 @@
     state.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), migrated.settings || {});
     if (!ENGINES.some(x => x.id === state.settings.engine)) state.settings.engine = 'baidu';
     if (!Array.isArray(state.settings.groups)) state.settings.groups = [];
+    state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
     state.settings.widgets = normalizeWidgets(state.settings.widgets);
     state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
     setLangOnly(state.settings.lang);
@@ -1330,6 +1361,7 @@
     syncUI();
     renderTodos();
     applyWidgets(); // an import may bring in a different left-column widget selection
+    renderAvatar(); // an import may carry a different name / avatar
     showToast(t('toast.import_done', { items: state.items.length, todos: state.todos.length }));
     window.LT_CANVAS.reinitCanvas(); // an import may bring in or clear layout coordinates, so resync the canvas
   }
@@ -1399,6 +1431,14 @@
       showToast(t('toast.wall_reset'));
     });
     document.getElementById('btn-wall-fetch').addEventListener('click', fetchWallLib);
+    const wallSrcSel = document.getElementById('f-wall-src');
+    if (wallSrcSel) wallSrcSel.addEventListener('change', () => {
+      wallLibSource = wallSrcSel.value || 'bing';
+      wallLibImages = null; // clear the previous source's pool so the grid doesn't show stale thumbs
+      renderWallLibGrid();
+      fetchWallLib();
+    });
+    syncWallSources();
     document.getElementById('btn-reset-all').addEventListener('click', resetAll);
     // Template manager (Settings -> Templates): the "new template" button.
     document.getElementById('btn-prompt-add').addEventListener('click', () => window.LT_PROMPTS.toggleNewPromptEditor());
@@ -1423,6 +1463,7 @@
       state.settings.name = nameInput.value.trim();
       await Store.set(K.settings, state.settings);
       startClock();
+      renderAvatar(); // the avatar initial / fallback derives from the display name
     });
     engineSel.addEventListener('change', async () => {
       state.settings.engine = engineSel.value;
@@ -1468,6 +1509,8 @@
       renderWallLibGrid();
       const wallRotCb = document.getElementById('f-wall-rotate');
       if (wallRotCb) wallRotCb.checked = !!state.settings.wallRotate;
+      const wallSrcSel = document.getElementById('f-wall-src');
+      if (wallSrcSel) wallSrcSel.value = wallLibSource;
       if (tab === 'wall' && wallLibImages === null) fetchWallLib(); // warm the pool (cached fallback when offline)
       modal.hidden = false;
     }
@@ -1527,6 +1570,7 @@
           <button type="button" class="btn ghost sm" data-sync="logout">${t('sync.logout')}</button>
         </div>`;
     }
+    renderAvatar(); // the avatar menu mirrors the login state, keep it in step
   }
   function bindSyncPanel() {
     const panel = document.getElementById('sync-panel');
@@ -1866,6 +1910,93 @@
     next.addEventListener('click', () => { calCursor.m++; if (calCursor.m > 12) { calCursor.m = 1; calCursor.y++; } renderCalendar(); });
   }
 
+  // ---------- Movie-of-the-day widget (route C: built-in Douban annual-best list, zero network) ----------
+  // A curated, ordered pool of Douban annual-best / top-250 films. The daily pick is deterministic
+  // (day-of-year → index), so every visitor with the widget on sees the same film on a given day,
+  // and it rolls over at midnight without any fetch. A "next" affordance browses the pool manually.
+  // The backend may later serve a richer live list; the static pool keeps the widget fully offline.
+  const DOUBAN_ANNUAL_BEST = [
+    { y: 1972, zh: '教父', en: 'The Godfather', rate: 9.3, genre: '剧情 / 犯罪', blurb: '权力与家族的史诗，黑帮电影难以逾越的丰碑。' },
+    { y: 1993, zh: '霸王别姬', en: 'Farewell My Concubine', rate: 9.6, genre: '剧情 / 爱情', blurb: '一折京戏，半个世纪的人世浮沉与执念。' },
+    { y: 1993, zh: '辛德勒的名单', en: "Schindler's List", rate: 9.6, genre: '剧情 / 历史', blurb: '黑白影像里，一个人如何用名单救下一千条命。' },
+    { y: 1994, zh: '肖申克的救赎', en: 'The Shawshank Redemption', rate: 9.7, genre: '剧情 / 犯罪', blurb: '希望是好事，也许是人间至善。' },
+    { y: 1994, zh: '阿甘正传', en: 'Forrest Gump', rate: 9.5, genre: '剧情 / 爱情', blurb: '一个傻子跑过美国，也跑进每个人心里。' },
+    { y: 1994, zh: '这个杀手不太冷', en: 'Léon', rate: 9.4, genre: '剧情 / 动作', blurb: '杀手与少女，一盆绿植，一段温柔的羁绊。' },
+    { y: 1995, zh: '大话西游之大圣娶亲', en: 'A Chinese Odyssey Part Two', rate: 9.2, genre: '喜剧 / 爱情', blurb: '曾经有一份真诚的爱情，我却没来得及珍惜。' },
+    { y: 1997, zh: '泰坦尼克号', en: 'Titanic', rate: 9.5, genre: '剧情 / 爱情', blurb: '巨轮沉没，爱情不朽。' },
+    { y: 1997, zh: '美丽人生', en: 'Life Is Beautiful', rate: 9.6, genre: '剧情 / 喜剧', blurb: '在最黑暗的岁月里，父亲用游戏守护孩子的童年。' },
+    { y: 1998, zh: '海上钢琴师', en: 'The Legend of 1900', rate: 9.3, genre: '剧情 / 音乐', blurb: '一生未曾下船，琴键上却有整片海洋。' },
+    { y: 1998, zh: '楚门的世界', en: 'The Truman Show', rate: 9.4, genre: '剧情 / 科幻', blurb: '假如全世界都在演戏，你敢走出那扇门吗？' },
+    { y: 2001, zh: '千与千寻', en: 'Spirited Away', rate: 9.4, genre: '动画 / 奇幻', blurb: '别回头，穿过隧道，你会长大。' },
+    { y: 2002, zh: '无间道', en: 'Infernal Affairs', rate: 9.3, genre: '剧情 / 犯罪', blurb: '出来混，迟早要还的。' },
+    { y: 2004, zh: '放牛班的春天', en: 'Les Choristes', rate: 9.3, genre: '剧情 / 音乐', blurb: '一群被遗忘的孩子，被音乐温柔地唤醒。' },
+    { y: 2006, zh: '当幸福来敲门', en: 'The Pursuit of Happyness', rate: 9.2, genre: '剧情 / 传记', blurb: '如果你有梦想，就要去捍卫它。' },
+    { y: 2008, zh: '机器人总动员', en: 'WALL·E', rate: 9.3, genre: '动画 / 科幻', blurb: '地球最后的小机器人，谈了一场跨星际的恋爱。' },
+    { y: 2009, zh: '三傻大闹宝莱坞', en: '3 Idiots', rate: 9.2, genre: '喜剧 / 剧情', blurb: 'All is well，追求卓越，成功自会追上你。' },
+    { y: 2010, zh: '盗梦空间', en: 'Inception', rate: 9.4, genre: '科幻 / 悬疑', blurb: '层层梦境，那个陀螺到底停没停？' },
+    { y: 2010, zh: '让子弹飞', en: 'Let the Bullets Fly', rate: 9.0, genre: '喜剧 / 剧情', blurb: '站着把钱挣了，让子弹再飞一会儿。' },
+    { y: 2011, zh: '熔炉', en: 'Silenced', rate: 9.3, genre: '剧情', blurb: '我们一路奋战，不是为了改变世界。' },
+    { y: 2011, zh: '触不可及', en: 'Intouchables', rate: 9.3, genre: '剧情 / 喜剧', blurb: '两个不同世界的人，成为彼此的救赎。' },
+    { y: 2013, zh: '疯狂原始人', en: 'The Croods', rate: 8.7, genre: '动画 / 喜剧', blurb: '一家人第一次走出山洞，看见新世界。' },
+    { y: 2014, zh: '星际穿越', en: 'Interstellar', rate: 9.4, genre: '科幻 / 冒险', blurb: '穿越虫洞与时间，爱是唯一能穿透维度的引力。' },
+    { y: 2016, zh: '疯狂动物城', en: 'Zootopia', rate: 9.2, genre: '动画 / 喜剧', blurb: '任何人都能成为任何想成为的人。' },
+    { y: 2016, zh: '你的名字。', en: 'Your Name.', rate: 8.4, genre: '动画 / 爱情', blurb: '交换身体的两个人，隔着时空寻找彼此。' },
+    { y: 2017, zh: '寻梦环游记', en: 'Coco', rate: 9.1, genre: '动画 / 奇幻', blurb: '真正的死亡，是被所有人遗忘。' },
+    { y: 2018, zh: '我不是药神', en: 'Dying to Survive', rate: 9.0, genre: '剧情 / 喜剧', blurb: '这世界上只有一种病，穷病。' },
+    { y: 2018, zh: '头号玩家', en: 'Ready Player One', rate: 8.7, genre: '科幻 / 冒险', blurb: '在虚拟世界里，寻找现实的彩蛋。' },
+    { y: 2018, zh: '绿皮书', en: 'Green Book', rate: 8.9, genre: '剧情 / 喜剧', blurb: '一段南下巡演，两个人都学会了尊重。' },
+    { y: 2018, zh: '何以为家', en: 'Capernaum', rate: 9.1, genre: '剧情', blurb: '我要控告我的父母，因为他们生下了我。' },
+    { y: 2019, zh: '流浪地球', en: 'The Wandering Earth', rate: 7.9, genre: '科幻 / 冒险', blurb: '带着地球去流浪，中国科幻的第一束光。' },
+    { y: 2019, zh: '哪吒之魔童降世', en: 'Ne Zha', rate: 8.4, genre: '动画 / 奇幻', blurb: '我命由我不由天。' },
+    { y: 2020, zh: '心灵奇旅', en: 'Soul', rate: 8.7, genre: '动画 / 奇幻', blurb: '生活的火花，不在远方，而在当下。' },
+    { y: 2021, zh: '你好，李焕英', en: 'Hi, Mom', rate: 7.7, genre: '喜剧 / 剧情', blurb: '穿越回过去，只想让妈妈再笑一次。' },
+    { y: 2022, zh: '灌篮高手', en: 'The First Slam Dunk', rate: 8.9, genre: '动画 / 运动', blurb: '全国大赛的哨声终于吹响，青春没有遗憾。' },
+    { y: 2023, zh: '流浪地球2', en: 'The Wandering Earth II', rate: 8.3, genre: '科幻 / 冒险', blurb: '危难当前，唯有责任。' },
+    { y: 2023, zh: '奥本海默', en: 'Oppenheimer', rate: 8.8, genre: '剧情 / 传记', blurb: '我成了死神，世界的毁灭者。' },
+    { y: 2023, zh: '长安三万里', en: 'Chang An', rate: 8.3, genre: '动画 / 历史', blurb: '诗在，长安就在。' },
+    { y: 2024, zh: '飞驰人生2', en: 'Pegasus 2', rate: 7.7, genre: '喜剧 / 运动', blurb: '人到中年，也要再飞一次。' },
+    { y: 2024, zh: '第二十条', en: 'Article 20', rate: 7.6, genre: '剧情 / 喜剧', blurb: '法，不能向不法让步。' }
+  ];
+  // Local cursor: -1 = follow the deterministic daily pick; otherwise a manual index into the pool.
+  let movieCursor = -1;
+  function movieIndexForToday() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), 0, 0);
+    const doy = Math.floor((now - start) / 86400000);
+    return ((doy % DOUBAN_ANNUAL_BEST.length) + DOUBAN_ANNUAL_BEST.length) % DOUBAN_ANNUAL_BEST.length;
+  }
+  function renderMovie() {
+    const card = document.getElementById('movie-card');
+    if (!card) return;
+    const i = movieCursor >= 0 ? (movieCursor % DOUBAN_ANNUAL_BEST.length) : movieIndexForToday();
+    const m = DOUBAN_ANNUAL_BEST[i];
+    const douban = 'https://www.douban.com/search?cat=1002&q=' + encodeURIComponent(m.zh);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const dateEl = document.getElementById('movie-date');
+    if (dateEl) {
+      const now = new Date();
+      dateEl.textContent = isEn() ? `${now.getMonth() + 1}/${now.getDate()}` : `${now.getMonth() + 1}月${now.getDate()}日`;
+    }
+    card.innerHTML =
+      '<div class="movie-top">' +
+        '<div class="movie-rate" aria-label="' + t('movie.rating') + ' ' + m.rate + '">' + m.rate.toFixed(1) + '</div>' +
+        '<div class="movie-body">' +
+          '<div class="movie-title">' + esc(m.zh) + '<span class="movie-year">' + m.y + '</span></div>' +
+          '<div class="movie-en">' + esc(m.en) + '</div>' +
+          '<div class="movie-genre">' + esc(m.genre) + '</div>' +
+          '<p class="movie-blurb">' + esc(m.blurb) + '</p>' +
+        '</div>' +
+      '</div>' +
+      '<div class="movie-actions">' +
+        '<a class="movie-link" href="' + douban + '" target="_blank" rel="noopener" data-i18n="movie.douban">豆瓣</a>' +
+        '<button type="button" class="movie-next" id="movie-next" data-i18n="movie.next">换一部</button>' +
+      '</div>';
+    const next = card.querySelector('#movie-next');
+    if (next) next.addEventListener('click', () => { movieCursor = i + 1; renderMovie(); });
+    // Re-apply any i18n labels injected above (t() already localized the aria; data-i18n handles the rest).
+    if (window.LT_I18N && window.LT_I18N.applyStatic) window.LT_I18N.applyStatic();
+  }
+
   // ---------- Reset ----------
   async function resetAll() {
     if (!confirm(t('toast.reset_confirm'))) return;
@@ -1887,7 +2018,10 @@
     syncUI();
     startClock();
     renderTodos();
+    movieCursor = -1;
+    renderMovie();
     applyWidgets(); // reset brings every left-column widget back
+    renderAvatar(); // reset clears the name / avatar back to defaults
     document.getElementById('modal-set').hidden = true;
     showToast(t('toast.reset_done'));
     window.LT_CANVAS.reinitCanvas(); // reset clears layout coordinates, back to the default canvas
@@ -1952,6 +2086,7 @@
     const raw = await Store.getAll();
     const data = migrateSchema(raw);
     state.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), data.settings || {});
+    state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
     state.items = (data.items && data.items.length) ? data.items : structuredClone(DEFAULT_SITES);
     state.wallpaper = pickWallpaperFromData(data.wallpaper);
     state.todos = Array.isArray(data.todos) ? data.todos : [];
@@ -1975,6 +2110,7 @@
     renderCalendar();
     applyWidgets(); // a remote pull may have removed / restored left-column widgets
     startClock(); // greeting/name may have been updated remotely
+    renderAvatar(); // a remote pull may have brought a different name / avatar
     maybeAutoRotate(); // a remote settings flip may have just enabled the daily rotate
     const nameInput = document.getElementById('f-name');
     if (nameInput) nameInput.value = state.settings.name || '';
@@ -2032,6 +2168,134 @@
     const sel = document.getElementById('f-theme');
     if (sel && sel.value !== pref) sel.value = pref;
     bindThemeMQ();
+  }
+
+  // ---------- Profile avatar (top-right) ----------
+  // A local profile marker: an optional uploaded avatar image, falling back to the name initial,
+  // then to a default person glyph. Ties into the existing display-name field and the optional
+  // cloud sync login state (the dropdown shows "logged in as …" and offers login/logout).
+  const AVATAR_FALLBACK_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  function avatarState() {
+    const avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
+    const name = String(state.settings.name || '').trim();
+    const initial = name ? Array.from(name)[0].toUpperCase() : '';
+    let loggedIn = false, email = '', displayName = name, sub = t('avatar.local'), syncLabel = t('avatar.sync');
+    if (window.LT_SYNC) {
+      const st = window.LT_SYNC.getState();
+      loggedIn = !!st.loggedIn;
+      email = st.email || '';
+      if (loggedIn) {
+        // 登录态主标题显示账号邮箱，避免与本地「未登录」身份并存（#63 修复）
+        displayName = email || name;
+        sub = t('avatar.logged_in');
+        syncLabel = t('avatar.logout');
+      } else {
+        sub = t('avatar.local');
+        syncLabel = t('avatar.sync');
+      }
+    }
+    return { avatar, name, initial, loggedIn, email, displayName, sub, syncLabel };
+  }
+  function renderAvatar() {
+    const s = avatarState();
+    const img = document.getElementById('avatar-img');
+    const ini = document.getElementById('avatar-initial');
+    const fb = document.getElementById('avatar-fallback');
+    if (img) { img.style.backgroundImage = s.avatar ? `url("${s.avatar}")` : ''; img.hidden = !s.avatar; }
+    if (ini) { ini.textContent = s.initial; ini.hidden = !(!s.avatar && s.initial); }
+    if (fb) fb.hidden = !!(s.avatar || s.initial);
+    const nameEl = document.getElementById('avatar-name');
+    if (nameEl) nameEl.textContent = s.displayName || t('avatar.guest');
+    const subEl = document.getElementById('avatar-sub');
+    if (subEl) subEl.textContent = s.sub;
+    const big = document.getElementById('avatar-big');
+    if (big) {
+      if (s.avatar) big.innerHTML = `<img src="${s.avatar}" alt="">`;
+      else if (s.initial) big.textContent = s.initial;
+      else big.innerHTML = AVATAR_FALLBACK_SVG;
+    }
+    const syncLabelEl = document.getElementById('avatar-sync-label');
+    if (syncLabelEl) syncLabelEl.textContent = s.syncLabel;
+    const syncItem = document.getElementById('avatar-sync');
+    if (syncItem) syncItem.classList.toggle('danger', s.loggedIn);
+    renderAvatarPreview();
+  }
+  function renderAvatarPreview() {
+    const pv = document.getElementById('avatar-preview');
+    const rm = document.getElementById('f-avatar-remove');
+    if (pv) {
+      const s = avatarState();
+      if (s.avatar) pv.innerHTML = `<img src="${s.avatar}" alt="">`;
+      else if (s.initial) pv.textContent = s.initial;
+      else pv.innerHTML = AVATAR_FALLBACK_SVG;
+    }
+    if (rm) rm.hidden = !sanitizeIconDataUrl(state.settings.avatar);
+  }
+  // Open the settings modal on a specific tab by reusing the existing settings button (which already
+  // syncs every control), then clicking the requested tab.
+  function openSettingsTab(tab) {
+    const setBtn = document.getElementById('btn-set');
+    if (setBtn) setBtn.click();
+    if (tab && tab !== 'gen') {
+      const tabBtn = document.querySelector(`#modal-set .tab[data-tab="${tab}"]`);
+      if (tabBtn) tabBtn.click();
+    }
+  }
+  function bindAvatar() {
+    const btn = document.getElementById('btn-avatar');
+    const menu = document.getElementById('avatar-menu');
+    if (!btn || !menu) return;
+    const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const open = menu.hidden;
+      if (open) renderAvatar(); // refresh login status right before showing
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+    });
+    const openSetEl = document.getElementById('avatar-open-set');
+    if (openSetEl) openSetEl.addEventListener('click', () => { close(); openSettingsTab('gen'); });
+    const exportEl = document.getElementById('avatar-export');
+    if (exportEl) exportEl.addEventListener('click', () => { close(); doExport(); });
+    const syncEl = document.getElementById('avatar-sync');
+    if (syncEl) syncEl.addEventListener('click', async () => {
+      close();
+      if (window.LT_SYNC && window.LT_SYNC.isLoggedIn()) {
+        await window.LT_SYNC.logout();
+        renderAvatar();
+      } else {
+        openSettingsTab('sync');
+      }
+    });
+    // Avatar upload (Settings → General): reuse the content-aware square crop, then bake to a 96px round.
+    const avatarInput = document.getElementById('f-avatar');
+    if (avatarInput) avatarInput.addEventListener('change', async e => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      if (f.size > 4 * 1024 * 1024) return showToast(t('toast.image_too_big'));
+      try {
+        state.settings.avatar = await compressIconSquare(f, 96);
+        await Store.set(K.settings, state.settings);
+        renderAvatar();
+        showToast(t('toast.avatar_saved'));
+      } catch {
+        showToast(t('toast.icon_invalid'));
+      }
+    });
+    const rmEl = document.getElementById('f-avatar-remove');
+    if (rmEl) rmEl.addEventListener('click', async () => {
+      state.settings.avatar = '';
+      await Store.set(K.settings, state.settings);
+      renderAvatar();
+      showToast(t('toast.avatar_removed'));
+    });
+    document.addEventListener('click', e => {
+      if (!menu.hidden && !e.target.closest('.profile')) close();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !menu.hidden) close();
+    });
   }
 
   // ---------- WorkBuddy desktop detection (#61) ----------
@@ -2248,6 +2512,7 @@
     startClock();
     renderCalendar();
     bindCalendar();
+    renderMovie();
     bindTodo();
 
     // Search
@@ -2319,6 +2584,8 @@
     bindSiteForm();
     window.LT_PROMPTS.bindPalette();
     bindSettings();
+    bindAvatar();
+    renderAvatar(); // profile avatar is rendered once events are bound and sync state is reachable
     sweepPending(); // sweep expired / corrupted pending leftovers on boot
 
     // Cloud sync init, last: the migration write-back has landed and every event is bound.

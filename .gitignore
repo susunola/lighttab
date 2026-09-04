@@ -6,3 +6,6 @@ icons/.bak/
 
 # macOS
 .DS_Store
+
+# Playwright CLI test artifacts
+.playwright-cli/
