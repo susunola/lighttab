@@ -18,6 +18,34 @@
       <button class="icon-btn" id="btn-set" data-i18n-title="top.settings" data-i18n-aria="top.settings" title="Settings" aria-label="Settings">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 4.3 17l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.7 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7.1 4.3l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1A2 2 0 1 1 19.7 7l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
       </button>
+      <div class="profile">
+        <button class="avatar-btn" id="btn-avatar" data-i18n-title="avatar.title" data-i18n-aria="avatar.title" title="Profile" aria-label="Profile" aria-haspopup="menu" aria-expanded="false">
+          <span class="avatar-img" id="avatar-img" hidden></span>
+          <span class="avatar-initial" id="avatar-initial" aria-hidden="true" hidden></span>
+          <svg class="avatar-fallback" id="avatar-fallback" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+        <div class="avatar-menu" id="avatar-menu" role="menu" hidden>
+          <div class="avatar-menu-head">
+            <span class="avatar-big" id="avatar-big" aria-hidden="true"></span>
+            <div class="avatar-id">
+              <span class="avatar-name" id="avatar-name"></span>
+              <span class="avatar-sub" id="avatar-sub"></span>
+            </div>
+          </div>
+          <button type="button" class="avatar-item" id="avatar-open-set" role="menuitem">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 4.3 17l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.7 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7.1 4.3l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1A2 2 0 1 1 19.7 7l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+            <span data-i18n="avatar.open_settings">Open settings</span>
+          </button>
+          <button type="button" class="avatar-item" id="avatar-sync" role="menuitem">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+            <span id="avatar-sync-label" data-i18n="avatar.sync">Log in / Sync</span>
+          </button>
+          <button type="button" class="avatar-item" id="avatar-export" role="menuitem">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span data-i18n="avatar.export">Export data</span>
+          </button>
+        </div>
+      </div>
     </nav>
   </header>
 
@@ -74,6 +102,20 @@
           <button type="submit" class="todo-submit" data-i18n-aria="todo.add" aria-label="Add">+</button>
         </form>
         <ul class="todo-list" id="todo-list"></ul>
+      </section>
+
+      <section class="widget wmovie" data-i18n-aria="widget.movie" aria-label="Movie of the day">
+        <button type="button" class="w-del" data-widget="wmovie" data-i18n-aria="widget.remove" aria-label="Remove this widget">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+        </button>
+        <div class="w-head">
+          <span class="w-title">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5"/></svg>
+            <span data-i18n="widget.movie">每日电影</span>
+          </span>
+          <span class="movie-date" id="movie-date" aria-hidden="true"></span>
+        </div>
+        <div class="movie-card" id="movie-card"></div>
       </section>
     </aside>
 
@@ -187,12 +229,17 @@
           <div class="swatches" id="swatches"></div>
           <label class="check-row">
             <input type="checkbox" id="f-wall-rotate">
-            <span data-i18n="wall.rotate">Daily Bing wallpaper auto-rotate</span>
+            <span data-i18n="wall.rotate">Daily wallpaper auto-rotate</span>
           </label>
-          <p class="form-tip" data-i18n="wall.rotate_tip">When on, a Bing image from the library is applied each calendar day. Manual picks are kept for the rest of that day.</p>
+          <p class="form-tip" data-i18n="wall.rotate_tip">When on, an image from the library is applied each calendar day. Manual picks are kept for the rest of that day.</p>
           <div class="wall-lib">
             <div class="wall-lib-head">
-              <span class="wall-lib-title" data-i18n="wall.lib_title">Wallpaper library · Bing Daily</span>
+              <span class="wall-lib-title" data-i18n="wall.lib_title">Wallpaper library</span>
+              <select id="f-wall-src" class="wall-src" title="壁纸源">
+                <option value="bing" data-i18n="wall.src_bing">Bing · Daily</option>
+                <option value="wallhaven" data-i18n="wall.src_wallhaven">Wallhaven · 4K</option>
+                <option value="unsplash" data-i18n="wall.src_unsplash" hidden>Unsplash · Photos</option>
+              </select>
               <button type="button" class="btn ghost sm" id="btn-wall-fetch" data-i18n="wall.fetch">Get latest</button>
             </div>
             <div class="wall-lib-grid" id="wall-lib-grid"></div>
@@ -212,6 +259,18 @@
             <span data-i18n="gen.name">Display name (used in greeting)</span>
             <input id="f-name" type="text" maxlength="20" data-i18n-ph="gen.name_ph" placeholder="Leave empty to hide the name">
           </label>
+          <div class="avatar-zone">
+            <span class="field-label" data-i18n="gen.avatar">Avatar</span>
+            <div class="avatar-row">
+              <span class="avatar-preview" id="avatar-preview" aria-hidden="true"></span>
+              <label class="btn ghost file-btn">
+                <input id="f-avatar" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                <span data-i18n="avatar.upload">Upload avatar</span>
+              </label>
+              <button type="button" class="btn ghost" id="f-avatar-remove" data-i18n="avatar.remove" hidden>Remove</button>
+            </div>
+            <p class="form-tip" data-i18n="avatar.tip">Optional: upload a square image as your top-right avatar (PNG/JPG/WebP/GIF, ≤4MB, auto-cropped round). Leave empty to show the name initial or a default icon.</p>
+          </div>
           <label>
             <span data-i18n="gen.engine">Default search engine</span>
             <select id="f-engine"></select>
@@ -254,6 +313,14 @@
                 <input type="checkbox" id="f-w-wtodo" checked>
                 <span class="wgt-name" data-i18n="widget.todo">To-dos</span>
                 <select id="f-pos-wtodo" class="wgt-pos">
+                  <option value="top" data-i18n="wpos.top">Above search</option>
+                  <option value="left" data-i18n="wpos.left">Left column</option>
+                </select>
+              </label>
+              <label class="wgt-row">
+                <input type="checkbox" id="f-w-wmovie" checked>
+                <span class="wgt-name" data-i18n="widget.movie">每日电影</span>
+                <select id="f-pos-wmovie" class="wgt-pos">
                   <option value="top" data-i18n="wpos.top">Above search</option>
                   <option value="left" data-i18n="wpos.left">Left column</option>
                 </select>

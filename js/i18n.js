@@ -29,10 +29,29 @@
     'top.wallpaper': { zh: '壁纸', en: 'Wallpaper' },
     'top.settings':  { zh: '设置', en: 'Settings' },
 
+    // ---------- Profile / avatar (top-right) ----------
+    'avatar.title':        { zh: '个人资料', en: 'Profile' },
+    'avatar.guest':        { zh: '未登录', en: 'Guest' },
+    'avatar.local':        { zh: '本地资料', en: 'Local profile' },
+    'avatar.logged_in':    { zh: '已登录', en: 'Logged in' },
+    'avatar.open_settings':{ zh: '打开设置', en: 'Open settings' },
+    'avatar.export':       { zh: '导出数据', en: 'Export data' },
+    'avatar.sync':         { zh: '登录 / 云同步', en: 'Log in / Sync' },
+    'avatar.logout':       { zh: '退出登录', en: 'Log out' },
+    'avatar.upload':       { zh: '上传头像', en: 'Upload avatar' },
+    'avatar.remove':       { zh: '移除', en: 'Remove' },
+    'avatar.tip':          { zh: '可选：上传一张方形图片作为右上角头像（PNG / JPG / WebP / GIF，≤4MB，自动裁成圆形）。留空则显示名称首字或默认图标。', en: 'Optional: upload a square image as your top-right avatar (PNG/JPG/WebP/GIF, \u22644MB, auto-cropped round). Leave empty to show the name initial or a default icon.' },
+
     // ---------- Widget titles ----------
     'widget.clock':    { zh: '时钟', en: 'Clock' },
     'widget.calendar': { zh: '日历', en: 'Calendar' },
     'widget.todo':     { zh: '待办', en: 'To-dos' },
+    'widget.movie':    { zh: '每日电影', en: 'Movie of the day' },
+
+    // ---------- Movie-of-the-day ----------
+    'movie.rating': { zh: '豆瓣评分', en: 'Rating' },
+    'movie.douban': { zh: '豆瓣', en: 'Douban' },
+    'movie.next':   { zh: '换一部', en: 'Next' },
 
     // ---------- To-dos ----------
     'todo.placeholder': { zh: '添加一件事…', en: 'Add a task…' },
@@ -136,22 +155,28 @@
     'set.close':   { zh: '关闭', en: 'Close' },
 
     // ---------- Wallpaper tab ----------
-    'wall.lib_title': { zh: '壁纸库 · 必应每日', en: 'Wallpaper library · Bing Daily' },
+    'wall.lib_title': { zh: '壁纸库', en: 'Wallpaper library' },
     'wall.fetch':     { zh: '获取最新', en: 'Get latest' },
-    'wall.lib_tip':   { zh: '精选必应每日壁纸，点击即可应用；需联网获取（图片来源见版权信息）。', en: 'Curated Bing daily wallpapers; click to apply. Requires network (see credits).' },
+    'wall.lib_tip':   { zh: '精选超高清壁纸（4K+），点击即可应用；需联网获取（图片来源见版权信息）。', en: 'Curated ultra-HD (4K+) wallpapers; click to apply. Requires network (see credits).' },
     'wall.upload':    { zh: '上传自定义图片', en: 'Upload custom image' },
     'wall.reset':     { zh: '重置为渐变', en: 'Reset to gradient' },
     'wall.format_tip':{ zh: '支持 JPG / PNG / WebP / GIF；最大 4MB；仅保存在本地浏览器。', en: 'Supports JPG / PNG / WebP / GIF; max 4MB; stored locally only.' },
     'wall.loading':   { zh: '加载中…', en: 'Loading…' },
-    'wall.got':       { zh: '已获取 {n} 张必应每日壁纸 · 点击应用（图片来源见版权信息）', en: 'Got {n} Bing daily wallpapers · click to apply (see credits)' },
+    'wall.got':       { zh: '已获取 {n} 张壁纸 · 点击应用（图片来源见版权信息）', en: 'Got {n} wallpapers · click to apply (see credits)' },
     'wall.fail':      { zh: '壁纸库加载失败：{err}（需联网）', en: 'Wallpaper library failed to load: {err} (requires network)' },
     'wall.got_cached':{ zh: '离线模式：显示上次缓存的 {n} 张壁纸（「获取最新」需联网）', en: 'Offline — showing {n} cached wallpapers (Get latest needs network)' },
-    'wall.rotate':    { zh: '每日自动更换必应壁纸', en: 'Daily Bing wallpaper auto-rotate' },
-    'wall.rotate_tip':{ zh: '开启后，每个自然日自动应用一张壁纸库中的必应图片；当天手动选择的壁纸不会被自动覆盖。', en: 'When on, a Bing image from the library is applied each calendar day. Manual picks are kept for the rest of that day.' },
+    'wall.rotate':    { zh: '每日自动更换壁纸', en: 'Daily wallpaper auto-rotate' },
+    'wall.rotate_tip':{ zh: '开启后，每个自然日自动应用一张壁纸库中的图片；当天手动选择的壁纸不会被自动覆盖。', en: 'When on, an image from the library is applied each calendar day. Manual picks are kept for the rest of that day.' },
+    'wall.src':          { zh: '壁纸源', en: 'Source' },
+    'wall.src_bing':     { zh: '必应 · 每日精选', en: 'Bing · Daily' },
+    'wall.src_wallhaven':{ zh: 'Wallhaven · 4K 社区', en: 'Wallhaven · 4K' },
+    'wall.src_unsplash': { zh: 'Unsplash · 摄影', en: 'Unsplash · Photos' },
+    'wall.src_unsplash_key': { zh: 'Unsplash 需在服务端配置 API Key（LT_UNSPLASH_KEY），未配置时该源不可用。', en: 'Unsplash requires a server-side API key (LT_UNSPLASH_KEY); unavailable until configured.' },
 
     // ---------- General tab ----------
     'gen.name':     { zh: '显示名称（问候语用）', en: 'Display name (used in greeting)' },
     'gen.name_ph':  { zh: '留空则不显示名字', en: 'Leave empty to hide the name' },
+    'gen.avatar':   { zh: '头像', en: 'Avatar' },
     'gen.engine':   { zh: '默认搜索引擎', en: 'Default search engine' },
     'gen.lang':     { zh: '语言', en: 'Language' },
     'gen.theme':    { zh: '主题', en: 'Theme' },
@@ -233,6 +258,8 @@
     'toast.bookmarks_group':   { zh: '（归入当前分组）', en: ' (added to current group)' },
     'toast.image_too_big':     { zh: '图片超过 4MB，请压缩后再试', en: 'Image exceeds 4MB, please compress and retry' },
     'toast.icon_invalid':      { zh: '图片无法读取，请换一张重试', en: 'Could not read that image, please try another' },
+    'toast.avatar_saved':      { zh: '头像已更新', en: 'Avatar updated' },
+    'toast.avatar_removed':    { zh: '头像已移除', en: 'Avatar removed' },
     'toast.reset_confirm':     { zh: '确认重置所有数据？\n（名称、引擎、壁纸、快捷方式、分组、模板、待办都会被清空）', en: 'Reset all data?\n(Name, engine, wallpaper, shortcuts, groups, templates, and to-dos will be cleared.)' },
     'toast.reset_done':        { zh: '已恢复默认数据', en: 'Restored defaults' },
     'toast.unnamed':           { zh: '未命名', en: 'Untitled' },
