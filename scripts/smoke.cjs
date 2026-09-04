@@ -8,9 +8,11 @@
  *  3) 版本号一致：manifest.json / newtab.html ver-line / app.js exportPayload() /
  *     js/i18n.js 的 gen.version（中英两份）
  *  4) 纯函数断言：looksLikeUrl（URL 识别）、lunar 已知日期换算、iconFor 后缀匹配、
- *     sanitizeWallpaperUrl 白名单、resolveTheme（dark/light/system 映射）、i18n 字典 zh/en 完整性
+ *     sanitizeWallpaperUrl 白名单、resolveTheme（dark/light/system 映射）、
+ *     todayStr / pickRotateCandidate（#49 壁纸轮换纯逻辑）、i18n 字典 zh/en 完整性
  *  5) newtab.html 无编辑器残留的 data-page-node-id 属性
  *  6) #48 主题静态结构：html 默认 data-theme、#f-theme 三选项、主题词条钩子
+ *  7) #49 壁纸轮换静态结构：#f-wall-rotate 复选框、词条钩子、K 映射含 walllib/rot
  */
 'use strict';
 
@@ -143,6 +145,19 @@ console.log('[4] 纯函数');
     sandbox.matchMedia = () => ({ matches: false, addEventListener: () => {} });
     assert(P.resolveTheme('system') === 'dark', 'resolveTheme system（prefers dark）→ dark');
     sandbox.matchMedia = realMQ;
+    // #49 wallpaper rotate: todayStr shape + pure candidate picker
+    assert(/^\d{4}-\d{2}-\d{2}$/.test(P.todayStr()), 'todayStr() 为 YYYY-MM-DD', String(P.todayStr()));
+    const rotPool = [
+      { url: 'https://a.example/1.jpg', title: 'A' },
+      { url: 'https://a.example/2.jpg', title: 'B' },
+      null,
+      { title: 'no url' }
+    ];
+    assert(P.pickRotateCandidate(rotPool, '') === rotPool[0], 'pickRotateCandidate 空当前值取池首项');
+    assert(P.pickRotateCandidate(rotPool, 'https://a.example/1.jpg') === rotPool[1], 'pickRotateCandidate 跳过当前壁纸');
+    assert(P.pickRotateCandidate(rotPool, 'https://a.example/9.jpg') === rotPool[0], 'pickRotateCandidate 当前不在池中取首项');
+    assert(P.pickRotateCandidate([], '') === null, 'pickRotateCandidate 空池返回 null');
+    assert(P.pickRotateCandidate(null, '') === null, 'pickRotateCandidate 非数组池返回 null');
   }
   void elStub;
 }
@@ -164,6 +179,13 @@ console.log('[4] 纯函数');
     I.setLang('en');
     assert(I.t('gen.theme') === 'Theme' && I.t('theme.dark') === 'Dark' && I.t('theme.light') === 'Light' && I.t('theme.system') === 'Follow system', 'theme 词条 英文');
     I.setLang('zh');
+    // #49 wallpaper rotate keys: both languages must be actually translated (never echo the key back)
+    const rotKeys = ['wall.rotate', 'wall.rotate_tip', 'wall.got_cached', 'toast.wall_rotate_on'];
+    const allTranslated = lang => rotKeys.every(k => I.t(k) !== k && I.t(k).length > 0);
+    assert(allTranslated('zh'), '壁纸轮换词条 中文已译', rotKeys.map(k => I.t(k)).join(' | '));
+    I.setLang('en');
+    assert(allTranslated('en'), '壁纸轮换词条 英文已译', rotKeys.map(k => I.t(k)).join(' | '));
+    I.setLang('zh');
   }
 }
 
@@ -182,6 +204,17 @@ if (themeSel) {
   assert(opts.join(',') === 'dark,light,system', '#f-theme 三个选项 dark/light/system', opts.join(','));
 }
 assert(/data-i18n="gen\.theme"/.test(html), '主题标签带 data-i18n="gen.theme"');
+
+// ---------- 7) #49 壁纸轮换静态结构 ----------
+console.log('[7] #49 壁纸轮换');
+assert(/<input type="checkbox" id="f-wall-rotate">/.test(html), '设置页含 #f-wall-rotate 复选框');
+assert(/data-i18n="wall\.rotate"/.test(html), '轮换标签带 data-i18n="wall.rotate"');
+assert(/data-i18n="wall\.rotate_tip"/.test(html), '轮换提示带 data-i18n="wall.rotate_tip"');
+assert(/walllib:\s*'lt\.walllib'/.test(appSrc), 'K 映射含 lt.walllib（本地缓存池）');
+assert(/rot:\s*'lt\.rot'/.test(appSrc), 'K 映射含 lt.rot（每日轮换记账）');
+assert(/function maybeAutoRotate/.test(appSrc), 'app.js 定义 maybeAutoRotate()');
+assert(/function markManualPickToday/.test(appSrc), 'app.js 定义 markManualPickToday()');
+assert(/pickRotateCandidate|todayStr/.test(appSrc), 'app.js 导出轮换纯函数到 LT_PURE');
 
 console.log('');
 if (failures) {
