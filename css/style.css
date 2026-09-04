@@ -1015,6 +1015,24 @@ svg.logo-tx text { font-family: inherit; }
 .add-float:hover { transform: scale(1.06); filter: brightness(1.08); }
 .add-float:active { transform: scale(0.95); }
 
+/* Plum-blossom button, bottom right (rotate wallpaper + inspirational quote) */
+.plum-float {
+  position: fixed;
+  right: 90px; bottom: 30px;
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #f43f5e, #ec4899);
+  color: #fff;
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgba(236, 72, 153, 0.45);
+  z-index: 50;
+  transition: transform .15s ease, filter .15s ease;
+}
+.plum-float:hover { transform: scale(1.06) rotate(18deg); filter: brightness(1.08); }
+.plum-float:active { transform: scale(0.95); }
+.plum-float.spin { animation: plum-spin .5s ease; }
+@keyframes plum-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
 /* ====== Menus ====== */
 .menu {
   position: fixed;
@@ -1056,6 +1074,51 @@ svg.logo-tx text { font-family: inherit; }
 .toast[hidden] { display: none !important; }
 .toast button { color: var(--accent); font-size: 13px; }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 10px); } }
+
+/* ====== Centered inspirational quote (plum blossom) ====== */
+.quote {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(720px, calc(100vw - 64px));
+  text-align: center;
+  z-index: 60;
+  padding: 30px 42px;
+  pointer-events: none;
+  animation: quote-in .45s ease;
+  transition: opacity .36s ease;
+}
+.quote[hidden] { display: none !important; }
+.quote.quote-out { opacity: 0; }
+.quote::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(10, 14, 24, 0.42);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 22px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  z-index: -1;
+}
+.quote .quote-text {
+  position: relative;
+  font-size: clamp(22px, 4vw, 34px);
+  font-weight: 600;
+  line-height: 1.55;
+  letter-spacing: .02em;
+  color: #fff;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+}
+.quote .quote-src {
+  position: relative;
+  margin-top: 16px;
+  font-size: 14px;
+  letter-spacing: .14em;
+  color: rgba(255, 255, 255, 0.86);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+}
+@keyframes quote-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); } }
 
 /* ====== Modals ====== */
 .modal {

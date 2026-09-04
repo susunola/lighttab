@@ -29,6 +29,9 @@
     'top.wallpaper': { zh: '壁纸', en: 'Wallpaper' },
     'top.settings':  { zh: '设置', en: 'Settings' },
 
+    // ---------- Plum blossom (bottom-right) ----------
+    'plum.tip': { zh: '换一张壁纸 · 励志名句', en: 'New wallpaper · a quote' },
+
     // ---------- Profile / avatar (top-right) ----------
     'avatar.title':        { zh: '个人资料', en: 'Profile' },
     'avatar.open_settings':{ zh: '打开设置', en: 'Open settings' },

@@ -536,6 +536,77 @@
     }
   }
 
+  // ---------- Plum blossom (bottom-right): rotate wallpaper + show an inspirational quote ----------
+  const QUOTES = [
+    { zh: '宝剑锋从磨砺出，梅花香自苦寒来。', en: 'A sword\'s edge comes from whetting; plum-blossom fragrance from bitter cold.', src: { zh: '《警世贤文》', en: 'Warnings to the World' } },
+    { zh: '路漫漫其修远兮，吾将上下而求索。', en: 'The road ahead is long and far; I shall search high and low.', src: { zh: '屈原《离骚》', en: 'Qu Yuan · Li Sao' } },
+    { zh: '天行健，君子以自强不息。', en: 'As heaven moves with vigor, the noble never cease to strengthen themselves.', src: { zh: '《周易》', en: 'Book of Changes' } },
+    { zh: '不积跬步，无以至千里。', en: 'Without small steps, one cannot cover a thousand miles.', src: { zh: '《荀子·劝学》', en: 'Xunzi' } },
+    { zh: '千里之行，始于足下。', en: 'A thousand-mile journey begins with a single step.', src: { zh: '《老子》', en: 'Laozi' } },
+    { zh: '长风破浪会有时，直挂云帆济沧海。', en: 'A time will come to ride the wind and cleave the waves; I\'ll hoist my sail and cross the vast sea.', src: { zh: '李白《行路难》', en: 'Li Bai' } },
+    { zh: '会当凌绝顶，一览众山小。', en: 'When I stand on the summit, all other peaks look small.', src: { zh: '杜甫《望岳》', en: 'Du Fu' } },
+    { zh: '纸上得来终觉浅，绝知此事要躬行。', en: 'What comes from books is shallow; true mastery comes from doing.', src: { zh: '陆游《冬夜读书示子聿》', en: 'Lu You' } },
+    { zh: '山重水复疑无路，柳暗花明又一村。', en: 'Where hills and streams seem to block the way, a new village blooms beyond the willows.', src: { zh: '陆游《游山西村》', en: 'Lu You' } },
+    { zh: '千磨万击还坚劲，任尔东西南北风。', en: 'Battered by a thousand blows, I stand firm against winds from every quarter.', src: { zh: '郑板桥《竹石》', en: 'Zheng Xie' } },
+    { zh: '少壮不努力，老大徒伤悲。', en: 'Idle in youth, grieving in old age.', src: { zh: '《长歌行》', en: 'The Long Ballad' } },
+    { zh: '星光不问赶路人，时光不负有心人。', en: 'The stars do not question the traveler; time rewards the devoted.', src: { zh: '佚名', en: 'Anonymous' } },
+  ];
+  // Pure picker (exported for offline smoke): pick an index different from the previous one when possible.
+  function pickQuoteIndex(len, prevIdx) {
+    const n = Math.max(0, Number(len) || 0);
+    if (n === 0) return -1;
+    if (n === 1) return 0;
+    let i = Math.floor(Math.random() * n);
+    if (i === prevIdx) i = (i + 1) % n;
+    return i;
+  }
+  let quoteIndex = -1;
+  let quoteTimer = 0;
+  function showQuote(q) {
+    const el = document.getElementById('quote');
+    if (!el || !q) return;
+    const en = isEn();
+    const text = en ? q.en : q.zh;
+    const src = q.src ? (en ? (q.src.en || q.src.zh) : (q.src.zh || q.src.en)) : '';
+    el.innerHTML = `<div class="quote-text">“${escapeHtml(text)}”</div>` +
+      (src ? `<div class="quote-src">— ${escapeHtml(src)}</div>` : '');
+    el.classList.remove('quote-out');
+    el.hidden = false;
+    // Restart the entrance animation on every new quote.
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+    if (quoteTimer) { clearTimeout(quoteTimer); quoteTimer = 0; }
+    quoteTimer = setTimeout(() => {
+      el.classList.add('quote-out');
+      quoteTimer = setTimeout(() => { el.hidden = true; el.classList.remove('quote-out'); quoteTimer = 0; }, 360);
+    }, 4200);
+  }
+  async function rotateWallpaperAndQuote() {
+    const btn = document.getElementById('btn-plum');
+    if (btn) { btn.classList.remove('spin'); void btn.offsetWidth; btn.classList.add('spin'); }
+    // Ensure a pool exists (silent network attempt, cached pool as fallback).
+    if (!Array.isArray(wallLibImages) || !wallLibImages.length) {
+      await fetchWallLib({ silent: true });
+    }
+    const pool = Array.isArray(wallLibImages) ? wallLibImages : [];
+    if (pool.length) {
+      const cur = (state.wallpaper && state.wallpaper.type === 'image') ? state.wallpaper.value : '';
+      const next = pickRotateCandidate(pool, cur);
+      if (next && next.url) {
+        await setWallpaper({ type: 'image', value: next.url });
+        markManualPickToday();
+        renderSwatches();
+        renderWallLibGrid();
+      }
+    }
+    // Show a quote regardless of whether the wallpaper changed (e.g. empty pool while offline).
+    if (QUOTES.length) {
+      quoteIndex = pickQuoteIndex(QUOTES.length, quoteIndex);
+      showQuote(QUOTES[quoteIndex]);
+    }
+  }
+
   // ---------- Clock / greeting ----------
   function startClock() {
     const hhmmEl = document.getElementById('clock-hhmm');
@@ -2586,6 +2657,9 @@
     // Floating add button
     document.getElementById('add-float').addEventListener('click', () => openSiteModal(null));
 
+    // Plum blossom: rotate the wallpaper and show an inspirational quote in the middle.
+    document.getElementById('btn-plum').addEventListener('click', rotateWallpaperAndQuote);
+
     // Free canvas layout (draggable blocks): initialised last, once every block has rendered.
     window.LT_CANVAS.initCanvasLayout();
     // Boot order note: applyWidgets() runs before the canvas exists, so its recapture is a no-op
@@ -2628,7 +2702,7 @@
   // Exposed for the offline probe harness: it has to drive port fallback and timeout paths with a
   // stubbed fetch, which is impossible from the outside.
   window.LT_PROBE_WB = probeWorkBuddy;
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

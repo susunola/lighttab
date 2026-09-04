@@ -214,6 +214,13 @@ console.log('[4] 纯函数');
     assert(P.pickRotateCandidate(rotPool, 'https://a.example/9.jpg') === rotPool[0], 'pickRotateCandidate 当前不在池中取首项');
     assert(P.pickRotateCandidate([], '') === null, 'pickRotateCandidate 空池返回 null');
     assert(P.pickRotateCandidate(null, '') === null, 'pickRotateCandidate 非数组池返回 null');
+    // #65 plum-blossom quote picker: deterministic around the previous index
+    assert(P.pickQuoteIndex(0, -1) === -1, 'pickQuoteIndex 空列表返回 -1');
+    assert(P.pickQuoteIndex(1, 0) === 0, 'pickQuoteIndex 单条恒取 0');
+    assert(P.pickQuoteIndex(1, 7) === 0, 'pickQuoteIndex 单条忽略上次');
+    const qi = P.pickQuoteIndex(5, 2);
+    assert(qi >= 0 && qi < 5 && qi !== 2, 'pickQuoteIndex 跳过上一条（5 中 2）');
+    assert(P.pickQuoteIndex(5, -1) >= 0 && P.pickQuoteIndex(5, -1) < 5, 'pickQuoteIndex 无上次随机取一条');
   }
   void elStub;
 }
@@ -605,6 +612,40 @@ assert(/\.widget\.wmovie\.w-top \{\s*--wtop-del:\s*176px/.test(cssSrc), '电影�
   assert(mvOk('zh'), '电影词条 中文已译', mvKeys.map(k => I.t(k)).join(' | '));
   I.setLang('en');
   assert(mvOk('en'), '电影词条 英文已译', mvKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('zh');
+}
+
+// ---------- 14) #65 梅花（右下角）：换壁纸 + 励志名句 ----------
+console.log('[14] #65 梅花 · 换壁纸 + 励志名句');
+// 静态结构：右下角梅花按钮 + 居中名句浮层
+assert(/<button class="plum-float" id="btn-plum"/.test(html), 'newtab.html 含 #btn-plum 梅花按钮');
+assert(/id="quote" class="quote" hidden aria-live="polite"/.test(html), 'newtab.html 含 #quote 居中名句浮层（无障碍 aria-live）');
+assert(/data-i18n-title="plum\.tip"/.test(html) && /data-i18n-aria="plum\.tip"/.test(html), '梅花按钮带 plum.tip 词条钩子');
+// JS：引用现有轮换原语，避免重复造轮子
+assert(/const QUOTES = \[/.test(appSrc), 'app.js 定义 QUOTES 励志名句池');
+assert(/function pickQuoteIndex/.test(appSrc), 'app.js 定义 pickQuoteIndex()');
+assert(/function showQuote/.test(appSrc), 'app.js 定义 showQuote()');
+assert(/function rotateWallpaperAndQuote/.test(appSrc), 'app.js 定义 rotateWallpaperAndQuote()');
+assert(/getElementById\('btn-plum'\)\.addEventListener\('click', rotateWallpaperAndQuote\)/.test(appSrc), 'boot 绑定梅花点击');
+assert(/pickRotateCandidate\(pool, cur\)/.test(appSrc), '梅花复用 pickRotateCandidate（与每日轮换同源）');
+assert(/markManualPickToday\(\)/.test(appSrc), '梅花点击后标记当日手动选择');
+assert(/pickQuoteIndex/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'pickQuoteIndex 已导出到 LT_PURE');
+// 名句池：中英各一份且数量充足
+assert((appSrc.match(/zh: '[^']*', en: '/g) || []).length >= 10, `励志名句池条目充足（当前 ${(appSrc.match(/zh: '[^']*', en: '/g) || []).length} 条）`);
+// CSS：梅花按钮 + 名句浮层样式齐备
+assert(/\.plum-float/.test(cssSrc) && /@keyframes plum-spin/.test(cssSrc), 'CSS 定义 .plum-float 及旋转动效');
+assert(/\.quote/.test(cssSrc) && /\.quote-text/.test(cssSrc) && /\.quote-src/.test(cssSrc), 'CSS 定义 .quote / .quote-text / .quote-src');
+assert(/@keyframes quote-in/.test(cssSrc) && /\.quote\.quote-out/.test(cssSrc), 'CSS 定义名句入场/退场动画');
+// i18n：plum.tip 中英各一份且非空（不 echo key 回显）
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  I.setLang('zh');
+  assert(I.t('plum.tip') === '换一张壁纸 · 励志名句', 'plum.tip 中文', I.t('plum.tip'));
+  I.setLang('en');
+  assert(I.t('plum.tip') === 'New wallpaper · a quote', 'plum.tip 英文', I.t('plum.tip'));
   I.setLang('zh');
 }
 
