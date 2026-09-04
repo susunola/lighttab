@@ -165,7 +165,7 @@
     'gen.data_tip': { zh: '备份/恢复全部数据（快捷方式、待办、设置、壁纸）。导出文件可跨浏览器迁移。', en: 'Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.' },
     'gen.reset':    { zh: '恢复默认数据', en: 'Reset to defaults' },
     'gen.done':     { zh: '完成', en: 'Done' },
-    'gen.version':  { zh: 'LightTab v1.18.0 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.18.0 · Minimal new tab · Local-first, optional cloud sync' },
+    'gen.version':  { zh: 'LightTab v1.18.1 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.18.1 · Minimal new tab · Local-first, optional cloud sync' },
 
     // ---------- Templates tab ----------
     'prompt.title':  { zh: 'Prompt 模板 · AI 发射台', en: 'Prompt templates · AI launcher' },
