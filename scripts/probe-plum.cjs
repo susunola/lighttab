@@ -50,13 +50,19 @@ const assert = (c, n, d) => (c ? ok(n, d) : fail(n, d));
   assert(await page.$eval('#quote', el => el.hidden), '#quote 初始隐藏');
   assert(await page.$eval('#quote', el => el.getAttribute('aria-live') === 'polite'), '#quote aria-live=polite');
 
-  // 2) plum blossom SVG: 5 petals + center cluster
+  // 2) plum blossom SVG: 5 big outer petals + per-petal inner tint + stamens/center cluster
+  //    Enriched design = 10 ellipses (5 outer white rx=4.8 + 5 inner tint rx=2.4) and 7 circles
+  //    (5 stamen tips + center disk + center dot). Contract: exactly 5 big petals, tint layer
+  //    present, and a stamen/center cluster of >= 6 circles.
   const petalInfo = await page.$eval('#btn-plum svg', svg => ({
+    big: svg.querySelectorAll('ellipse[rx="4.8"]').length,
+    tint: svg.querySelectorAll('ellipse[rx="2.4"]').length,
     ellipse: svg.querySelectorAll('ellipse').length,
     circle: svg.querySelectorAll('circle').length,
     fill: svg.getAttribute('fill')
   }));
-  assert(petalInfo.ellipse === 5 && petalInfo.circle >= 6, `梅花 SVG 5 瓣 + 花心簇（${petalInfo.ellipse}瓣/${petalInfo.circle}圆点, fill=${petalInfo.fill}）`);
+  assert(petalInfo.big === 5 && petalInfo.tint === 5 && petalInfo.ellipse === 10 && petalInfo.circle >= 6,
+    `梅花 SVG 5 大瓣+5 晕染层+花心簇（big=${petalInfo.big} tint=${petalInfo.tint} ellipse=${petalInfo.ellipse} circle=${petalInfo.circle}, fill=${petalInfo.fill}）`);
 
   // 3) geometry: bottom-right, left of the + button, no overlap
   const plumBox = await page.locator('#btn-plum').boundingBox();
