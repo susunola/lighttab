@@ -434,6 +434,13 @@ for (const id of ['wclock', 'wcal', 'wtodo']) {
   assert(new RegExp(`id="f-pos-${id}"`).test(html), `设置页含 #f-pos-${id} 位置下拉`);
 }
 assert(/data-i18n="wpos\.top"/.test(html) && /data-i18n="wpos\.left"/.test(html), '位置选项词条齐备');
+// 设置表单有三条全局规则（.modal-body label / label>span / select）特异性高于裸类选择器，
+// 不加 .modal-body 限定会把这一行控件压成上下堆叠的整宽块（本次实测行高 29px→80px）
+assert(/\.modal-body label\.wgt-row/.test(cssSrc), '.wgt-row 以 .modal-body label.wgt-row 提权');
+assert(/\.modal-body \.wgt-row > span\.wgt-name/.test(cssSrc), '.wgt-name 以 .modal-body 限定提权');
+assert(/\.modal-body select\.wgt-pos/.test(cssSrc), '.wgt-pos 以 .modal-body select 提权');
+assert(!/(?:^|\})\s*\.wgt-row \{/m.test(cssSrc), '不存在裸 .wgt-row 规则（会被全局 label 规则击穿）');
+assert(!/(?:^|\})\s*\.wgt-pos \{/m.test(cssSrc), '不存在裸 .wgt-pos 规则（会被全局 select 规则击穿）');
 assert(i18nSrc.includes("'wpos.top'") && i18nSrc.includes("'wpos.left'"), 'i18n 含 wpos 两条');
 assert(!/clockpos\./.test(i18nSrc) && !/gen\.clock_pos/.test(i18nSrc), '旧的 clockpos 词条已清除');
 assert(/\.widget\.w-top \{/.test(cssSrc), 'CSS 定义通用 .widget.w-top');

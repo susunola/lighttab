@@ -190,13 +190,40 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 /* Settings → General: left-column widget toggles */
 .wgt-zone { margin-top: 4px; }
-.wgt-rows { display: flex; flex-direction: column; gap: 7px; margin: 8px 0 2px; }
-.wgt-row {
-  display: grid; grid-template-columns: 15px 1fr auto; align-items: center; gap: 9px;
-  font-size: 13px; color: var(--ink-2); cursor: pointer;
+/* Every selector here is scoped under .modal-body on purpose. The settings form ships three global
+ * rules that would otherwise win on specificity and break this control into stacked full-width
+ * blocks: `.modal-body label {display:block}` (0,1,1), `.modal-body label > span {display:block}`
+ * (0,2,1) and `.modal-body select {width:100%}` (0,1,1). A bare `.wgt-row` is only (0,1,0). */
+.modal-body .wgt-rows { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 2px; }
+.modal-body label.wgt-row {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
 }
-.wgt-row input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent-2); cursor: pointer; }
-.wgt-pos { width: auto; min-width: 118px; font-size: 12.5px; padding: 4px 8px; }
+.modal-body .wgt-row > span.wgt-name {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+}
+.modal-body .wgt-row > input[type="checkbox"] {
+  width: 16px; height: 16px; margin: 0;
+  accent-color: var(--accent-2);
+  cursor: pointer;
+}
+.modal-body select.wgt-pos {
+  width: auto;
+  min-width: 124px;
+  padding: 5px 9px;
+  font-size: 12.5px;
+  border-radius: 8px;
+}
 
 /* #61 clock lifted above the search box: drop the card chrome and centre it, phone-launcher style.
  * Same DOM as the left-column card, so the tick logic is untouched — only presentation changes.
