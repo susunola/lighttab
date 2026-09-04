@@ -68,8 +68,14 @@
     groups: [],
     // Free canvas layout: { wclock/wcal/wtodo/search/grid: {x,y,w} }.
     // null = fall back to the default two-column flow layout.
-    layout: null
+    layout: null,
+    // Left-column widgets the user kept. Removing one hides it in both the flow and canvas layouts;
+    // removing all three collapses the whole left column so the icon grid spans the full width.
+    // Lives inside settings on purpose — it then rides along with export / import / cloud sync for free.
+    widgets: { wclock: true, wcal: true, wtodo: true }
   };
+  // Left-column widget ids, in render order. Single source of truth for visibility + settings UI.
+  const WIDGETS = ['wclock', 'wcal', 'wtodo'];
 
   // Built-in prompt templates.
   //   name    display name
@@ -1472,6 +1478,7 @@
     state.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), migrated.settings || {});
     if (!ENGINES.some(x => x.id === state.settings.engine)) state.settings.engine = 'baidu';
     if (!Array.isArray(state.settings.groups)) state.settings.groups = [];
+    state.settings.widgets = normalizeWidgets(state.settings.widgets);
     setLangOnly(state.settings.lang);
     const gids = new Set(state.settings.groups.map(g => g.id));
     state.items = Array.isArray(migrated.items)
@@ -1510,6 +1517,7 @@
     document.getElementById('modal-set').hidden = true;
     syncUI();
     renderTodos();
+    applyWidgets(); // an import may bring in a different left-column widget selection
     showToast(t('toast.import_done', { items: state.items.length, todos: state.todos.length }));
     reinitCanvas(); // an import may bring in or clear layout coordinates, so resync the canvas
   }
@@ -2072,6 +2080,7 @@
     syncUI();
     startClock();
     renderTodos();
+    applyWidgets(); // reset brings every left-column widget back
     document.getElementById('modal-set').hidden = true;
     showToast(t('toast.reset_done'));
     reinitCanvas(); // reset clears layout coordinates, back to the default canvas
@@ -2141,6 +2150,7 @@
     syncUI();
     renderTodos();
     renderCalendar();
+    applyWidgets(); // a remote pull may have removed / restored left-column widgets
     startClock(); // greeting/name may have been updated remotely
     maybeAutoRotate(); // a remote settings flip may have just enabled the daily rotate
     const nameInput = document.getElementById('f-name');
@@ -2216,6 +2226,9 @@
     // Card grid coordinates: on first entry, map the current flow positions to (col, row).
     // With no cells (extremely narrow window, or no cards) captureCardLayout returns an empty object.
     layout.cards = captureCardLayout();
+    // auto=true marks coordinates the app derived from the flow layout rather than the user dragging
+    // blocks around. Only an auto layout may be silently re-derived (see recaptureBlocksFromFlow).
+    layout.auto = true;
     state.settings.layout = layout;
     Store.set(K.settings, state.settings);
     return layout;
@@ -2472,6 +2485,8 @@
       }
       map[id] = { col, row };
       setCardLayoutMap(map);
+      const lay = getLayout();
+      if (lay) lay.auto = false; // hand-arranged icon grid: stop auto re-deriving it
       // Re-apply positions for every visible card, including the swapped one.
       applyCardCanvas();
       Store.set(K.settings, state.settings);
@@ -2565,6 +2580,7 @@
         y: Math.round(r.top - rr.top),
         w: Math.round(r.width)
       };
+      l.auto = false; // hand-placed from now on: never silently re-derive these coordinates
       Store.set(K.settings, state.settings);
       refreshCanvasHeight();
     }
@@ -2575,9 +2591,47 @@
     root.addEventListener('pointercancel', onPointerUp);
   }
 
+  // True when the frozen canvas coordinates still describe a page whose left column looked different.
+  // Only auto layouts are considered — a hand-dragged arrangement is never second-guessed.
+  // The signal is exact rather than geometric: recaptureBlocksFromFlow drops the key of every hidden
+  // block, so a leftover key for a removed widget means these coordinates predate the removal.
+  // (Don't compare x against a constant — coordinates are relative to .layout's border box, so the
+  // left-most block legitimately sits at the container's 40px padding.)
+  function widgetLayoutStale() {
+    const l = getLayout();
+    if (!l || l.auto === false) return false;
+    const vis = normalizeWidgets(state.settings && state.settings.widgets);
+    return WIDGETS.some((id) => !vis[id] && l[id]);
+  }
+
+  // Removing a left-column widget leaves a hole in the frozen canvas coordinates, so re-derive the
+  // block positions from a fresh flow pass. Only ever applied to an auto layout — once the user has
+  // dragged a block or a card the arrangement is theirs and we leave it exactly as they left it.
+  function recaptureBlocksFromFlow() {
+    const root = canvasRoot();
+    if (!root || !root.classList.contains('canvas')) return; // flow layout reflows on its own
+    const l = getLayout();
+    if (!l || l.auto === false) return;
+    leaveCanvas(); // drop absolute positioning so the browser reflows around the hidden widgets
+    const rr = root.getBoundingClientRect();
+    const next = {};
+    for (const b of blockEls()) {
+      const r = b.el.getBoundingClientRect();
+      if (!r.width && !r.height) continue; // a removed widget contributes no coordinates
+      next[b.key] = { x: Math.round(r.left - rr.left), y: Math.round(r.top - rr.top), w: Math.round(r.width) };
+    }
+    // Card coordinates are (col, row) against the grid's track width. A collapsed left column makes
+    // the grid wider, which changes the track count — so the card map has to be re-derived too,
+    // otherwise old column indices scatter the icons across the new width.
+    next.cards = captureCardLayout();
+    next.auto = true;
+    state.settings.layout = next;
+    Store.set(K.settings, state.settings);
+    applyCanvas();
+  }
+
   // Switch between flow and canvas based on window width and layout data (idempotent; reused after import/reset).
-  function reinitCanvas() {
-    leaveCanvas();
+  function reinitCanvas() {    leaveCanvas();
     if (!canvasEligible()) return;
     if (getLayout()) applyCanvas();
     else { captureLayout(); applyCanvas(); }
@@ -2660,6 +2714,66 @@
     bindThemeMQ();
   }
 
+  // ---------- Left-column widget visibility (#60) ----------
+  // Coerce whatever came off disk / an imported file into a full {wclock,wcal,wtodo} boolean map.
+  // Anything missing or non-boolean defaults to visible, so a corrupt file can never silently
+  // swallow a widget the user never chose to remove.
+  function normalizeWidgets(raw) {
+    const out = {};
+    for (const id of WIDGETS) out[id] = !(raw && raw[id] === false);
+    return out;
+  }
+  function widgetVisible(id) {
+    return normalizeWidgets(state.settings && state.settings.widgets)[id];
+  }
+  function applyWidgets() {
+    const vis = normalizeWidgets(state.settings && state.settings.widgets);
+    state.settings.widgets = vis;
+    for (const id of WIDGETS) {
+      const el = document.querySelector('.widget.' + id);
+      if (el) el.hidden = !vis[id];
+      const box = document.getElementById('f-w-' + id);
+      if (box) box.checked = vis[id];
+    }
+    // All three gone → drop the column entirely so .right (flex:1) reclaims the full width.
+    const left = document.querySelector('.layout > .left');
+    if (left) left.hidden = !WIDGETS.some((id) => vis[id]);
+    // In free-canvas mode the block coordinates are frozen, so hiding a widget would leave a hole.
+    recaptureBlocksFromFlow();
+  }
+  // Remove one widget, with an undo toast — same affordance as deleting a shortcut card.
+  function removeWidget(id) {
+    if (!WIDGETS.includes(id) || !widgetVisible(id)) return;
+    state.settings.widgets = normalizeWidgets(state.settings.widgets);
+    state.settings.widgets[id] = false;
+    Store.set(K.settings, state.settings);
+    applyWidgets();
+    showToast(t('widget.removed'), t('toast.undo'), () => {
+      state.settings.widgets[id] = true;
+      Store.set(K.settings, state.settings);
+      applyWidgets();
+    });
+  }
+  function bindWidgetControls() {
+    document.querySelectorAll('.widget .w-del').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        removeWidget(btn.dataset.widget);
+      });
+    });
+    for (const id of WIDGETS) {
+      const box = document.getElementById('f-w-' + id);
+      if (!box) continue;
+      box.addEventListener('change', () => {
+        state.settings.widgets = normalizeWidgets(state.settings.widgets);
+        state.settings.widgets[id] = box.checked;
+        Store.set(K.settings, state.settings);
+        applyWidgets();
+      });
+    }
+  }
+
   // ---------- Boot ----------
   async function boot() {
     const { raw, data } = await loadDataIntoState();
@@ -2680,6 +2794,8 @@
     renderEngineList();
     syncUI();
     bindGroupBar();
+    applyWidgets();
+    bindWidgetControls();
     startClock();
     renderCalendar();
     bindCalendar();
@@ -2769,6 +2885,11 @@
 
     // Free canvas layout (draggable blocks): initialised last, once every block has rendered.
     initCanvasLayout();
+    // Boot order note: applyWidgets() runs before the canvas exists, so its recapture is a no-op
+    // there. If this profile arrived with widgets already removed (cloud sync, imported file, a
+    // previous session), the frozen coordinates still describe the old three-widget page — fix
+    // them up now that the canvas is live.
+    if (widgetLayoutStale()) recaptureBlocksFromFlow();
 
     // Self-check
     if (!hasChromeStorage) {
@@ -2786,7 +2907,7 @@
 
   // Pure-function exports for the offline assertions in scripts/smoke.cjs
   // (same convention as window.LT_LUNAR / window.LT_SYNC).
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, resolveTheme, todayStr, pickRotateCandidate };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, resolveTheme, todayStr, pickRotateCandidate };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

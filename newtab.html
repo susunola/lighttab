@@ -25,6 +25,9 @@
     <!-- Left widget column -->
     <aside class="left">
       <section class="widget wclock" data-i18n-aria="widget.clock" aria-label="Clock">
+        <button type="button" class="w-del" data-widget="wclock" data-i18n-aria="widget.remove" aria-label="Remove this widget">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+        </button>
         <div class="clock-row">
           <span class="clock-hhmm" id="clock-hhmm">--:--</span>
           <span class="clock-sec" id="clock-sec">--</span>
@@ -35,6 +38,9 @@
       </section>
 
       <section class="widget wcal" data-i18n-aria="widget.calendar" aria-label="Calendar">
+        <button type="button" class="w-del" data-widget="wcal" data-i18n-aria="widget.remove" aria-label="Remove this widget">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+        </button>
         <div class="w-head">
           <span class="w-title">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -53,6 +59,9 @@
       </section>
 
       <section class="widget wtodo" id="todo-widget" data-i18n-aria="widget.todo" aria-label="To-dos">
+        <button type="button" class="w-del" data-widget="wtodo" data-i18n-aria="widget.remove" aria-label="Remove this widget">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+        </button>
         <div class="w-head">
           <span class="w-title">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg>
@@ -222,6 +231,15 @@
               <option value="system" data-i18n="theme.system">Follow system</option>
             </select>
           </label>
+          <div class="wgt-zone">
+            <span class="data-label" data-i18n="gen.widgets">Left column widgets</span>
+            <div class="wgt-checks">
+              <label class="wgt-check"><input type="checkbox" id="f-w-wclock" checked><span data-i18n="widget.clock">Clock</span></label>
+              <label class="wgt-check"><input type="checkbox" id="f-w-wcal" checked><span data-i18n="widget.calendar">Calendar</span></label>
+              <label class="wgt-check"><input type="checkbox" id="f-w-wtodo" checked><span data-i18n="widget.todo">To-dos</span></label>
+            </div>
+            <p class="data-tip" data-i18n="gen.widgets_tip">Uncheck to remove. With all three removed the left column collapses and the icon grid spans the full width.</p>
+          </div>
           <div class="data-zone">
             <span class="data-label" data-i18n="gen.data">Data management</span>
             <div class="data-actions">

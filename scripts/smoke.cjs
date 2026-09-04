@@ -173,6 +173,20 @@ console.log('[4] 纯函数');
     const fsOf = (s) => Number(/font-size="([\d.]+)"/.exec(P.iconGlyphHtml({ tx: s, c: '#fff', f: '#000' }))[1]);
     assert(fsOf('O') > fsOf('文档') && fsOf('文档') > fsOf('小鹅通') && fsOf('小鹅通') > fsOf('51CTO'),
       'iconGlyphHtml 字标字号随字数递减');
+    // #60 normalizeWidgets：缺省/脏数据一律回落到"可见"，只有显式 false 才算移除
+    const NW = P.normalizeWidgets;
+    assert(JSON.stringify(NW(undefined)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true }),
+      'normalizeWidgets(undefined) → 三个全可见');
+    assert(JSON.stringify(NW(null)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true }),
+      'normalizeWidgets(null) → 三个全可见');
+    assert(NW({ wcal: false }).wcal === false && NW({ wcal: false }).wclock === true,
+      'normalizeWidgets 部分对象 → 缺的补 true');
+    assert(NW({ wclock: 0, wcal: '', wtodo: null }).wclock === true,
+      'normalizeWidgets 只认显式 false，其它假值仍可见');
+    assert(NW({ bogus: false }).wclock === true && !('bogus' in NW({ bogus: false })),
+      'normalizeWidgets 丢弃未知键');
+    assert(Object.values(NW({ wclock: false, wcal: false, wtodo: false })).every((v) => v === false),
+      'normalizeWidgets 允许三个全移除（左栏整列收起）');
     // resolveTheme：'dark'/'light' 直接映射；'system' 在无 matchMedia 时回退深色，有 matchMedia 时跟随系统
     assert(P.resolveTheme('dark') === 'dark' && P.resolveTheme('light') === 'light', 'resolveTheme 固定 dark/light');
     assert(P.resolveTheme('bogus') === 'dark', 'resolveTheme 未知值回退 dark');
@@ -343,6 +357,38 @@ assert(/it\.icon = icon/.test(appSrc), '编辑保存写入 icon 字段');
 assert(/has-custom-icon/.test(appSrc) && /\.has-custom-icon/.test(cssSrc), '自定义图标卡片挂 has-custom-icon 类，CSS 给主题感知中性底');
 assert(/function iconCropRect/.test(appSrc), 'app.js 定义 iconCropRect（内容感知裁切）');
 assert(/iconCropRect/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'iconCropRect 已导出到 LT_PURE');
+
+// ---------- 9) #60 左栏组件可删除 ----------
+console.log('[9] #60 左栏组件可删除');
+for (const id of ['wclock', 'wcal', 'wtodo']) {
+  assert(new RegExp(`class="w-del" data-widget="${id}"`).test(html), `${id} 组件挂了移除按钮`);
+  assert(new RegExp(`id="f-w-${id}"`).test(html), `设置页含 #f-w-${id} 勾选框`);
+}
+assert(/data-i18n="gen\.widgets"/.test(html) && /data-i18n="gen\.widgets_tip"/.test(html), '设置页组件区词条钩子齐备');
+assert(/data-i18n-aria="widget\.remove"/.test(html), '移除按钮带无障碍词条');
+assert(/widgets:\s*\{\s*wclock:\s*true/.test(appSrc), 'DEFAULT_SETTINGS 含 widgets 默认全开');
+assert(/const WIDGETS = \['wclock', 'wcal', 'wtodo'\]/.test(appSrc), 'app.js 定义 WIDGETS 单一真源');
+assert(/function normalizeWidgets/.test(appSrc), 'app.js 定义 normalizeWidgets()');
+assert(/function applyWidgets/.test(appSrc), 'app.js 定义 applyWidgets()');
+assert(/function removeWidget/.test(appSrc), 'app.js 定义 removeWidget()');
+assert(/normalizeWidgets/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'normalizeWidgets 已导出到 LT_PURE');
+assert(/\.widget \.w-del/.test(cssSrc) && /\.widget:hover \.w-del/.test(cssSrc), 'CSS 定义悬停出现的 .w-del');
+assert(/@media \(hover: none\)[\s\S]{0,120}\.w-del/.test(cssSrc), '触屏无 hover 时移除按钮常驻');
+assert(/\.wgt-checks/.test(cssSrc), 'CSS 定义设置页勾选组 .wgt-checks');
+// widgets 必须存活在 settings 内，这样导出/导入/云同步零成本带上它
+assert(!/'lt\.widgets'/.test(appSrc), 'widgets 不另开存储键（随 settings 走同步与导出）');
+assert(/state\.settings\.widgets = normalizeWidgets\(state\.settings\.widgets\)/.test(appSrc), 'doImport 校验 widgets 字段');
+// 删除/恢复/云拉取/重置四条路径都要重新应用一次
+assert((appSrc.match(/applyWidgets\(\)/g) || []).length >= 6, 'applyWidgets 在启动/删除/导入/重置/云拉取各路径均被调用');
+// 自由画布模式：坐标是冻结的，移除组件必须重算，且不能覆盖用户手拖的排布
+assert(/layout\.auto = true/.test(appSrc), 'captureLayout 标记 auto 布局');
+assert((appSrc.match(/\.auto = false/g) || []).length >= 2, '块拖拽与卡片拖拽都会把布局标记为手动');
+assert(/function widgetLayoutStale/.test(appSrc), 'app.js 定义 widgetLayoutStale()（冷启动陈旧坐标检测）');
+assert(/function recaptureBlocksFromFlow/.test(appSrc), 'app.js 定义 recaptureBlocksFromFlow()');
+assert(/if \(!l \|\| l\.auto === false\) return/.test(appSrc), '手动布局不被自动重算覆盖');
+assert(/next\.cards = captureCardLayout\(\)/.test(appSrc), '重算时卡片坐标一并重新推导（网格变宽会改列数）');
+assert(/if \(widgetLayoutStale\(\)\) recaptureBlocksFromFlow\(\)/.test(appSrc), '启动时修正陈旧的画布坐标');
+
 
 console.log('');
 if (failures) {
