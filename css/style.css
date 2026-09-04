@@ -551,6 +551,15 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .card .ico .logo { width: 60%; height: 60%; display: block; }
 .card .ico .ini { display: block; line-height: 1; user-select: none; }
+/* Custom uploaded icon (#50): full-bleed cover inside the tile, transparent PNGs let the tile colour show through. */
+.card .ico .logo-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
 .card .title {
   margin-top: 10px;
   font-size: 13px;
@@ -708,6 +717,34 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .form-tip { margin: 4px 0 0; font-size: 11.5px; color: var(--ink-3); }
 .ver-line { margin-top: 16px; text-align: center; }
+/* #50 custom card icon row (shortcut modal): label outside <label> needs the same look as label>span. */
+.modal-body .field-label {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-3);
+  margin: 0 0 6px;
+  letter-spacing: 0.04em;
+}
+.icon-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 4px;
+}
+.icon-preview {
+  width: 46px; height: 46px;
+  flex: 0 0 46px;
+  border-radius: 13px;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--tint-2);
+  border: 1px solid var(--line);
+  color: #1f2937;
+  font-weight: 600;
+  font-size: 17px;
+}
+.icon-preview svg.logo { width: 60%; height: 60%; }
+.icon-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .modal-actions {
   display: flex; justify-content: flex-end; gap: 8px;
   margin-top: 8px;

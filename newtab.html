@@ -138,6 +138,18 @@
           <span data-i18n="site.group">Group</span>
           <select id="f-group"></select>
         </label>
+        <div>
+          <span class="field-label" data-i18n="icon.label">Icon</span>
+          <div class="icon-row">
+            <span class="icon-preview" id="f-icon-preview" aria-hidden="true"></span>
+            <label class="btn ghost file-btn">
+              <input id="f-icon" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+              <span data-i18n="icon.upload">Upload icon</span>
+            </label>
+            <button type="button" class="btn ghost" id="f-icon-remove" data-i18n="icon.remove" hidden>Remove</button>
+          </div>
+          <p class="form-tip" data-i18n="icon.tip">Optional: upload a square image as this card's icon (PNG/JPG/WebP/GIF, ≤4MB, auto-cropped). Leave empty to keep the brand icon or initial.</p>
+        </div>
         <p class="form-tip" data-i18n="site.tip">Known sites get brand icons automatically; others show an initial. Drag cards to reorder.</p>
         <div class="modal-actions">
           <button type="button" class="btn ghost" data-close data-i18n="site.cancel">Cancel</button>

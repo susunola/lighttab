@@ -139,6 +139,15 @@
     if (/^data:image\//i.test(v) || /^https:/i.test(v)) return v;
     return null;
   }
+  // Custom per-card icon guard: only local base64 raster images (data:image/png|jpeg|webp|gif),
+  // length-capped at 128 KiB so an icon can never bloat storage / cloud-sync / export payloads.
+  // Everything else (remote URLs, svg data:, oversized blobs) is rejected outright.
+  function sanitizeIconDataUrl(v) {
+    if (typeof v !== 'string' || !v || v.length > 128 * 1024) return null;
+    if (/['"\\\r\n]/.test(v)) return null;
+    if (!/^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v)) return null;
+    return v;
+  }
   // Whether focus currently sits in a text-entry element (input / textarea / select / contenteditable).
   function isTypingTarget(el) {
     if (!el) return false;
@@ -277,6 +286,7 @@
   let currentEngine = ENGINES[0];
   let activePrompt = null; // template picked and waiting to launch (session only, not persisted)
   let clockTimer = null;
+  let pendingIcon = null; // unsaved custom card icon (dataURL) held by the shortcut modal until Save
 
   // ---------- Wallpaper ----------
   function applyWallpaper(wp) {
@@ -1007,21 +1017,32 @@
   function cardHtml(it) {
     const host = hostnameOf(it.url) || it.title;
     const icon = iconFor(it.url);
-    const bg = icon ? icon.c : (it.color || pickColor(host));
-    const ink = inkOn(bg);
-    const safeTitle = escapeHtml(it.title);
-    // Letter fallback: CJK titles use their first character, otherwise the first letter of the hostname, uppercased.
-    let letter = (it.title || '').trim().charAt(0);
-    if (!/[\u4e00-\u9fa5]/.test(letter)) {
-      const h = hostnameOf(it.url);
-      letter = (h && h[0] ? h[0] : '?').toUpperCase();
+    const customIcon = sanitizeIconDataUrl(it.icon);
+    let bg, ink, ico;
+    if (customIcon) {
+      // User-uploaded image wins over the brand icon; the tile keeps the card colour underneath so
+      // transparent PNGs still read as a coloured tile (same look as brand tiles).
+      bg = it.color || pickColor(host);
+      ico = `<img class="logo-img" src="${customIcon}" alt="" draggable="false">`;
+    } else if (icon) {
+      bg = icon.c;
+      ico = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="${inkOn(icon.c)}" d="${icon.d}"/></svg>`;
+    } else {
+      bg = it.color || pickColor(host);
+      // Letter fallback: CJK titles use their first character, otherwise the first letter of the hostname, uppercased.
+      let letter = (it.title || '').trim().charAt(0);
+      if (!/[\u4e00-\u9fa5]/.test(letter)) {
+        const h = hostnameOf(it.url);
+        letter = (h && h[0] ? h[0] : '?').toUpperCase();
+      }
+      ico = `<span class="ini">${escapeHtml(letter)}</span>`;
     }
+    ink = inkOn(bg);
+    const safeTitle = escapeHtml(it.title);
     return `
       <a class="card" href="${escapeHtml(it.url)}" data-id="${it.id}" draggable="true" target="_blank" rel="noopener" title="${safeTitle}">
         <div class="ico" style="background:${bg};color:${ink}">
-          ${icon
-            ? `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="${ink}" d="${icon.d}"/></svg>`
-            : `<span class="ini">${escapeHtml(letter)}</span>`}
+          ${ico}
         </div>
         <div class="title">${safeTitle}</div>
         <div class="card-actions">
@@ -1167,8 +1188,9 @@
     const row = document.getElementById('f-group-row');
     const sel = document.getElementById('f-group');
     row.hidden = state.settings.groups.length === 0;
+    let it = null;
     if (id) {
-      const it = state.items.find(x => x.id === id);
+      it = state.items.find(x => x.id === id);
       if (!it) return;
       titleEl.textContent = t('site.edit');
       form.elements['title'].value = it.title;
@@ -1189,14 +1211,77 @@
       }
       sel.value = state.settings.groups.some(g => g.id === cur) ? cur : '';
     }
+    // Custom icon state: start from the item's stored icon when editing, empty when adding.
+    pendingIcon = id ? (sanitizeIconDataUrl(it.icon) || null) : null;
+    const iconInput = document.getElementById('f-icon');
+    if (iconInput) iconInput.value = '';
+    renderIconPreview();
     modal.hidden = false;
     setTimeout(() => form.elements['title'].focus(), 30);
+  }
+  // Live "what will this card look like" tile in the shortcut modal: uploaded image wins; otherwise the
+  // brand icon (or letter tile) is derived from whatever URL / title is currently typed.
+  function renderIconPreview() {
+    const box = document.getElementById('f-icon-preview');
+    const rmBtn = document.getElementById('f-icon-remove');
+    if (!box) return;
+    box.style.background = '';
+    box.style.color = '';
+    if (pendingIcon) {
+      box.innerHTML = `<img src="${pendingIcon}" alt="" draggable="false">`;
+      if (rmBtn) rmBtn.hidden = false;
+      return;
+    }
+    const url = normalizeUrl(document.getElementById('f-url').value.trim());
+    const host = url ? hostnameOf(url) : '';
+    const icon = url ? iconFor(url) : null;
+    if (icon) {
+      box.innerHTML = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="${inkOn(icon.c)}" d="${icon.d}"/></svg>`;
+      box.style.background = icon.c;
+    } else if (host) {
+      const titleVal = document.getElementById('f-title').value.trim();
+      let letter = (titleVal || '').charAt(0) || host.charAt(0);
+      if (letter && /[a-zA-Z]/.test(letter)) letter = letter.toUpperCase();
+      const bg = pickColor(host);
+      box.innerHTML = `<span class="ini">${escapeHtml(letter)}</span>`;
+      box.style.background = bg;
+      box.style.color = inkOn(bg);
+    } else {
+      box.innerHTML = '<span class="ini">?</span>';
+      box.style.color = '';
+    }
+    if (rmBtn) rmBtn.hidden = true;
   }
   function bindSiteForm() {
     const modal = document.getElementById('modal-site');
     modal.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => modal.hidden = true));
     modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
     const form = document.getElementById('site-form');
+    // Custom card icon: upload (square-crop + compress to a small PNG/JPG dataURL), live preview,
+    // remove-to-revert. Nothing is persisted until Save; Cancel simply drops the pending icon.
+    const iconInput = document.getElementById('f-icon');
+    if (iconInput) iconInput.addEventListener('change', async () => {
+      const f = iconInput.files && iconInput.files[0];
+      iconInput.value = ''; // allow re-selecting the same file next time
+      if (!f) return;
+      if (f.size > 4 * 1024 * 1024) return showToast(t('toast.image_too_big'));
+      try {
+        pendingIcon = await compressIconSquare(f, 160);
+        renderIconPreview();
+      } catch (err) {
+        console.warn('[LightTab] icon upload failed', err);
+        showToast(t('toast.icon_invalid'));
+      }
+    });
+    const rmIconBtn = document.getElementById('f-icon-remove');
+    if (rmIconBtn) rmIconBtn.addEventListener('click', () => {
+      pendingIcon = null;
+      renderIconPreview();
+    });
+    ['f-url', 'f-title'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', renderIconPreview);
+    });
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const title = form.elements['title'].value.trim();
@@ -1205,11 +1290,12 @@
       if (!url) return showToast(t('toast.url_invalid'));
       const group = document.getElementById('f-group').value || '';
       const editId = form.dataset.editId;
+      const icon = sanitizeIconDataUrl(pendingIcon) || undefined;
       if (editId) {
         const it = state.items.find(x => x.id === editId);
-        if (it) { it.title = title; it.url = url; it.group = group; }
+        if (it) { it.title = title; it.url = url; it.group = group; it.icon = icon; }
       } else {
-        state.items.push({ id: nid(), title, url, group });
+        state.items.push({ id: nid(), title, url, group, icon });
       }
       await Store.set(K.items, state.items);
       modal.hidden = true;
@@ -1365,7 +1451,7 @@
     state.items = Array.isArray(migrated.items)
       ? migrated.items
           .filter(it => it && typeof it.url === 'string')
-          .map(it => ({ id: it.id || nid(), title: String(it.title || '').slice(0, 32) || t('toast.unnamed'), url: it.url, group: gids.has(it.group) ? it.group : '' }))
+          .map(it => ({ id: it.id || nid(), title: String(it.title || '').slice(0, 32) || t('toast.unnamed'), url: it.url, group: gids.has(it.group) ? it.group : '', icon: sanitizeIconDataUrl(it.icon) || undefined }))
       : [];
     state.wallpaper = pickWallpaperFromData(migrated.wallpaper);
     state.todos = Array.isArray(migrated.todos)
@@ -1713,6 +1799,38 @@
         img.src = fr.result;
       };
       fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  }
+  // Square centre-crop any image to `size`x`size` as PNG (transparency kept). Photo-like PNGs that would
+  // exceed the 128 KiB icon budget are re-baked onto white as JPEG so the stored icon stays small.
+  function compressIconSquare(file, size) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const side = Math.min(img.width, img.height);
+          if (!side || !size) return reject(new Error('bad image'));
+          const c = document.createElement('canvas');
+          c.width = size; c.height = size;
+          const ctx = c.getContext('2d');
+          const sx = (img.width - side) / 2;
+          const sy = (img.height - side) / 2;
+          ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+          let url = c.toDataURL('image/png');
+          if (url.length > 96 * 1024) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, size, size);
+            ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+            url = c.toDataURL('image/jpeg', 0.85);
+          }
+          resolve(url);
+        };
+        img.onerror = () => reject(new Error('decode failed'));
+        img.src = fr.result;
+      };
+      fr.onerror = () => reject(new Error('read failed'));
       fr.readAsDataURL(file);
     });
   }
@@ -2573,7 +2691,7 @@
 
   // Pure-function exports for the offline assertions in scripts/smoke.cjs
   // (same convention as window.LT_LUNAR / window.LT_SYNC).
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, hostnameOf, iconFor, resolveTheme, todayStr, pickRotateCandidate };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, hostnameOf, iconFor, resolveTheme, todayStr, pickRotateCandidate };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
