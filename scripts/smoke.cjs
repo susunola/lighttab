@@ -409,16 +409,46 @@ assert(!/host_permissions/.test(read('manifest.json')), '不申请 host_permissi
 for (const k of ['wb.running', 'wb.not_running', 'wb.not_detected', 'wb.get']) {
   assert(i18nSrc.includes(`'${k}'`), `i18n 含 ${k}`);
 }
-// 时钟位置
-assert(/clockPos: 'left'/.test(appSrc), 'DEFAULT_SETTINGS 含 clockPos 默认左栏');
-assert(/function applyClockPos/.test(appSrc), 'app.js 定义 applyClockPos()');
-assert(/applyClockPos\(\);/.test(appSrc), 'applyWidgets 驱动 applyClockPos');
-assert(/id="f-clock-pos"/.test(html), '设置页含 #f-clock-pos 下拉');
-assert(/data-i18n="clockpos\.left"/.test(html) && /data-i18n="clockpos\.top"/.test(html), '时钟位置两个选项词条齐备');
-assert(/\.widget\.wclock-top/.test(cssSrc), 'CSS 定义 .widget.wclock-top');
-// 顶部态样式必须以 .widget 限定，否则被文件后面同特异性的 .wclock .clock-* 覆盖
-assert(!/^\.wclock-top /m.test(cssSrc), '顶部态选择器均以 .widget 限定（避免被后续同特异性规则覆盖）');
-assert(/wantTop !== sharesRightColumn/.test(canvasSrc), '陈旧检测覆盖时钟位置与坐标不一致的情况');
+// ---------- #62 每组件位置（时钟 / 日历 / 待办 可各自放到搜索框上方）----------
+assert(/widgetPos: \{ wclock: 'top', wcal: 'top', wtodo: 'left' \}/.test(appSrc),
+  'DEFAULT_SETTINGS 的 widgetPos 默认时钟+日历在顶、待办在左栏');
+assert(/function normalizeWidgetPos/.test(appSrc), 'app.js 定义 normalizeWidgetPos()');
+assert(/function applyWidgetPos/.test(appSrc), 'app.js 定义 applyWidgetPos()');
+assert(/applyWidgetPos\(\);/.test(appSrc), 'applyWidgets 驱动 applyWidgetPos');
+assert(/normalizeWidgetPos/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''),
+  'normalizeWidgetPos 已导出到 LT_PURE');
+assert(!/clockPos/.test(cssSrc) && !/wclock-top/.test(cssSrc), 'CSS 里旧的 wclock-top 已清除');
+for (const id of ['wclock', 'wcal', 'wtodo']) {
+  assert(new RegExp(`id="f-pos-${id}"`).test(html), `设置页含 #f-pos-${id} 位置下拉`);
+}
+assert(/data-i18n="wpos\.top"/.test(html) && /data-i18n="wpos\.left"/.test(html), '位置选项词条齐备');
+assert(i18nSrc.includes("'wpos.top'") && i18nSrc.includes("'wpos.left'"), 'i18n 含 wpos 两条');
+assert(!/clockpos\./.test(i18nSrc) && !/gen\.clock_pos/.test(i18nSrc), '旧的 clockpos 词条已清除');
+assert(/\.widget\.w-top \{/.test(cssSrc), 'CSS 定义通用 .widget.w-top');
+// 顶部态样式必须以 .widget 限定，否则被文件后面同特异性的 .wclock/.wcal 规则覆盖
+assert(!/^\.w-top /m.test(cssSrc), '顶部态选择器均以 .widget 限定（避免被后续同特异性规则覆盖）');
+assert(/\.widget\.wclock\.w-top/.test(cssSrc) && /\.widget\.wcal\.w-top/.test(cssSrc),
+  '时钟与日历各有顶部态专属样式');
+// 顶部栈的 10px 间距只能在 flow 生效：画布模式坐标已含该间距，再加一次就会互相压 10px
+assert(/\.layout:not\(\.canvas\) \.widget\.w-top \+ \.widget\.w-top/.test(cssSrc),
+  '顶部栈间距限定在非画布模式（否则画布下重复施加）');
+// 日历格子是「日期 + 农历」两行，钉死高度/行高会裁掉第二行
+assert(!/\.widget\.wcal\.w-top \.cal-cell[^}]*line-height/.test(cssSrc),
+  '日历顶部态未给格子写死 line-height（会裁掉农历行）');
+// 陈旧检测与自愈重排
+assert(/normalizeWidgetPos\(st && st\.widgetPos\)/.test(canvasSrc), '画布陈旧检测按每组件位置判定');
+assert(/function topStackOverlaps/.test(canvasSrc), 'canvas.js 定义 topStackOverlaps()');
+assert(/function relayoutTopStackIfNeeded/.test(canvasSrc), 'canvas.js 定义 relayoutTopStackIfNeeded()');
+assert(/relayoutTopStackIfNeeded\(\); \}\);/.test(canvasSrc), 'ResizeObserver 里挂了顶部栈自愈');
+assert(/relayoutBusy/.test(canvasSrc), '自愈带重入保护（避免重排触发重排）');
+assert(/if \(!l \|\| l\.auto === false\) return; \/\/ a hand-dragged/.test(canvasSrc),
+  '手拖过的布局不被自愈重排覆盖');
+// schema 迁移：旧的单个 clockPos 必须平滑搬进 widgetPos
+assert(/const SCHEMA_VERSION = 4;/.test(appSrc), 'SCHEMA_VERSION 提到 4');
+assert(/3: \(d\) => \{/.test(appSrc), 'MIGRATIONS 含 v3→v4');
+assert(/delete st\.clockPos/.test(appSrc), '迁移后清掉旧的 clockPos 字段');
+assert(/state\.settings\.widgetPos = normalizeWidgetPos\(state\.settings\.widgetPos\)/.test(appSrc),
+  'doImport 校验 widgetPos');
 // 卡片坐标 GC：已删除卡片的格位必须回收，否则新卡片被挤到后面
 assert(/for \(const id in map\) if \(!alive\.has\(id\)\)/.test(canvasSrc), 'assignInitialCardLayout 回收失效卡片坐标');
 assert(/if \(pruned\) \{ setCardLayoutMap\(map\);/.test(canvasSrc), '坐标回收后落盘一次');

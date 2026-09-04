@@ -232,21 +232,35 @@
             </select>
           </label>
           <div class="wgt-zone">
-            <span class="data-label" data-i18n="gen.widgets">Left column widgets</span>
-            <div class="wgt-checks">
-              <label class="wgt-check"><input type="checkbox" id="f-w-wclock" checked><span data-i18n="widget.clock">Clock</span></label>
-              <label class="wgt-check"><input type="checkbox" id="f-w-wcal" checked><span data-i18n="widget.calendar">Calendar</span></label>
-              <label class="wgt-check"><input type="checkbox" id="f-w-wtodo" checked><span data-i18n="widget.todo">To-dos</span></label>
+            <span class="data-label" data-i18n="gen.widgets">Widgets</span>
+            <div class="wgt-rows">
+              <label class="wgt-row">
+                <input type="checkbox" id="f-w-wclock" checked>
+                <span class="wgt-name" data-i18n="widget.clock">Clock</span>
+                <select id="f-pos-wclock" class="wgt-pos">
+                  <option value="top" data-i18n="wpos.top">Above search</option>
+                  <option value="left" data-i18n="wpos.left">Left column</option>
+                </select>
+              </label>
+              <label class="wgt-row">
+                <input type="checkbox" id="f-w-wcal" checked>
+                <span class="wgt-name" data-i18n="widget.calendar">Calendar</span>
+                <select id="f-pos-wcal" class="wgt-pos">
+                  <option value="top" data-i18n="wpos.top">Above search</option>
+                  <option value="left" data-i18n="wpos.left">Left column</option>
+                </select>
+              </label>
+              <label class="wgt-row">
+                <input type="checkbox" id="f-w-wtodo" checked>
+                <span class="wgt-name" data-i18n="widget.todo">To-dos</span>
+                <select id="f-pos-wtodo" class="wgt-pos">
+                  <option value="top" data-i18n="wpos.top">Above search</option>
+                  <option value="left" data-i18n="wpos.left">Left column</option>
+                </select>
+              </label>
             </div>
-            <p class="data-tip" data-i18n="gen.widgets_tip">Uncheck to remove. With all three removed the left column collapses and the icon grid spans the full width.</p>
+            <p class="data-tip" data-i18n="gen.widgets_tip">Uncheck to remove a widget; the dropdown moves it between the top stack and the left column. With the left column emptied it collapses and the icon grid spans the full width.</p>
           </div>
-          <label>
-            <span data-i18n="gen.clock_pos">Clock placement</span>
-            <select id="f-clock-pos">
-              <option value="left" data-i18n="clockpos.left">Left column card</option>
-              <option value="top" data-i18n="clockpos.top">Above the search box</option>
-            </select>
-          </label>
           <div class="data-zone">
             <span class="data-label" data-i18n="gen.data">Data management</span>
             <div class="data-actions">

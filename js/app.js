@@ -73,9 +73,11 @@
     // removing all three collapses the whole left column so the icon grid spans the full width.
     // Lives inside settings on purpose — it then rides along with export / import / cloud sync for free.
     widgets: { wclock: true, wcal: true, wtodo: true },
-    // Clock placement: 'left' keeps it as the first left-column card, 'top' lifts it above the
-    // search box as a big centred time + date line (the phone-launcher look).
-    clockPos: 'left'
+    // Per-widget placement: 'left' keeps the widget as a left-column card, 'top' lifts it into the
+    // stack above the search box (centred, card chrome dropped — the phone-launcher look).
+    // Clock and calendar default to the top stack; the to-do list stays a left-column card because
+    // it is interactive and taller.
+    widgetPos: { wclock: 'top', wcal: 'top', wtodo: 'left' }
   };
   // Left-column widget ids, in render order. Single source of truth for visibility + settings UI.
   const WIDGETS = ['wclock', 'wcal', 'wtodo'];
@@ -215,7 +217,7 @@
 
   // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
   // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
-  const SCHEMA_VERSION = 3;
+  const SCHEMA_VERSION = 4;
   const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema' };
   // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
   // to the content script across tabs without ever putting it in the URL.
@@ -1269,6 +1271,7 @@
     if (!ENGINES.some(x => x.id === state.settings.engine)) state.settings.engine = 'baidu';
     if (!Array.isArray(state.settings.groups)) state.settings.groups = [];
     state.settings.widgets = normalizeWidgets(state.settings.widgets);
+    state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
     setLangOnly(state.settings.lang);
     const gids = new Set(state.settings.groups.map(g => g.id));
     state.items = Array.isArray(migrated.items)
@@ -1887,6 +1890,22 @@
       return d;
     },
     // v2 -> v3: prompt library (lt.prompts). Existing users get the built-in set injected; an empty array means the user cleared it, so do not re-inject.
+    // v3 -> v4: per-widget placement. The old single settings.clockPos becomes widgetPos.wclock;
+    // the calendar joins the clock in the top stack (the layout this release ships with) unless the
+    // user had already parked the clock in the left column, in which case keep the familiar
+    // left-column layout for both instead of moving their calendar behind their back.
+    3: (d) => {
+      const st = d.settings || {};
+      if (!st.widgetPos || typeof st.widgetPos !== 'object') {
+        const clock = st.clockPos === 'top' ? 'top' : (st.clockPos === 'left' ? 'left' : null);
+        st.widgetPos = clock === 'left'
+          ? { wclock: 'left', wcal: 'left', wtodo: 'left' }
+          : { wclock: 'top', wcal: 'top', wtodo: 'left' };
+      }
+      delete st.clockPos;
+      d.settings = st;
+      return d;
+    },
     2: (d) => {
       if (d.prompts == null) d.prompts = DEFAULT_PROMPTS.map(p => ({ ...p, id: nid() }));
       return d;
@@ -2081,7 +2100,7 @@
   function applyWidgets() {
     const vis = normalizeWidgets(state.settings && state.settings.widgets);
     state.settings.widgets = vis;
-    applyClockPos();
+    applyWidgetPos();
     for (const id of WIDGETS) {
       const el = document.querySelector('.widget.' + id);
       if (el) el.hidden = !vis[id];
@@ -2098,29 +2117,46 @@
     // In free-canvas mode the block coordinates are frozen, so hiding a widget would leave a hole.
     window.LT_CANVAS.recaptureBlocksFromFlow();
   }
-  // Move the clock card between the left column and the slot above the search box. The clock's own
-  // DOM (and therefore startClock's element handles) is reused verbatim — only its parent and one
-  // class change, so nothing about the tick logic has to know this feature exists.
-  function applyClockPos() {
-    const el = document.querySelector('.widget.wclock');
-    if (!el) return;
-    const pos = (state.settings && state.settings.clockPos) === 'top' ? 'top' : 'left';
+  // Per-widget placement (#62). Coerce anything off disk / out of an imported file into a full
+  // {wclock,wcal,wtodo} map of 'left' | 'top'; unknown values fall back to the shipped default so a
+  // corrupt file can never strand a widget somewhere it cannot be found.
+  function normalizeWidgetPos(raw) {
+    const out = {};
+    for (const id of WIDGETS) {
+      const v = raw && raw[id];
+      out[id] = (v === 'left' || v === 'top') ? v : DEFAULT_SETTINGS.widgetPos[id];
+    }
+    return out;
+  }
+  // Move each widget card between the left column and the slot above the search box. The widget's
+  // own DOM is reused verbatim — only its parent and one class change — so the clock's tick logic
+  // and the calendar's month renderer never have to know this feature exists.
+  function applyWidgetPos() {
+    const pos = normalizeWidgetPos(state.settings && state.settings.widgetPos);
+    state.settings.widgetPos = pos;
     const left = document.querySelector('.layout > .left');
     const right = document.querySelector('.layout > .right');
     const search = document.getElementById('search');
-    if (pos === 'top' && right && search) {
-      if (el.parentElement !== right) right.insertBefore(el, search);
-    } else if (pos === 'left' && left && el.parentElement !== left) {
-      left.insertBefore(el, left.firstChild);
+    // Walk WIDGETS in order and insert before #search each time, so the top stack ends up in the
+    // same clock -> calendar -> to-do order as the left column would have shown.
+    for (const id of WIDGETS) {
+      const el = document.querySelector('.widget.' + id);
+      if (!el) continue;
+      if (pos[id] === 'top' && right && search) {
+        right.insertBefore(el, search);
+      } else if (pos[id] === 'left' && left) {
+        left.appendChild(el);
+      }
+      el.classList.toggle('w-top', pos[id] === 'top');
+      const sel = document.getElementById('f-pos-' + id);
+      if (sel && sel.value !== pos[id]) sel.value = pos[id];
     }
-    el.classList.toggle('wclock-top', pos === 'top');
-    const sel = document.getElementById('f-clock-pos');
-    if (sel && sel.value !== pos) sel.value = pos;
   }
   // Remove one widget, with an undo toast — same affordance as deleting a shortcut card.
   function removeWidget(id) {
     if (!WIDGETS.includes(id) || !widgetVisible(id)) return;
     state.settings.widgets = normalizeWidgets(state.settings.widgets);
+    state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
     state.settings.widgets[id] = false;
     Store.set(K.settings, state.settings);
     applyWidgets();
@@ -2143,20 +2179,24 @@
       if (!box) continue;
       box.addEventListener('change', () => {
         state.settings.widgets = normalizeWidgets(state.settings.widgets);
+    state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
         state.settings.widgets[id] = box.checked;
         Store.set(K.settings, state.settings);
         applyWidgets();
       });
     }
-    const posSel = document.getElementById('f-clock-pos');
-    if (posSel) {
-      posSel.addEventListener('change', () => {
-        state.settings.clockPos = posSel.value === 'top' ? 'top' : 'left';
+    for (const id of WIDGETS) {
+      const sel = document.getElementById('f-pos-' + id);
+      if (!sel) continue;
+      sel.addEventListener('change', () => {
+        state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
+        state.settings.widgetPos[id] = sel.value === 'top' ? 'top' : 'left';
         Store.set(K.settings, state.settings);
         applyWidgets();
       });
     }
   }
+
 
   // ---------- Boot ----------
   async function boot() {
@@ -2298,7 +2338,7 @@
   window.LT_APP = {
     state, Store, K, ENGINES, WIDGETS,
     t, engName, escapeHtml, nid, showToast,
-    launchPrompt, setEngine, normalizeWidgets,
+    launchPrompt, setEngine, normalizeWidgets, normalizeWidgetPos,
     getCurrentEngine: () => currentEngine,
     getActivePrompt: () => activePrompt,
     setActivePrompt: (p) => { activePrompt = p; }
@@ -2309,7 +2349,7 @@
   // Exposed for the offline probe harness: it has to drive port fallback and timeout paths with a
   // stubbed fetch, which is impossible from the outside.
   window.LT_PROBE_WB = probeWorkBuddy;
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, resolveTheme, todayStr, pickRotateCandidate };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

@@ -190,48 +190,102 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 /* Settings → General: left-column widget toggles */
 .wgt-zone { margin-top: 4px; }
-.wgt-checks { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 8px 0 2px; }
-.wgt-check {
-  display: inline-flex; align-items: center; gap: 7px;
+.wgt-rows { display: flex; flex-direction: column; gap: 7px; margin: 8px 0 2px; }
+.wgt-row {
+  display: grid; grid-template-columns: 15px 1fr auto; align-items: center; gap: 9px;
   font-size: 13px; color: var(--ink-2); cursor: pointer;
 }
-.wgt-check input { width: 15px; height: 15px; accent-color: var(--accent-2); cursor: pointer; }
+.wgt-row input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent-2); cursor: pointer; }
+.wgt-pos { width: auto; min-width: 118px; font-size: 12.5px; padding: 4px 8px; }
 
 /* #61 clock lifted above the search box: drop the card chrome and centre it, phone-launcher style.
  * Same DOM as the left-column card, so the tick logic is untouched — only presentation changes.
  * Every selector here is qualified with .widget so it outranks the plain `.wclock .clock-*` block
  * further down the file (equal specificity would otherwise let the later rules win). The box is
  * clamped to the search box's own max-width and left margin so the two read as one centred group. */
-.widget.wclock-top {
+/* #62 widgets lifted above the search box: drop the card chrome, centre them, and clamp to the
+ * search box's own width so the whole stack reads as one group. Selectors are written .widget.w-top
+ * (0,3,0) on purpose — the base .wclock / .wcal rules live further down the file, so equal
+ * specificity would let them win. The DOM is the same node the left column uses, so every widget's
+ * render logic is untouched. */
+.widget.w-top {
   background: none;
   border: 0;
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  padding: clamp(6px, 2vh, 22px) 0 clamp(10px, 2vh, 20px);
+  padding: 0;
   text-align: center;
   max-width: 640px;
   margin: 0 auto 0 0;
 }
-.widget.wclock-top .clock-row { justify-content: center; gap: 6px; }
-.widget.wclock-top .clock-hhmm {
+/* Stack gap: flow only. In canvas mode blocks are absolutely positioned and their y already bakes in
+ * this gap (it was measured from a flow pass), so leaving the margin on would apply it a second time
+ * and push each block 10px into the next one. `.widget.w-top + .widget.w-top` is (0,4,0) and would
+ * otherwise beat `.layout.canvas .widget { margin: 0 }` at (0,2,0). */
+.layout:not(.canvas) .widget.w-top + .widget.w-top { margin-top: 10px; }
+/* The box is 640px wide (to line up with the search field) while each widget's own content is
+ * narrower and centred, so pinning ✕ to right:0 leaves it floating in empty space. Park it just
+ * outside each widget's content instead, via a per-widget half-width. */
+.widget.w-top .w-del {
+  top: 0;
+  right: auto;
+  left: 50%;
+  transform: translateX(var(--wtop-del, 210px));
+}
+.widget.wclock.w-top { --wtop-del: 226px; } /* date + lunar line */
+.widget.wcal.w-top { --wtop-del: 168px; }   /* 320px month strip */
+.widget.wtodo.w-top { --wtop-del: 218px; }  /* 420px list */
+
+/* --- clock in the top stack: big time, date and lunar on one line --- */
+.widget.wclock.w-top { padding: clamp(4px, 1.6vh, 18px) 0 clamp(6px, 1.2vh, 14px); }
+.widget.wclock.w-top .clock-row { justify-content: center; gap: 6px; }
+.widget.wclock.w-top .clock-hhmm {
   font-size: clamp(56px, 6vw, 88px);
   font-weight: 300;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.28);
 }
-.widget.wclock-top .clock-sec { display: none; } /* seconds are noise at this size */
-/* Date and lunar sit on one line, matching the phone lock-screen reference. */
-.widget.wclock-top .clock-date,
-.widget.wclock-top .clock-lunar {
+.widget.wclock.w-top .clock-sec { display: none; } /* seconds are noise at this size */
+.widget.wclock.w-top .clock-date,
+.widget.wclock.w-top .clock-lunar {
   display: inline;
   margin: 0;
   font-size: clamp(13px, 1.15vw, 15.5px);
   color: var(--ink-2);
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.25);
 }
-.widget.wclock-top .clock-lunar::before { content: ''; display: inline-block; width: 12px; }
-.widget.wclock-top .clock-greet { margin-top: 6px; }
-.widget.wclock-top .w-del { top: 4px; right: 4px; }
+.widget.wclock.w-top .clock-lunar::before { content: ''; display: inline-block; width: 12px; }
+.widget.wclock.w-top .clock-greet { margin-top: 6px; }
+
+/* --- calendar in the top stack: compact month strip, no card, header inline --- */
+.widget.wcal.w-top { padding: 2px 0 14px; }
+.widget.wcal.w-top .w-head {
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.widget.wcal.w-top .w-title { display: none; } /* the grid speaks for itself up here */
+.widget.wcal.w-top .cal-nav { gap: 4px; }
+.widget.wcal.w-top .cal-week span { font-size: 10px; padding: 1px 0; }
+/* Each cell stacks the day number over its lunar label, so shrink the type and keep enough height —
+ * pinning a short height (or any line-height) clips the second line. */
+.widget.wcal.w-top .cal-cell { height: 30px; font-size: 12px; border-radius: 8px; }
+.widget.wcal.w-top .cal-cell i { font-size: 8.5px; margin-top: 2px; }
+.widget.wcal.w-top .cal-grid { gap: 1px; }
+/* Keep the month strip from stretching to the full 640px — it reads better tight and centred. */
+.widget.wcal.w-top .cal-week,
+.widget.wcal.w-top .cal-grid {
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* --- to-do in the top stack: keep it readable, just lose the card --- */
+.widget.wtodo.w-top { padding: 2px 0 6px; }
+.widget.wtodo.w-top .w-head { justify-content: center; gap: 10px; }
+.widget.wtodo.w-top .todo-add,
+.widget.wtodo.w-top .todo-list { max-width: 420px; margin-left: auto; margin-right: auto; }
+.widget.wtodo.w-top .todo-list { text-align: left; }
 
 /* WorkBuddy desktop reachability dot in the engine dropdown (#61) */
 .eng-state {
