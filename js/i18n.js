@@ -192,6 +192,11 @@
     'toast.wall_rotate_on':{ zh: '已开启每日壁纸轮换', en: 'Daily wallpaper rotation on' },
     'toast.copied':        { zh: '已复制到剪贴板', en: 'Copied to clipboard' },
     'toast.deleted':       { zh: '已删除', en: 'Deleted' },
+    // #60 left-column widget removal
+    'widget.removed':      { zh: '组件已移除', en: 'Widget removed' },
+    'widget.remove':       { zh: '移除该组件', en: 'Remove this widget' },
+    'gen.widgets':         { zh: '左栏组件', en: 'Left column widgets' },
+    'gen.widgets_tip':     { zh: '取消勾选即移除；三个都移除后左栏收起，图标网格自动占满整宽。', en: 'Uncheck to remove. With all three removed the left column collapses and the icon grid spans the full width.' },
     'toast.undo':          { zh: '撤销', en: 'Undo' },
     'toast.name_required': { zh: '名称不能为空', en: 'Name is required' },
     'toast.url_invalid':   { zh: '网址格式不正确', en: 'Invalid URL format' },
