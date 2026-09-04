@@ -8,11 +8,13 @@
  *  3) 版本号一致：manifest.json / newtab.html ver-line / app.js exportPayload() /
  *     js/i18n.js 的 gen.version（中英两份）
  *  4) 纯函数断言：looksLikeUrl（URL 识别）、lunar 已知日期换算、iconFor 后缀匹配、
- *     sanitizeWallpaperUrl 白名单、resolveTheme（dark/light/system 映射）、
+ *     sanitizeWallpaperUrl 白名单、sanitizeIconDataUrl（#50 自定义图标守卫）、
+ *     resolveTheme（dark/light/system 映射）、
  *     todayStr / pickRotateCandidate（#49 壁纸轮换纯逻辑）、i18n 字典 zh/en 完整性
  *  5) newtab.html 无编辑器残留的 data-page-node-id 属性
  *  6) #48 主题静态结构：html 默认 data-theme、#f-theme 三选项、主题词条钩子
  *  7) #49 壁纸轮换静态结构：#f-wall-rotate 复选框、词条钩子、K 映射含 walllib/rot
+ *  8) #50 自定义图标静态结构：#f-icon 上传、预览、移除、icon 字段导入/渲染钩子
  */
 'use strict';
 
@@ -62,6 +64,7 @@ if (manifest) {
 console.log('[3] 版本号一致性');
 const html = read('newtab.html');
 const appSrc = read('js/app.js');
+const cssSrc = read('css/style.css');
 const i18nSrc = read('js/i18n.js');
 const mHtml = html.match(/ver-line[^>]*>\s*LightTab v(\d+\.\d+\.\d+)/);
 const mApp = appSrc.match(/\bversion:\s*'(\d+\.\d+\.\d+)'/);
@@ -130,6 +133,15 @@ console.log('[4] 纯函数');
     assert(P.sanitizeWallpaperUrl("https://x.com/a');alert(1);//") === null, '拒绝含引号的 URL');
     assert(P.sanitizeWallpaperUrl('javascript:alert(1)') === null, '拒绝 javascript:');
     assert(P.sanitizeWallpaperUrl('http://x.com/a.jpg') === null, '拒绝 http:');
+    // sanitizeIconDataUrl：#50 自定义图标只收本地 base64 光栅图（png/jpeg/webp/gif）
+    assert(P.sanitizeIconDataUrl('data:image/png;base64,iVBORw0KGgo=') !== null, '允许 data:image/png;base64');
+    assert(P.sanitizeIconDataUrl('data:image/jpeg;base64,/9j/4AAQ') !== null, '允许 data:image/jpeg;base64');
+    assert(P.sanitizeIconDataUrl('data:image/webp;base64,UklGR') !== null, '允许 data:image/webp;base64');
+    assert(P.sanitizeIconDataUrl('data:image/svg+xml;base64,PHN2Zz4=') === null, '拒绝 svg dataURL');
+    assert(P.sanitizeIconDataUrl('https://cdn.example.com/logo.png') === null, '拒绝远程 URL');
+    assert(P.sanitizeIconDataUrl('data:text/html;base64,PGI+') === null, '拒绝非图片 dataURL');
+    assert(P.sanitizeIconDataUrl("data:image/png;base64,AB'CD") === null, '拒绝含引号的 dataURL');
+    assert(P.sanitizeIconDataUrl('data:image/png;base64,' + 'A'.repeat(140 * 1024)) === null, '拒绝超 128KiB 的图标');
     // iconFor：精确命中 + 主域尾缀匹配 + 未收录返回 null
     sandbox.LT_ICONDB = { 'github.com': { c: '#1f2937', d: 'M0 0' }, 'wikipedia.org': { c: '#000', d: 'M1 1' } };
     assert(P.iconFor('https://github.com/susunola')?.d === 'M0 0', 'iconFor 精确匹配 github.com');
@@ -186,6 +198,12 @@ console.log('[4] 纯函数');
     I.setLang('en');
     assert(allTranslated('en'), '壁纸轮换词条 英文已译', rotKeys.map(k => I.t(k)).join(' | '));
     I.setLang('zh');
+    // #50 custom icon keys: both languages translated
+    const iconKeys = ['icon.label', 'icon.upload', 'icon.remove', 'icon.tip', 'toast.icon_invalid'];
+    assert(iconKeys.every(k => I.t(k) !== k && I.t(k).length > 0), '自定义图标词条 中文已译', iconKeys.map(k => I.t(k)).join(' | '));
+    I.setLang('en');
+    assert(iconKeys.every(k => I.t(k) !== k && I.t(k).length > 0), '自定义图标词条 英文已译', iconKeys.map(k => I.t(k)).join(' | '));
+    I.setLang('zh');
   }
 }
 
@@ -215,6 +233,19 @@ assert(/rot:\s*'lt\.rot'/.test(appSrc), 'K 映射含 lt.rot（每日轮换记账
 assert(/function maybeAutoRotate/.test(appSrc), 'app.js 定义 maybeAutoRotate()');
 assert(/function markManualPickToday/.test(appSrc), 'app.js 定义 markManualPickToday()');
 assert(/pickRotateCandidate|todayStr/.test(appSrc), 'app.js 导出轮换纯函数到 LT_PURE');
+
+// ---------- 8) #50 自定义卡片图标静态结构 ----------
+console.log('[8] #50 自定义图标');
+assert(/<input id="f-icon" type="file"/.test(html), '快捷方式弹窗含 #f-icon 上传输入');
+assert(/id="f-icon-preview"/.test(html), '弹窗含 #f-icon-preview 预览格');
+assert(/id="f-icon-remove"/.test(html), '弹窗含 #f-icon-remove 移除按钮');
+assert(/data-i18n="icon\.(label|upload|remove|tip)"/.test(html), '图标区词条钩子齐备');
+assert(/function sanitizeIconDataUrl/.test(appSrc), 'app.js 定义 sanitizeIconDataUrl()');
+assert(/function compressIconSquare/.test(appSrc), 'app.js 定义 compressIconSquare()');
+assert(/let pendingIcon/.test(appSrc), 'app.js 定义 pendingIcon 模态暂存态');
+assert(/logo-img/.test(appSrc) && /logo-img/.test(cssSrc), '卡片渲染/样式支持 .logo-img（img 分支）');
+assert(/icon:\s*sanitizeIconDataUrl\(it\.icon\)/.test(appSrc), 'doImport 校验并保留 icon 字段');
+assert(/it\.icon = icon/.test(appSrc), '编辑保存写入 icon 字段');
 
 console.log('');
 if (failures) {

@@ -122,6 +122,12 @@
     'site.cancel': { zh: '取消', en: 'Cancel' },
     'site.save':   { zh: '保存', en: 'Save' },
 
+    // #50 custom per-card icon (shortcut modal)
+    'icon.label':  { zh: '图标', en: 'Icon' },
+    'icon.upload': { zh: '上传图标', en: 'Upload icon' },
+    'icon.remove': { zh: '移除', en: 'Remove' },
+    'icon.tip':    { zh: '可选：上传方形图片作为此卡图标（PNG / JPG / WebP / GIF，≤4MB，自动裁成方形）。留空则继续使用内置品牌图标或首字母。', en: 'Optional: upload a square image as this card\'s icon (PNG/JPG/WebP/GIF, \u22644MB, auto-cropped square). Leave empty to keep the brand icon or initial.' },
+
     // ---------- Settings modal tabs ----------
     'set.wall':    { zh: '壁纸', en: 'Wallpaper' },
     'set.general': { zh: '常规', en: 'General' },
@@ -214,6 +220,7 @@
     'toast.bookmarks_dup_suffix': { zh: '，跳过 {n} 个重复', en: ', skipped {n} duplicates' },
     'toast.bookmarks_group':   { zh: '（归入当前分组）', en: ' (added to current group)' },
     'toast.image_too_big':     { zh: '图片超过 4MB，请压缩后再试', en: 'Image exceeds 4MB, please compress and retry' },
+    'toast.icon_invalid':      { zh: '图片无法读取，请换一张重试', en: 'Could not read that image, please try another' },
     'toast.reset_confirm':     { zh: '确认重置所有数据？\n（名称、引擎、壁纸、快捷方式、分组、模板、待办都会被清空）', en: 'Reset all data?\n(Name, engine, wallpaper, shortcuts, groups, templates, and to-dos will be cleared.)' },
     'toast.reset_done':        { zh: '已恢复默认数据', en: 'Restored defaults' },
     'toast.unnamed':           { zh: '未命名', en: 'Untitled' },
