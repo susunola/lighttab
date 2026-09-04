@@ -25,10 +25,10 @@ unless you explicitly turn on an online feature (cloud sync, Bing daily wallpape
 
 ## Features
 
-- **Clock & greeting** — live time, date and a time-of-day greeting, plus the Chinese lunar calendar (sexagenary year, zodiac, leap months, 1900–2100, computed entirely on-device)
+- **Clock & greeting** — live time, date and a time-of-day greeting, plus the Chinese lunar calendar (sexagenary year, zodiac, leap months, 1900–2100, computed entirely on-device). The clock can sit in the left column or lifted above the search box as a large centred time line (phone-launcher style)
 - **Bilingual UI (English / 中文)** — switch the whole interface in *Settings → General → Language*. Greetings, dates, the lunar line, calendar, engine names, menus and messages all follow. Persisted locally, applied instantly, no reload
 - **Calendar widget** — local month view with lunar-day labels and month navigation (zero network)
-- **One-box search** — URL shortcuts (bare domains with paths work, e.g. `github.com/susunola`), 6 search engines, 2 AI chats (Doubao, ChatGPT) and a WorkBuddy deep link
+- **One-box search** — URL shortcuts (bare domains with paths work, e.g. `github.com/susunola`), 6 search engines, 2 AI chats (Doubao, ChatGPT) and a WorkBuddy deep link. When WorkBuddy Desktop is running it is shown live in the engine list via a local loopback probe (no extra permissions)
 - **AI prompt launcher** (press `/`) — pick a template, type your content, and send the same prompt to several targets at once. The prompt text never travels in the URL (it goes through a nonce channel in extension mode); if the target page blocks auto-fill, the prompt is copied to your clipboard with an on-page notice
 - **Icon grid** — drag to reorder, groups, and a built-in brand-icon library so no favicon is ever fetched from a third party
 - **Free canvas layout** — on wide screens every widget and card can be dragged anywhere; cards snap to a grid and swap places with whatever is already there

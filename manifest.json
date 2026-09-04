@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.18.1",
+  "version": "1.19.0",
   "name": "LightTab - Minimal New Tab",
   "short_name": "LightTab",
   "description": "Minimal new tab: clock, lunar calendar, search, AI prompts, shortcuts, to-dos, Bing wallpapers. Local-first, optional cloud sync.",
