@@ -142,6 +142,18 @@ console.log('[4] 纯函数');
     assert(P.sanitizeIconDataUrl('data:text/html;base64,PGI+') === null, '拒绝非图片 dataURL');
     assert(P.sanitizeIconDataUrl("data:image/png;base64,AB'CD") === null, '拒绝含引号的 dataURL');
     assert(P.sanitizeIconDataUrl('data:image/png;base64,' + 'A'.repeat(140 * 1024)) === null, '拒绝超 128KiB 的图标');
+    // iconCropRect：内容感知方形裁切（竖图去 tagline）
+    const dense = (n) => Array(n).fill(0.6);
+    let R = P.iconCropRect(300, 600, dense(600));
+    assert(R.sx === 0 && R.sy === 0 && R.side === 300, '竖图无空隙 → 顶部正方形', JSON.stringify(R));
+    R = P.iconCropRect(300, 600, dense(200).concat(Array(400).fill(0)));
+    assert(R.sx === 50 && R.sy === 0 && R.side === 200, '竖图下有空隙 → 只取首块（图标）', JSON.stringify(R));
+    R = P.iconCropRect(400, 400, dense(400));
+    assert(R.sx === 0 && R.sy === 0 && R.side === 400, '近方形 → 全图', JSON.stringify(R));
+    R = P.iconCropRect(600, 300, null);
+    assert(R.sx === 150 && R.sy === 0 && R.side === 300, '宽图 → 中心裁方', JSON.stringify(R));
+    R = P.iconCropRect(300, 600, dense(200).concat(Array(200).fill(0)).concat(dense(200)));
+    assert(R.sx === 50 && R.sy === 0 && R.side === 200, '图标+空隙+tagline → 只取首块', JSON.stringify(R));
     // iconFor：精确命中 + 主域尾缀匹配 + 未收录返回 null
     sandbox.LT_ICONDB = { 'github.com': { c: '#1f2937', d: 'M0 0' }, 'wikipedia.org': { c: '#000', d: 'M1 1' } };
     assert(P.iconFor('https://github.com/susunola')?.d === 'M0 0', 'iconFor 精确匹配 github.com');
@@ -247,7 +259,8 @@ assert(/logo-img/.test(appSrc) && /logo-img/.test(cssSrc), '卡片渲染/样式�
 assert(/icon:\s*sanitizeIconDataUrl\(it\.icon\)/.test(appSrc), 'doImport 校验并保留 icon 字段');
 assert(/it\.icon = icon/.test(appSrc), '编辑保存写入 icon 字段');
 assert(/has-custom-icon/.test(appSrc) && /\.has-custom-icon/.test(cssSrc), '自定义图标卡片挂 has-custom-icon 类，CSS 给主题感知中性底');
-assert(/aspect\s*<\s*SQ_LO/.test(appSrc), 'compressIconSquare 对竖图取 top-crop（保留图标、丢弃 tagline）');
+assert(/function iconCropRect/.test(appSrc), 'app.js 定义 iconCropRect（内容感知裁切）');
+assert(/iconCropRect/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'iconCropRect 已导出到 LT_PURE');
 
 console.log('');
 if (failures) {
