@@ -32,6 +32,9 @@
   ];
 
   const WALLPAPERS = [
+    // The factory default is a bundled render (procedurally generated, zero licensing surface);
+    // entries with `img` are bundled files, entries with `css` are gradients.
+    { id: 'dusk',     name: 'Dusk Mountain', img: 'assets/wallpaper-dusk.jpg' },
     { id: 'midnight', name: 'Dusk Blue',    css: 'linear-gradient(135deg,#0b1426 0%,#152a4f 45%,#1c3d6e 100%)' },
     { id: 'aurora',   name: 'Aurora',       css: 'linear-gradient(135deg,#0f1c3a 0%,#1e3a6e 50%,#2d5f8f 100%)' },
     { id: 'violet',   name: 'Night Violet', css: 'linear-gradient(135deg,#0f0a26 0%,#2b1b54 50%,#432e7a 100%)' },
@@ -39,6 +42,8 @@
     { id: 'graphite', name: 'Graphite',     css: 'linear-gradient(135deg,#0e1117 0%,#1f242e 50%,#2a3038 100%)' },
     { id: 'rose',     name: 'Dusk Red',     css: 'linear-gradient(135deg,#1a0f1a 0%,#3d1b2e 50%,#5a2540 100%)' }
   ];
+  // What a fresh profile (or an unreadable saved wallpaper) gets.
+  const BUNDLED_WALL = { type: 'image', value: 'assets/wallpaper-dusk.jpg', light: false };
 
   const DEFAULT_SITES = [
     { id: nid(), title: 'GitHub',         url: 'https://github.com',            color: '#181717' },
@@ -61,7 +66,7 @@
     lang: 'zh',
     // Theme: 'dark' | 'light' | 'system' (follow the OS scheme).
     theme: 'dark',
-    wallpaper: WALLPAPERS[0],
+    wallpaper: { ...BUNDLED_WALL },
     // Daily Bing wallpaper auto-rotate: when on, one Bing daily image from the local pool is
     // applied per calendar day. Manual picks always win for the rest of that day.
     wallRotate: false,
@@ -149,12 +154,12 @@
   function looksLikeUrl(q) {
     return /^https?:\/\//i.test(q) || /^[^\s]+\.[a-z]{2,}([/?#]\S*)?$/i.test(q);
   }
-  // Wallpaper URL allow-list (guards against CSS injection): only data:image/ and https: are accepted,
-  // and quotes / backslashes / newlines are rejected outright.
+  // Wallpaper URL allow-list (guards against CSS injection): data:image/, https: and bundled
+  // assets/ paths are accepted; quotes / backslashes / newlines are rejected outright.
   function sanitizeWallpaperUrl(v) {
     if (typeof v !== 'string' || !v) return null;
     if (/['"\\\r\n]/.test(v)) return null;
-    if (/^data:image\//i.test(v) || /^https:/i.test(v)) return v;
+    if (/^data:image\//i.test(v) || /^https:/i.test(v) || /^assets\/[\w.-]+$/.test(v)) return v;
     return null;
   }
   // Custom per-card icon guard: only local base64 raster images (data:image/png|jpeg|webp|gif),
@@ -327,28 +332,25 @@
   // ---------- Wallpaper ----------
   function applyWallpaper(wp) {
     const el = document.getElementById('wallpaper');
-    el.classList.toggle('bg-light', !!(wp && wp.type === 'image' && wp.light));
-    if (!wp || !wp.type) {
-      el.style.background = WALLPAPERS[0].css;
-      return;
-    }
-    if (wp.type === 'image' && sanitizeWallpaperUrl(wp.value)) {
+    // Anything unreadable (missing type, disallowed image URL, empty gradient) falls back to the bundled default.
+    if (!wp || !wp.type
+      || (wp.type === 'image' && !sanitizeWallpaperUrl(wp.value))
+      || (wp.type === 'gradient' && !wp.value)) wp = BUNDLED_WALL;
+    el.classList.toggle('bg-light', !!(wp.type === 'image' && wp.light));
+    if (wp.type === 'image') {
       el.style.background = `center/cover no-repeat url("${sanitizeWallpaperUrl(wp.value)}")`;
-    } else if (wp.type === 'gradient' && wp.value) {
-      el.style.background = wp.value;
     } else {
-      // An invalid image URL also falls back to the default gradient.
-      el.style.background = WALLPAPERS[0].css;
+      el.style.background = wp.value;
     }
   }
   function pickWallpaperFromData(data) {
-    // Both the import and read paths go through the allow-list; an invalid image URL falls back to the gradient.
+    // Both the import and read paths go through the allow-list; an invalid image URL falls back to the bundled default.
     if (data && data.type === 'image' && sanitizeWallpaperUrl(data.value)) {
       return { ...data, value: sanitizeWallpaperUrl(data.value) };
     }
     if (data && data.type === 'gradient' && data.value) return data;
-    // Legacy compatibility: nothing saved -> fall back to the default gradient.
-    return { type: 'gradient', value: WALLPAPERS[0].css };
+    // Legacy compatibility: nothing saved -> fall back to the bundled default.
+    return { ...BUNDLED_WALL };
   }
   async function setWallpaper(wp) {
     state.wallpaper = wp;
@@ -364,18 +366,18 @@
   let wallLibSavedAt = 0;      // ms epoch of the last successful fetch (drives the once-a-day silent refresh)
   let wallLibSource = 'bing';  // current wallpaper source: bing | wallhaven | unsplash
 
-  // Gradient swatch rendering (top level so bindSettings and the wallpaper library can both reuse it).
+  // Preset swatch rendering (top level so bindSettings and the wallpaper library can both reuse it).
   function renderSwatches() {
     const swEl = document.getElementById('swatches');
     if (!swEl) return;
     const currentId = state.wallpaper?.type === 'gradient'
-      ? WALLPAPERS.findIndex(w => w.css === state.wallpaper.value)
-      : -1;
+      ? WALLPAPERS.findIndex(w => w.css && w.css === state.wallpaper.value)
+      : WALLPAPERS.findIndex(w => w.img && w.img === state.wallpaper.value);
     swEl.innerHTML = WALLPAPERS.map((w, i) => `
-      <div class="swatch ${i === currentId ? 'active' : ''}" data-i="${i}" style="background:${w.css}">
+      <div class="swatch ${i === currentId ? 'active' : ''}" data-i="${i}" style="background:${w.img ? `center/cover url('${w.img}')` : w.css}">
         <span class="label">${t('wp.' + w.id)}</span>
       </div>
-    `).join('') + (state.wallpaper?.type === 'image' && sanitizeWallpaperUrl(state.wallpaper.value) ? `
+    `).join('') + (state.wallpaper?.type === 'image' && sanitizeWallpaperUrl(state.wallpaper.value) && currentId === -1 ? `
       <div class="swatch active" data-i="img" style="background:center/cover url('${sanitizeWallpaperUrl(state.wallpaper.value)}')">
         <span class="label">${t('wp.custom')}</span>
       </div>
@@ -384,7 +386,7 @@
       el.addEventListener('click', () => {
         if (el.dataset.i === 'img') return;
         const w = WALLPAPERS[+el.dataset.i];
-        setWallpaper({ type: 'gradient', value: w.css });
+        setWallpaper(w.img ? { type: 'image', value: w.img, light: false } : { type: 'gradient', value: w.css });
         markManualPickToday(); // a manual pick wins for the rest of this calendar day
         renderSwatches();
       });
@@ -1520,7 +1522,7 @@
     }));
     document.getElementById('f-upload').addEventListener('change', onUpload);
     document.getElementById('btn-reset-wall').addEventListener('click', () => {
-      setWallpaper({ type: 'gradient', value: WALLPAPERS[0].css });
+      setWallpaper({ ...BUNDLED_WALL });
       markManualPickToday(); // a manual pick wins for the rest of this calendar day
       renderSwatches();
       showToast(t('toast.wall_reset'));
@@ -2106,7 +2108,7 @@
     setLangOnly(state.settings.lang);
     applyTheme();
     state.items = structuredClone(DEFAULT_SITES).map(x => ({ ...x, id: nid(), group: '' }));
-    state.wallpaper = { type: 'gradient', value: WALLPAPERS[0].css };
+    state.wallpaper = { ...BUNDLED_WALL };
     state.todos = [];
     state.prompts = structuredClone(DEFAULT_PROMPTS);
     state.view = VIEW_ALL;

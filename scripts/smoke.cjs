@@ -137,6 +137,15 @@ console.log('[4] 纯函数');
     assert(P.sanitizeWallpaperUrl("https://x.com/a');alert(1);//") === null, '拒绝含引号的 URL');
     assert(P.sanitizeWallpaperUrl('javascript:alert(1)') === null, '拒绝 javascript:');
     assert(P.sanitizeWallpaperUrl('http://x.com/a.jpg') === null, '拒绝 http:');
+    // 出厂默认壁纸：打包在扩展里的本地资源
+    assert(P.sanitizeWallpaperUrl('assets/wallpaper-dusk.jpg') !== null, '允许打包的 assets/ 壁纸');
+    assert(P.sanitizeWallpaperUrl('assets/../etc/passwd') === null, '拒绝 assets/ 路径穿越');
+    assert(fs.existsSync(path.join(ROOT, 'assets/wallpaper-dusk.jpg')), 'assets/wallpaper-dusk.jpg 存在');
+    assert(/BUNDLED_WALL = \{ type: 'image', value: 'assets\/wallpaper-dusk\.jpg'/.test(appSrc), '出厂默认壁纸为打包图片');
+    assert(/WALLPAPERS = \[[\s\S]{0,200}id: 'dusk',\s+name: 'Dusk Mountain', img: 'assets\/wallpaper-dusk\.jpg'/.test(appSrc), '打包壁纸是首个预设色卡');
+    assert(/'wp\.dusk':\s*\{\s*zh: '暮山', en: 'Dusk Mountain' \}/.test(i18nSrc), 'wp.dusk 中英词条齐备');
+    assert(/replaceAll\('assets\/wallpaper-dusk\.jpg', 'data:image\/jpeg;base64,/.test(read('scripts/build-singlefile.cjs')),
+      '单文件构建把打包壁纸内联为 dataURL');
     // sanitizeIconDataUrl：#50 自定义图标只收本地 base64 光栅图（png/jpeg/webp/gif）
     assert(P.sanitizeIconDataUrl('data:image/png;base64,iVBORw0KGgo=') !== null, '允许 data:image/png;base64');
     assert(P.sanitizeIconDataUrl('data:image/jpeg;base64,/9j/4AAQ') !== null, '允许 data:image/jpeg;base64');

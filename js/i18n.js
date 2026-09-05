@@ -102,6 +102,7 @@
     'eng.wbai':     { zh: 'WorkBuddy', en: 'WorkBuddy' },
 
     // ---------- Wallpapers ----------
+    'wp.dusk':     { zh: '暮山', en: 'Dusk Mountain' },
     'wp.midnight': { zh: '暮色蓝', en: 'Dusk Blue' },
     'wp.aurora':   { zh: '极光', en: 'Aurora' },
     'wp.violet':   { zh: '暗夜紫', en: 'Night Violet' },
@@ -159,7 +160,7 @@
     'wall.fetch':     { zh: '获取最新', en: 'Get latest' },
     'wall.lib_tip':   { zh: '精选超高清壁纸（4K+），点击即可应用；需联网获取（图片来源见版权信息）。', en: 'Curated ultra-HD (4K+) wallpapers; click to apply. Requires network (see credits).' },
     'wall.upload':    { zh: '上传自定义图片', en: 'Upload custom image' },
-    'wall.reset':     { zh: '重置为渐变', en: 'Reset to gradient' },
+    'wall.reset':     { zh: '重置为默认壁纸', en: 'Reset to default wallpaper' },
     'wall.format_tip':{ zh: '支持 JPG / PNG / WebP / GIF；最大 4MB；仅保存在本地浏览器。', en: 'Supports JPG / PNG / WebP / GIF; max 4MB; stored locally only.' },
     'wall.loading':   { zh: '加载中…', en: 'Loading…' },
     'wall.got':       { zh: '已获取 {n} 张壁纸 · 点击应用（图片来源见版权信息）', en: 'Got {n} wallpapers · click to apply (see credits)' },
@@ -213,7 +214,7 @@
 
     // ---------- Toasts / notices ----------
     'toast.wall_applied':  { zh: '已应用壁纸', en: 'Wallpaper applied' },
-    'toast.wall_reset':    { zh: '已恢复默认渐变', en: 'Default gradient restored' },
+    'toast.wall_reset':    { zh: '已恢复默认壁纸', en: 'Default wallpaper restored' },
     'toast.wall_rotate_on':{ zh: '已开启每日壁纸轮换', en: 'Daily wallpaper rotation on' },
     'toast.copied':        { zh: '已复制到剪贴板', en: 'Copied to clipboard' },
     'toast.deleted':       { zh: '已删除', en: 'Deleted' },

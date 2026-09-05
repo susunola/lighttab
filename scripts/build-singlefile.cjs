@@ -24,6 +24,11 @@ html = html.replace(/<script src="(js\/[^"]+)"><\/script>/g, (m, src) => {
   return '<script>\n/* inlined from ' + src + ' */\n' + js + '\n</script>';
 });
 
+// Inline the bundled wallpaper so the single file stays truly self-contained
+// (the split-file extension loads it as a relative asset; dist cannot).
+const wall = fs.readFileSync(path.join(ROOT, 'assets/wallpaper-dusk.jpg'));
+html = html.replaceAll('assets/wallpaper-dusk.jpg', 'data:image/jpeg;base64,' + wall.toString('base64'));
+
 const outDir = path.join(ROOT, 'dist');
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'newtab.html'), html);
