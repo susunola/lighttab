@@ -199,9 +199,19 @@
     const alive = new Set([...(A().state.items || []).map((it) => it.id), '__add__']);
     let pruned = 0;
     for (const id in map) if (!alive.has(id)) { delete map[id]; pruned++; }
-    // map is the live layout.cards object, so persist once when something was actually dropped -
-    // otherwise every deleted shortcut would leave a coordinate behind on disk forever.
-    if (pruned) { setCardLayoutMap(map); A().Store.set(A().K.settings, A().state.settings); }
+    if (pruned) {
+      // A deleted card must not leave a hole: compact the survivors into contiguous cells,
+      // preserving their reading order (row-major). Cards in other groups are compacted along
+      // with the visible ones so the map stays globally consistent.
+      const entries = Object.entries(map)
+        .filter(([, p]) => p && typeof p.col === 'number' && typeof p.row === 'number')
+        .sort((a, b) => (a[1].row - b[1].row) || (a[1].col - b[1].col));
+      entries.forEach(([id], i) => { map[id] = { col: i % cols, row: Math.floor(i / cols) }; });
+      // map is the live layout.cards object, so persist once when something was actually dropped -
+      // otherwise every deleted shortcut would leave a coordinate behind on disk forever.
+      setCardLayoutMap(map);
+      A().Store.set(A().K.settings, A().state.settings);
+    }
     // Existing coordinates are marked occupied; missing ones take the first free cell, scanning column by column then row by row.
     const occupied = new Set();
     for (const id in map) {

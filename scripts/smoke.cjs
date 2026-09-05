@@ -525,7 +525,10 @@ assert(/state\.settings\.widgetPos = normalizeWidgetPos\(state\.settings\.widget
   'doImport 校验 widgetPos');
 // 卡片坐标 GC：已删除卡片的格位必须回收，否则新卡片被挤到后面
 assert(/for \(const id in map\) if \(!alive\.has\(id\)\)/.test(canvasSrc), 'assignInitialCardLayout 回收失效卡片坐标');
-assert(/if \(pruned\) \{ setCardLayoutMap\(map\);/.test(canvasSrc), '坐标回收后落盘一次');
+assert(/if \(pruned\) \{/.test(canvasSrc) && /setCardLayoutMap\(map\)/.test(canvasSrc), '坐标回收后落盘一次');
+// 删除卡片不能留洞：幸存者按阅读顺序压实成连续格位
+assert(/a\[1\]\.row - b\[1\]\.row/.test(canvasSrc) && /col: i % cols, row: Math\.floor\(i \/ cols\)/.test(canvasSrc),
+  '回收后按阅读顺序压实剩余卡片坐标');
 
 
 // ---------- 11) 玻璃质感 token ----------
