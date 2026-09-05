@@ -510,17 +510,22 @@ assert(/--glass: rgba\(12, 16, 28, 0\.48\)/.test(cssSrc), '深色玻璃为暗色
 assert(!/:root[\s\S]{0,900}--glass: rgba\(255, 255, 255/.test(cssSrc), '深色主题不再用白色玻璃');
 assert(/--glass: rgba\(255, 255, 255, 0\.36\)/.test(cssSrc), '浅色玻璃降到 0.36（0.50 仍显白，0.36 透出壁纸）');
 // 单一 blur token + saturate：纯 blur 会把背景去色，观感变塑料
-assert(/--glass-blur: blur\(16px\) saturate\(155%\)/.test(cssSrc), '深色 glass-blur 带 saturate');
-assert(/--glass-blur: blur\(16px\) saturate\(185%\)/.test(cssSrc), '浅色 glass-blur 带 saturate');
-// 磨砂三要素：仅有 blur + 半透明色 = 塑料感。必须再有颗粒、斜向高光、边缘反光
-assert(/--frost-grain:\s*url\("data:image\/svg\+xml/.test(cssSrc), '定义了磨砂颗粒（内联 SVG 噪声，无网络请求）');
-assert(/feTurbulence/.test(cssSrc), '颗粒用 feTurbulence 生成');
+assert(/--glass-blur: blur\(20px\) saturate\(150%\)/.test(cssSrc), '深色 glass-blur 带 saturate');
+assert(/--glass-blur: blur\(20px\) saturate\(185%\)/.test(cssSrc), '浅色 glass-blur 带 saturate');
+// 磨砂材质：斜向高光 + 边缘反光。早先的 SVG 噪声颗粒叠在照片壁纸上显脏，已移除——
+// 此处守住「不再有颗粒」，防止回退
+assert(!/--frost-grain/.test(cssSrc), '玻璃不再叠噪声颗粒（壁纸上显脏）');
+assert(!/background-blend-mode/.test(cssSrc), '玻璃面不再用 blend-mode 混颗粒');
 assert(/--frost-sheen: linear-gradient\(135deg/.test(cssSrc), '定义了斜向高光 --frost-sheen');
 assert((cssSrc.match(/--frost-sheen:/g) || []).length === 2, '深浅两套主题各有自己的高光强度');
 assert((cssSrc.match(/--frost-edge:/g) || []).length === 2, '深浅两套主题各有自己的边缘反光');
-assert((cssSrc.match(/box-shadow: var\(--frost-edge\)/g) || []).length >= 3, '主要玻璃面用 --frost-edge 做边缘');
-assert(/background-image: var\(--frost-sheen\), var\(--frost-grain\)/.test(cssSrc), '高光+颗粒作为背景层叠加');
-assert(/background-blend-mode: normal, var\(--frost-grain-blend\)/.test(cssSrc), '颗粒用 blend-mode 融入表面');
+assert((cssSrc.match(/box-shadow: var\(--frost-edge\)/g) || []).length >= 2, '主要玻璃面用 --frost-edge 做边缘');
+assert(/background-image: var\(--frost-sheen\);/.test(cssSrc), '高光作为背景层叠加');
+// 快捷方式卡片不是玻璃：静置时直接坐在壁纸上（iTab 风格），hover 才出现玻璃 pill
+assert(!/\.widget,\s*\n\.card,/.test(cssSrc), '卡片不在共享磨砂层规则里');
+assert(/\.card \{[^}]*background: none/.test(cssSrc), '卡片静置时无背景（直接坐在壁纸上）');
+assert(/\.card:hover \{[^}]*backdrop-filter/.test(cssSrc), '卡片 hover 才出现玻璃 pill');
+assert(/\.card \.title \{[^}]*text-shadow/.test(cssSrc), '卡片标题带文字阴影（壁纸上可读）');
 // 用背景层而不是 ::before：组件里已有绝对定位子元素（.w-del / 拖拽把手），
 // 绝对定位的伪元素会盖在它们上面
 assert(!/\.(widget|card|search)::before\s*\{/.test(cssSrc), '磨砂层不用 ::before（会压住绝对定位子元素）');
@@ -593,7 +598,28 @@ assert(/function renderMovie/.test(appSrc) && /function movieIndexForToday/.test
 assert(/movieCursor/.test(appSrc), 'app.js 维护 movieCursor 手动浏览游标');
 assert(/renderMovie\(\);/.test(appSrc), 'boot / reset 均调用 renderMovie');
 assert(/encodeURIComponent\(m\.zh\)/.test(appSrc), '豆瓣跳转链接对片名做 URL 编码');
-assert(/escape|&amp;/.test(appSrc), '片名/简介渲染前做 HTML 转义');
+assert(/esc\(m\.zh\)/.test(appSrc) && /esc\(m\.blurb\)/.test(appSrc) && /esc\(m\.genre\)/.test(appSrc),
+  '片名/简介/类型渲染前经 esc() 做 HTML 转义');
+// 回归守卫：每个组件都必须纳入 canvas BLOCK_DEFS，否则 canvas 模式（>1024px 默认）下
+// 该组件被绝对定位却没有坐标，堆在左上角压住其他块（wmovie 曾漏掉）
+{
+  const wMatch = appSrc.match(/const WIDGETS = \[([^\]]*)\]/);
+  const defsMatch = canvasSrc.match(/const BLOCK_DEFS = \[([\s\S]*?)\];/);
+  assert(!!wMatch && !!defsMatch, 'WIDGETS 与 BLOCK_DEFS 定义可解析');
+  if (wMatch && defsMatch) {
+    const ids = [...wMatch[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+    for (const id of ids) {
+      assert(defsMatch[1].includes(`key: '${id}'`), `canvas BLOCK_DEFS 覆盖组件 ${id}`);
+    }
+  }
+  // 退出 canvas 模式必须恢复卡片拖拽并移除画布把手
+  const clearFn = canvasSrc.match(/function clearCardCanvas\(\) \{([\s\S]*?)\n  \}/);
+  assert(!!clearFn && clearFn[1].includes("setAttribute('draggable', 'true')") && clearFn[1].includes('card-drag-handle'),
+    'clearCardCanvas 恢复 draggable 并移除拖拽把手');
+}
+// 回归守卫：删光所有快捷方式是合法状态，重启后不得回退默认站点
+assert(/Array\.isArray\(data\.items\) \? data\.items/.test(appSrc),
+  'loadDataIntoState 接受空 items 数组（不再回退 DEFAULT_SITES）');
 // CSS：卡片布局（评分徽章 + 正文 + 动作行）
 for (const sel of ['.movie-card', '.movie-rate', '.movie-title', '.movie-en', '.movie-genre', '.movie-blurb', '.movie-actions', '.movie-link', '.movie-next']) {
   assert(cssSrc.includes(sel), `CSS 定义 ${sel}`);

@@ -129,7 +129,7 @@
     const box = document.getElementById('prompt-manage');
     if (!box) return;
     const rows = A().state.prompts.map(p => `
-      <div class="prompt-row ${promptEditingId === p.id ? 'open' : ''}" data-id="${p.id}">
+      <div class="prompt-row ${promptEditingId === p.id ? 'open' : ''}" data-id="${A().escapeHtml(p.id)}">
         <div class="pr-main">
           <span class="pr-name" title="${A().escapeHtml(p.name)}">${A().escapeHtml(p.name)}</span>
           <span class="pr-tmpl" title="${A().escapeHtml(p.tmpl || '')}">${A().escapeHtml((p.tmpl || '').slice(0, 40))}</span>

@@ -345,6 +345,9 @@
 
   function applyStatic() {
     document.querySelectorAll('[data-i18n]').forEach(el => {
+      // Elements flagged data-i18n-dyn carry live status text written by their owner
+      // (e.g. the wallpaper-library fetch status); re-applying the static label would clobber it.
+      if (el.hasAttribute('data-i18n-dyn')) return;
       el.textContent = t(el.getAttribute('data-i18n'));
     });
     document.querySelectorAll('[data-i18n-ph]').forEach(el => {

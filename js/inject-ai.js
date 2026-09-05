@@ -46,18 +46,24 @@
   /** Read the prompt for this nonce from extension storage (shared across targets: read-only, never deleted; returns null on failure so the URL fallback kicks in). */
   function readPending(nonce) {
     return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (!done) { done = true; resolve(v); } };
+      // Never hang main(): if the extension context is torn down mid-read the callback never
+      // fires, so time out and let the plaintext-URL fallback take over.
+      setTimeout(() => finish(null), 3000);
       try {
         if (window.chrome && chrome.storage && chrome.storage.local) {
           chrome.storage.local.get(PENDING_PREFIX + nonce, (r) => {
             try {
+              if (chrome.runtime && chrome.runtime.lastError) return finish(null);
               const rec = r && r[PENDING_PREFIX + nonce];
-              resolve(rec && typeof rec.p === 'string' ? rec.p : null);
-            } catch (_) { resolve(null); }
+              finish(rec && typeof rec.p === 'string' ? rec.p : null);
+            } catch (_) { finish(null); }
           });
         } else {
-          resolve(null);
+          finish(null);
         }
-      } catch (_) { resolve(null); }
+      } catch (_) { finish(null); }
     });
   }
 

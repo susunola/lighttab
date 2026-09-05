@@ -13,6 +13,7 @@
     { key: 'wclock', sel: '.wclock' },
     { key: 'wcal',   sel: '.wcal' },
     { key: 'wtodo',  sel: '#todo-widget' },
+    { key: 'wmovie', sel: '.wmovie' },
     { key: 'search', sel: '#search' },
     { key: 'grid',   sel: '#grid-wrap' }
   ];
@@ -245,6 +246,11 @@
       c.style.left = '';
       c.style.top = '';
       c.style.width = '';
+      // Restore what applyCardCanvas changed: flow mode uses HTML5 drag-to-reorder,
+      // and the canvas-only drag handle is unstyled (and useless) outside it.
+      c.setAttribute('draggable', 'true');
+      const h = c.querySelector('.card-drag-handle');
+      if (h) h.remove();
     }
   }
 
@@ -461,6 +467,9 @@
     const st = A().state.settings;
     const vis = A().normalizeWidgets(st && st.widgets);
     if (A().WIDGETS.some((id) => !vis[id] && l[id])) return true;
+    // A visible widget with no coordinates at all (e.g. wmovie on a layout frozen before the
+    // movie widget existed) would park at the origin over another block — re-derive.
+    if (A().WIDGETS.some((id) => vis[id] && !l[id])) return true;
     // Placement has to agree with the frozen coordinates too. Lifted above the search box means the
     // widget shares the right column's left edge; parked in the left column means it starts further
     // left. Compare blocks against each other, never against a constant (coordinates are relative to

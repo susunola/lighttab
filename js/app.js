@@ -42,7 +42,6 @@
 
   const DEFAULT_SITES = [
     { id: nid(), title: 'GitHub',         url: 'https://github.com',            color: '#181717' },
-    { id: nid(), title: 'GitHub',     url: 'https://github.com',         color: '#1f2937' },
     { id: nid(), title: 'ChatGPT',    url: 'https://chatgpt.com',        color: '#10a37f' },
     { id: nid(), title: 'Gmail',      url: 'https://mail.google.com',    color: '#EA4335' },
     { id: nid(), title: 'X',              url: 'https://x.com',                 color: '#000000' },
@@ -139,6 +138,11 @@
     return String(s).replace(/[&<>"']/g, c => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
     ));
+  }
+  // Only hex colours are ever produced locally (pickColor / DEFAULT_SITES / icondb); anything else
+  // (e.g. a crafted import or sync payload) is dropped before it reaches a style="" attribute.
+  function safeColor(c) {
+    return (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c)) ? c : null;
   }
   // Does the input look like a URL? An explicit scheme always counts; a bare domain may carry a
   // path/query/hash (github.com/susunola). Search phrases containing spaces are never misread as URLs.
@@ -410,6 +414,9 @@
     const o = opts || {};
     const btn = document.getElementById('btn-wall-fetch');
     const tip = document.getElementById('wall-lib-tip');
+    // The tip now carries live status text — flag it so applyStatic (called by renderMovie
+    // and friends) does not revert it to the static label.
+    if (tip) tip.setAttribute('data-i18n-dyn', '');
     if (!o.silent && btn) btn.disabled = true;
     if (!o.silent && tip) tip.textContent = t('wall.loading');
     try {
@@ -815,9 +822,13 @@
     }
     if (!text.trim()) return showToast(t('ai.empty'), null, null, 2600);
     let targetIds = tpl ? (tpl.targets || []) : [currentEngine.id];
-    targetIds = targetIds.filter(id => ENGINES.some(x => x.id === id));
+    // Only AI engines can receive a prompt (injected chat or deep link); a plain search engine
+    // would get a malformed URL with a literal "{q}".
+    targetIds = targetIds.filter(id => ENGINES.some(x => x.id === id && x.ai));
     if (!targetIds.length) {
-      if (tpl) targetIds = [currentEngine.id];
+      // A template with no targets configured falls back to the current engine (AI engines only);
+      // a template whose targets are all invalid/removed gets the explicit no-target toast.
+      if (tpl && !(tpl.targets || []).length && currentEngine.ai) targetIds = [currentEngine.id];
       if (!targetIds.length) return showToast(t('ai.no_target'));
     }
     const engs = targetIds.map(id => ENGINES.find(x => x.id === id)).filter(Boolean);
@@ -964,13 +975,13 @@
       // marks — read as the visual focus instead of competing with a saturated host colour. Users
       // can still set it.color (e.g. via import) for an explicit coloured frame.
       customCls = ' has-custom-icon';
-      bg = it.color || null;
+      bg = safeColor(it.color);
       ico = `<img class="logo-img" src="${customIcon}" alt="" draggable="false">`;
     } else if (icon) {
       bg = icon.c;
       ico = iconGlyphHtml(icon);
     } else {
-      bg = it.color || pickColor(host);
+      bg = safeColor(it.color) || pickColor(host);
       // Letter fallback: CJK titles use their first character, otherwise the first letter of the hostname, uppercased.
       let letter = (it.title || '').trim().charAt(0);
       if (!/[\u4e00-\u9fa5]/.test(letter)) {
@@ -982,8 +993,10 @@
     ink = bg ? inkOn(bg) : '#1f2937';
     const safeTitle = escapeHtml(it.title);
     const bgStyle = bg ? `background:${bg};` : '';
+    // Only http(s) links are renderable — an imported/synced record could otherwise carry a javascript: URL.
+    const safeHref = /^https?:\/\//i.test(it.url || '') ? it.url : '#';
     return `
-      <a class="card" href="${escapeHtml(it.url)}" data-id="${it.id}" draggable="true" target="_blank" rel="noopener" title="${safeTitle}">
+      <a class="card" href="${escapeHtml(safeHref)}" data-id="${escapeHtml(it.id)}" draggable="true" target="_blank" rel="noopener" title="${safeTitle}">
         <div class="ico${customCls}" style="${bgStyle}color:${ink}">
           ${ico}
         </div>
@@ -1121,7 +1134,7 @@
   // Group dropdown: the whole row hides when there are no groups; otherwise it preselects the item's own group or the current view's group.
   function fillGroupSelect(sel) {
     sel.innerHTML = `<option value="">${t('group.ungrouped')}</option>` +
-      state.settings.groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+      state.settings.groups.map(g => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`).join('');
   }
   function openSiteModal(id) {
     const modal = document.getElementById('modal-site');
@@ -1264,7 +1277,7 @@
       return;
     }
     const chip = (g, label, count, extra) => `
-      <button type="button" class="gchip ${state.view === g ? 'active' : ''} ${extra || ''}" data-g="${g}">
+      <button type="button" class="gchip ${state.view === g ? 'active' : ''} ${extra || ''}" data-g="${escapeHtml(g)}">
         ${label}<span class="gcnt">${count}</span>
       </button>`;
     let html = chip(VIEW_ALL, t('group.all'), state.items.length);
@@ -1426,11 +1439,15 @@
     await Store.set(K.prompts, state.prompts);
     Store.set(K.schema, SCHEMA_VERSION);
     applyWallpaper(state.wallpaper);
+    applyTheme(); // an import may carry a different theme
     setEngine(state.settings.engine);
+    renderEngineList(); // refresh the engine dropdown's active highlight
     startClock(); // refresh greeting/name (clock text is throttled per hour, so an import must force a redraw)
     document.getElementById('modal-set').hidden = true;
     syncUI();
     renderTodos();
+    renderMovie(); // an import may switch the language, which the movie card renders in
+    renderSwatches(); // refresh wallpaper labels/active state in the (possibly new) language
     applyWidgets(); // an import may bring in a different left-column widget selection
     renderAvatar(); // an import may carry a different name / avatar
     showToast(t('toast.import_done', { items: state.items.length, todos: state.todos.length }));
@@ -1706,8 +1723,15 @@
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.size > 4 * 1024 * 1024) return showToast(t('toast.image_too_big'));
-    const dataUrl = await compressImage(f, 2560, 0.82);
-    const light = await isLightImage(dataUrl);
+    let dataUrl, light;
+    try {
+      dataUrl = await compressImage(f, 2560, 0.82);
+      light = await isLightImage(dataUrl);
+    } catch (err) {
+      // Undecodable/corrupt image: say so and reset the input so picking the same file retries.
+      e.target.value = '';
+      return showToast(t('toast.icon_invalid'));
+    }
     await setWallpaper({ type: 'image', value: dataUrl, light });
     markManualPickToday(); // an upload is a manual pick: no auto-rotate for the rest of this day
     renderSwatches(); // a re-render already carries the active state - no manual class clearing, no reopening the modal
@@ -1908,7 +1932,7 @@
     }
     const delLabel = escapeHtml(t('todo.del'));
     list.innerHTML = state.todos.map(it => `
-      <li class="todo-item ${it.done ? 'done' : ''}" data-id="${it.id}">
+      <li class="todo-item ${it.done ? 'done' : ''}" data-id="${escapeHtml(it.id)}">
         <span class="t-check"></span>
         <span class="t-text">${escapeHtml(it.text)}</span>
         <span class="t-del" title="${delLabel}">×</span>
@@ -2086,11 +2110,13 @@
     await Store.set(K.prompts, state.prompts);
     applyWallpaper(state.wallpaper);
     setEngine(state.settings.engine);
+    renderEngineList(); // the engine dropdown's active highlight must follow the reset
     syncUI();
     startClock();
     renderTodos();
     movieCursor = -1;
     renderMovie();
+    renderSwatches(); // reset restores the default gradient — refresh the wallpaper panel
     applyWidgets(); // reset brings every left-column widget back
     renderAvatar(); // reset clears the name / avatar back to defaults
     document.getElementById('modal-set').hidden = true;
@@ -2158,7 +2184,8 @@
     const data = migrateSchema(raw);
     state.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), data.settings || {});
     state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
-    state.items = (data.items && data.items.length) ? data.items : structuredClone(DEFAULT_SITES);
+    // An empty array is legitimate (the user deleted every shortcut); only a missing key falls back to the default set.
+    state.items = Array.isArray(data.items) ? data.items : structuredClone(DEFAULT_SITES);
     state.wallpaper = pickWallpaperFromData(data.wallpaper);
     state.todos = Array.isArray(data.todos) ? data.todos : [];
     // Templates: an empty array is legitimate (the user deleted them all); only undefined falls back to the default set.
@@ -2550,6 +2577,10 @@
     const { raw, data } = await loadDataIntoState();
     setLangOnly(state.settings.lang);
     applyTheme();
+    // Focus the search box without scrolling: the HTML autofocus attribute makes the browser
+    // scroll the input into view, which pushes the topbar off-screen on short/narrow windows.
+    const qInput = document.getElementById('q');
+    if (qInput) qInput.focus({ preventScroll: true });
     // If migration changed the version, write back: schema plus every key the migration filled in or rewrote, keeping disk and memory consistent.
     if ((Number(raw.schema) || 1) !== SCHEMA_VERSION) {
       Store.set(K.schema, SCHEMA_VERSION);
