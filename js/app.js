@@ -9,7 +9,7 @@
   const t = (k, v) => (window.LT_I18N ? window.LT_I18N.t(k, v) : k);
   const lang = () => (window.LT_I18N ? window.LT_I18N.getLang() : 'zh');
   const isEn = () => lang() === 'en';
-  function engName(e) { return t('eng.' + e.id) || e.name; }
+  function engName(e) { return e.custom ? e.name : (t('eng.' + e.id) || e.name); }
 
   // ---------- Constants ----------
   // ENGINES: `id` is the stable key used for storage and for the i18n lookup `eng.<id>`.
@@ -73,6 +73,11 @@
     // Groups: array of { id, name }. Empty = grouping disabled (group bar hidden, and the
     // shortcut dialog does not show the group dropdown).
     groups: [],
+    // Search engines: user-added engines and built-ins the user removed. Both live in settings
+    // so they sync/export with everything else. Customs carry `custom: true` (their name is used
+    // verbatim instead of the eng.<id> i18n lookup).
+    customEngines: [],
+    hiddenEngines: [],
     // Free canvas layout: { wclock/wcal/wtodo/search/grid: {x,y,w} }.
     // null = fall back to the default two-column flow layout.
     layout: null,
@@ -668,12 +673,21 @@
 
   // ---------- Search engines ----------
   function setEngine(id) {
-    const e = ENGINES.find(x => x.id === id) || ENGINES[0];
+    const engines = allEngines();
+    const e = engines.find(x => x.id === id) || engines[0];
     currentEngine = e;
     const btn = document.getElementById('engine-btn');
     btn.querySelector('.eng-name').textContent = engName(e);
     btn.querySelector('.eng-logo-wrap').innerHTML = engLogoHtml(e);
     document.getElementById('q').placeholder = t('search.placeholder_engine', { engine: engName(e) });
+  }
+  // The live engine list: built-ins minus user-removed ones, plus the user's own engines.
+  // ENGINES itself stays the immutable built-in catalog.
+  function allEngines() {
+    const hidden = new Set((state.settings && state.settings.hiddenEngines) || []);
+    const custom = ((state.settings && state.settings.customEngines) || [])
+      .filter(e => e && e.id && e.name && typeof e.url === 'string');
+    return ENGINES.filter(e => !hidden.has(e.id)).concat(custom);
   }
   // Engine logos: reuse the brand-icon library where an entry exists (Baidu, Google, GitHub,
   // bilibili, Doubao, ChatGPT); engines without one (Bing, Sogou, WorkBuddy) get a
@@ -683,8 +697,9 @@
     bilibili: 'bilibili.com', doubao: 'doubao.com', openai: 'openai.com'
   };
   function engLogoHtml(e) {
-    const host = ENG_ICON_HOST[e.id];
-    const icon = host ? iconFor('https://' + host) : null;
+    // Try the engine's own URL host first (works for user-added engines too, e.g. a custom
+    // Perplexity entry gets the real logo), then the id→host map, then a letter tile.
+    const icon = iconFor(e.url) || (ENG_ICON_HOST[e.id] ? iconFor('https://' + ENG_ICON_HOST[e.id]) : null);
     // No brand tile behind these glyphs (unlike the card grid), so single-colour marks
     // take the brand colour itself when it is bright enough, otherwise the menu's text colour.
     if (icon) return `<span class="eng-logo">${iconGlyphHtml(icon, menuGlyphColor(icon.c) || 'currentColor')}</span>`;
@@ -693,7 +708,7 @@
   function renderEngineList() {
     const ul = document.getElementById('engine-list');
     if (!ul) return;
-    ul.innerHTML = ENGINES.map((e, i) => {
+    ul.innerHTML = allEngines().map((e, i) => {
       // WorkBuddy is a desktop deep link rather than a website, so show whether it is actually up.
       let badge = '';
       if (e.id === 'wbai' && wbStatus.checked) {
@@ -709,6 +724,93 @@
       </li>
     `;
     }).join('');
+  }
+
+  // ---------- Engine manager (settings → general): add your own, remove built-ins ----------
+  function fillEngineSelect() {
+    const engineSel = document.getElementById('f-engine');
+    if (engineSel) engineSel.innerHTML = allEngines().map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(engName(e))}</option>`).join('');
+  }
+  // Everything that shows engines re-renders; a deleted current engine falls back to the first.
+  function enginesChanged() {
+    const engines = allEngines();
+    if (!engines.some(e => e.id === currentEngine.id)) setEngine(engines[0].id);
+    else setEngine(currentEngine.id); // re-render name/logo in place
+    state.settings.engine = currentEngine.id;
+    Store.set(K.settings, state.settings);
+    renderEngineList();
+    fillEngineSelect();
+    renderEngManager();
+  }
+  function renderEngManager() {
+    const list = document.getElementById('engm-list');
+    if (!list) return;
+    const engines = allEngines();
+    const restoreBtn = document.getElementById('engm-restore');
+    if (restoreBtn) restoreBtn.hidden = !(state.settings.hiddenEngines || []).length;
+    const lastOne = engines.length === 1;
+    list.innerHTML = engines.map(e => `
+      <div class="engm-row" data-id="${escapeHtml(e.id)}">
+        ${engLogoHtml(e)}
+        <span class="engm-name">${escapeHtml(engName(e))}</span>
+        <span class="engm-host">${escapeHtml(e.deeplink ? t('engm.deeplink') : (hostnameOf(e.url) || '—'))}</span>
+        <button type="button" class="engm-del" title="${escapeHtml(t('engm.del'))}" aria-label="${escapeHtml(t('engm.del'))}" ${lastOne ? 'disabled' : ''}>×</button>
+      </div>
+    `).join('');
+    list.querySelectorAll('.engm-del').forEach(btn => {
+      btn.addEventListener('click', () => removeEngine(btn.closest('.engm-row').dataset.id));
+    });
+  }
+  function removeEngine(id) {
+    const engines = allEngines();
+    if (engines.length <= 1) return showToast(t('toast.eng_last'));
+    const e = engines.find(x => x.id === id);
+    if (!e) return;
+    if (e.custom) {
+      state.settings.customEngines = (state.settings.customEngines || []).filter(x => x.id !== id);
+    } else {
+      state.settings.hiddenEngines = [...(state.settings.hiddenEngines || []), id];
+    }
+    Store.set(K.settings, state.settings);
+    enginesChanged();
+    // Undo restores the exact entry — a custom engine otherwise could not be brought back.
+    showToast(t('toast.eng_removed'), t('toast.undo'), () => {
+      if (e.custom) state.settings.customEngines = [...(state.settings.customEngines || []), e];
+      else state.settings.hiddenEngines = (state.settings.hiddenEngines || []).filter(x => x !== id);
+      Store.set(K.settings, state.settings);
+      enginesChanged();
+    });
+  }
+  function addCustomEngine() {
+    const nameEl = document.getElementById('engm-name');
+    const urlEl = document.getElementById('engm-url');
+    const name = (nameEl.value || '').trim().slice(0, 12);
+    const url = (urlEl.value || '').trim();
+    // The URL must be a real web search template: http(s) and carrying the {q} placeholder.
+    if (!name || !/^https?:\/\//i.test(url) || !url.includes('{q}')) {
+      return showToast(t('toast.eng_invalid'), null, null, 3200);
+    }
+    state.settings.customEngines = [...(state.settings.customEngines || []),
+      { id: 'u-' + nid(), name, url, color: pickColor(hostnameOf(url) || name), custom: true }];
+    nameEl.value = '';
+    urlEl.value = '';
+    Store.set(K.settings, state.settings);
+    enginesChanged();
+    showToast(t('toast.eng_added'));
+  }
+  function bindEngManager() {
+    const addBtn = document.getElementById('engm-add');
+    if (!addBtn) return;
+    addBtn.addEventListener('click', addCustomEngine);
+    document.getElementById('engm-url').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); addCustomEngine(); }
+    });
+    document.getElementById('engm-restore').addEventListener('click', () => {
+      state.settings.hiddenEngines = [];
+      Store.set(K.settings, state.settings);
+      enginesChanged();
+    });
+    renderEngManager();
   }
   // Open the result page: navigate in the current tab by default (no stray blank tabs); hold Cmd/Ctrl for a new tab.
   function openResult(url, ev) {
@@ -835,14 +937,14 @@
     let targetIds = tpl ? (tpl.targets || []) : [currentEngine.id];
     // Only AI engines can receive a prompt (injected chat or deep link); a plain search engine
     // would get a malformed URL with a literal "{q}".
-    targetIds = targetIds.filter(id => ENGINES.some(x => x.id === id && x.ai));
+    targetIds = targetIds.filter(id => allEngines().some(x => x.id === id && x.ai));
     if (!targetIds.length) {
       // A template with no targets configured falls back to the current engine (AI engines only);
       // a template whose targets are all invalid/removed gets the explicit no-target toast.
       if (tpl && !(tpl.targets || []).length && currentEngine.ai) targetIds = [currentEngine.id];
       if (!targetIds.length) return showToast(t('ai.no_target'));
     }
-    const engs = targetIds.map(id => ENGINES.find(x => x.id === id)).filter(Boolean);
+    const engs = targetIds.map(id => allEngines().find(x => x.id === id)).filter(Boolean);
     const deeplinks = engs.filter(x => x.deeplink);
     const webs = engs.filter(x => !x.deeplink);
     let dlN = 0, webN = 0, blocked = false;
@@ -1426,11 +1528,22 @@
     });
     // Validate every imported field so JSON from any source can never break the page.
     state.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), migrated.settings || {});
-    if (!ENGINES.some(x => x.id === state.settings.engine)) state.settings.engine = 'baidu';
+    if (!allEngines().some(x => x.id === state.settings.engine)) state.settings.engine = allEngines()[0].id;
     if (!Array.isArray(state.settings.groups)) state.settings.groups = [];
     state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
     state.settings.widgets = normalizeWidgets(state.settings.widgets);
     state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
+    // Imported engine lists get the same validation as the add form: customs must be well-formed
+    // http(s) URLs carrying {q}; hidden ids must name real built-ins.
+    state.settings.customEngines = Array.isArray(state.settings.customEngines)
+      ? state.settings.customEngines
+          .filter(e => e && typeof e.name === 'string' && typeof e.url === 'string'
+            && /^https?:\/\//i.test(e.url) && e.url.includes('{q}'))
+          .map(e => ({ id: String(e.id || ('u-' + nid())), name: e.name.slice(0, 12), url: e.url, color: safeColor(e.color) || '#3b82f6', custom: true }))
+      : [];
+    state.settings.hiddenEngines = Array.isArray(state.settings.hiddenEngines)
+      ? state.settings.hiddenEngines.filter(id => ENGINES.some(x => x.id === id))
+      : [];
     setLangOnly(state.settings.lang);
     const gids = new Set(state.settings.groups.map(g => g.id));
     state.items = Array.isArray(migrated.items)
@@ -1443,7 +1556,7 @@
       ? migrated.todos.filter(it => it && typeof it.text === 'string').map(it => ({ id: it.id || nid(), text: it.text, done: !!it.done }))
       : [];
     // Templates: validate one by one (tmpl must be a string; targets keep only known engines) and drop bad entries.
-    const validTarget = id => ENGINES.some(x => x.id === id);
+    const validTarget = id => allEngines().some(x => x.id === id);
     state.prompts = Array.isArray(migrated.prompts)
       ? migrated.prompts
           .filter(p => p && typeof p.tmpl === 'string')
@@ -1573,7 +1686,8 @@
     const langSel = document.getElementById('f-lang');
     const weatherCityInput = document.getElementById('f-weather-city');
     if (weatherCityInput) weatherCityInput.addEventListener('change', () => saveWeatherCity(weatherCityInput.value));
-    engineSel.innerHTML = ENGINES.map(e => `<option value="${e.id}">${engName(e)}</option>`).join('');
+    fillEngineSelect();
+    bindEngManager();
     nameInput.addEventListener('change', async () => {
       state.settings.name = nameInput.value.trim();
       await Store.set(K.settings, state.settings);
@@ -2880,9 +2994,10 @@
       }
       if (/^[1-9]$/.test(e.key) && !typing) {
         const idx = +e.key - 1;
-        if (ENGINES[idx]) {
-          setEngine(ENGINES[idx].id);
-          state.settings.engine = ENGINES[idx].id;
+        const engines = allEngines();
+        if (engines[idx]) {
+          setEngine(engines[idx].id);
+          state.settings.engine = engines[idx].id;
           Store.set(K.settings, state.settings);
           renderEngineList();
         }
@@ -2936,7 +3051,7 @@
   // Shared context for the split-out modules js/canvas.js and js/prompts.js.
   // They load before this file (see newtab.html) and only touch this object at call time.
   window.LT_APP = {
-    state, Store, K, ENGINES, WIDGETS,
+    state, Store, K, ENGINES, allEngines, WIDGETS,
     t, engName, escapeHtml, nid, showToast,
     launchPrompt, setEngine, normalizeWidgets, normalizeWidgetPos,
     getCurrentEngine: () => currentEngine,

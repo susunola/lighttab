@@ -68,6 +68,7 @@ const htmlRaw = read('newtab.html');
 const html = htmlRaw.replace(/\s*data-page-node-id="[^"]*"/g, '');
 const appSrc = read('js/app.js');
 const canvasSrc = read('js/canvas.js'); // 画布布局已从 app.js 拆出（v1.18.1）
+const promptsSrc = read('js/prompts.js');
 const cssSrc = read('css/style.css');
 const i18nSrc = read('js/i18n.js');
 const mHtml = html.match(/ver-line[^>]*>\s*LightTab v(\d+\.\d+\.\d+)/);
@@ -454,6 +455,20 @@ assert(/function engLogoHtml/.test(appSrc), 'app.js 定义 engLogoHtml()');
 assert(/ENG_ICON_HOST = \{[^}]*baidu: 'baidu\.com'/.test(appSrc) && /openai: 'openai\.com'/.test(appSrc), '引擎→图标库主机映射齐备');
 assert(!/eng-dot/.test(appSrc) && !/eng-dot/.test(cssSrc) && !/eng-dot/.test(html), '旧的 eng-dot 色点已清除');
 assert(/\.eng-logo \{/.test(cssSrc) && /\.eng-letter \{/.test(cssSrc), 'CSS 定义 .eng-logo / .eng-letter');
+// 搜索引擎管理：自定义添加 + 内置可删（undo 撤销），全部走 allEngines() 运行时列表
+assert(/function allEngines\(\)/.test(appSrc) && /allEngines,/.test(appSrc), 'allEngines() 定义并导出到 LT_APP');
+assert(/customEngines: \[\]/.test(appSrc) && /hiddenEngines: \[\]/.test(appSrc), 'DEFAULT_SETTINGS 含 customEngines/hiddenEngines');
+assert(!/\bENGINES\.map/.test(appSrc) && !/\bENGINES\.find\(/.test(appSrc.replace(/ENG_ICON_HOST[\s\S]*?\};/, '')),
+  '运行时不再直接读内置 ENGINES 列表（allEngines 兜底）');
+assert(!/A\(\)\.ENGINES/.test(promptsSrc), 'prompts.js 走 allEngines()');
+assert(/id="engm-list"/.test(html) && /id="engm-add"/.test(html) && /id="engm-restore"/.test(html), '设置面板含引擎管理区');
+assert(/url\.includes\('\{q\}'\)/.test(appSrc), '自定义引擎 URL 强制含 {q} 占位');
+assert(/toast\.eng_last/.test(appSrc), '仅剩一个引擎时禁止再删');
+assert(/toast\.eng_removed.*toast\.undo/.test(appSrc), '删除引擎走 undo toast');
+for (const k of ['engm.title','engm.name_ph','engm.url_ph','engm.add','engm.restore','engm.tip','engm.del','engm.deeplink','toast.eng_added','toast.eng_removed','toast.eng_invalid','toast.eng_last']) {
+  const re = new RegExp("'" + k.replace('.', '\\.') + "':\\s*\\{\\s*zh: '[^']+', en: '[^']+' \\}");
+  assert(re.test(i18nSrc), `i18n 词条 ${k} 中英齐备`);
+}
 assert(!/host_permissions/.test(read('manifest.json')), '不申请 host_permissions（靠对方 CORS 放行）');
 for (const k of ['wb.running', 'wb.not_running', 'wb.not_detected', 'wb.get']) {
   assert(i18nSrc.includes(`'${k}'`), `i18n 含 ${k}`);

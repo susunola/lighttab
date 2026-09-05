@@ -67,7 +67,7 @@
     const ul = document.getElementById('palette-list');
     ul.innerHTML = palItems.map((p, i) => {
       const dots = (p.targets || []).map(id => {
-        const e = A().ENGINES.find(x => x.id === id);
+        const e = A().allEngines().find(x => x.id === id);
         return e ? `<i class="p-dot" style="background:${e.color}" title="${A().escapeHtml(A().engName(e))}"></i>` : '';
       }).join('');
       const preview = (p.tmpl || '').replace(/\{q\}/g, '').replace(/\s+/g, ' ').trim().slice(0, 46);
@@ -134,7 +134,7 @@
           <span class="pr-name" title="${A().escapeHtml(p.name)}">${A().escapeHtml(p.name)}</span>
           <span class="pr-tmpl" title="${A().escapeHtml(p.tmpl || '')}">${A().escapeHtml((p.tmpl || '').slice(0, 40))}</span>
           <span class="pr-tags">${(p.targets || []).map(id => {
-            const e = A().ENGINES.find(x => x.id === id);
+            const e = A().allEngines().find(x => x.id === id);
             return e ? `<span class="ptag" style="--pc:${e.color};background:${e.color}20;color:${e.color}">${A().escapeHtml(A().engName(e))}</span>` : '';
           }).join('') || `<span class="ptag dim">${A().t('tpl.no_target')}</span>`}</span>
           <span class="pr-acts">
@@ -178,7 +178,7 @@
         <label class="pe-field"><span class="pe-lbl">${A().t('prompt.hint_label')}</span>
           <input class="pe-hint" type="text" maxlength="60" placeholder="${A().escapeHtml(A().t('prompt.hint_ph'))}" value="${A().escapeHtml(pv.hint || '')}"></label>
         <div class="pe-field"><span class="pe-lbl">${A().t('prompt.targets')}</span>
-          <div class="pe-targets">${A().ENGINES.map(e => `
+          <div class="pe-targets">${A().allEngines().map(e => `
             <label class="pe-t"><input type="checkbox" value="${e.id}" ${tg.includes(e.id) ? 'checked' : ''}>
             <span class="ptag" style="--pc:${e.color};background:${e.color}20;color:${e.color}">${A().escapeHtml(A().engName(e))}</span></label>`).join('')}
           </div>

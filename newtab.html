@@ -326,6 +326,17 @@
             <span data-i18n="gen.engine">Default search engine</span>
             <select id="f-engine"></select>
           </label>
+          <div class="engm-zone">
+            <span class="field-label" data-i18n="engm.title">Search engines</span>
+            <div class="engm-list" id="engm-list"></div>
+            <div class="engm-add">
+              <input id="engm-name" type="text" maxlength="12" data-i18n-ph="engm.name_ph" placeholder="Name">
+              <input id="engm-url" type="text" spellcheck="false" data-i18n-ph="engm.url_ph" placeholder="https://example.com/search?q={q}">
+              <button type="button" class="btn ghost sm" id="engm-add" data-i18n="engm.add">Add</button>
+            </div>
+            <p class="form-tip" data-i18n="engm.tip">Custom URLs must contain {q} where the query goes. Removed built-ins can be restored at any time.</p>
+            <button type="button" class="btn ghost sm" id="engm-restore" data-i18n="engm.restore" hidden>Restore built-in engines</button>
+          </div>
           <label>
             <span data-i18n="gen.lang">Language</span>
             <select id="f-lang">

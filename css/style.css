@@ -1295,6 +1295,33 @@ svg.logo-tx text { font-family: inherit; }
   background: var(--tint-3);
 }
 .form-tip { margin: 4px 0 0; font-size: 11.5px; color: var(--ink-3); }
+/* Engine manager (settings → general): rows reuse the dropdown's logo language. */
+.engm-zone { margin: 14px 0 2px; }
+.engm-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.engm-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+.engm-row:hover { background: var(--tint-3); }
+.engm-name { font-size: 13px; color: var(--ink); }
+.engm-host { flex: 1; font-size: 11.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.engm-del {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  color: var(--ink-3);
+  font-size: 14px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transition: opacity .12s ease, background .12s ease, color .12s ease;
+}
+.engm-row:hover .engm-del { opacity: 1; }
+.engm-del:hover { background: var(--tint-2); color: var(--danger); }
+.engm-del:disabled { opacity: 0; pointer-events: none; }
+.engm-add { display: flex; gap: 8px; }
+.engm-add #engm-name { flex: 0 0 110px; }
+.engm-add #engm-url { flex: 1; min-width: 0; }
+.engm-zone .form-tip { margin-bottom: 8px; }
 .ver-line { margin-top: 16px; text-align: center; }
 /* #50 custom card icon row (shortcut modal): label outside <label> needs the same look as label>span. */
 .modal-body .field-label {
