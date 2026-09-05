@@ -664,7 +664,7 @@ assert(/\.widget\.wmovie\.w-top \{\s*--wtop-del:\s*176px/.test(cssSrc), '电影�
 console.log('[14] #65 梅花 · 换壁纸 + 励志名句');
 // 静态结构：右下角梅花按钮 + 居中名句浮层
 assert(/<button class="plum-float" id="btn-plum"/.test(html), 'newtab.html 含 #btn-plum 梅花按钮');
-assert(/id="quote" class="quote" hidden aria-live="polite"/.test(html), 'newtab.html 含 #quote 居中名句浮层（无障碍 aria-live）');
+assert(/id="quote" class="quote" hidden aria-live="polite"/.test(html), 'newtab.html 含 #quote 名句浮层（无障碍 aria-live）');
 assert(/data-i18n-title="plum\.tip"/.test(html) && /data-i18n-aria="plum\.tip"/.test(html), '梅花按钮带 plum.tip 词条钩子');
 // JS：引用现有轮换原语，避免重复造轮子
 assert(/const QUOTES = \[/.test(appSrc), 'app.js 定义 QUOTES 励志名句池');
@@ -681,6 +681,10 @@ assert((appSrc.match(/zh: '[^']*', en: '/g) || []).length >= 10, `励志名句�
 assert(/\.plum-float/.test(cssSrc) && /@keyframes plum-spin/.test(cssSrc), 'CSS 定义 .plum-float 及旋转动效');
 assert(/\.quote/.test(cssSrc) && /\.quote-text/.test(cssSrc) && /\.quote-src/.test(cssSrc), 'CSS 定义 .quote / .quote-text / .quote-src');
 assert(/@keyframes quote-in/.test(cssSrc) && /\.quote\.quote-out/.test(cssSrc), 'CSS 定义名句入场/退场动画');
+// 名句是底部一行小字（iTab 惯例），不是居中玻璃卡片
+assert(/\.quote \{[^}]*bottom: 18px/.test(cssSrc), '名句浮层钉在底部');
+assert(!/\.quote::before/.test(cssSrc), '名句浮层不再带玻璃卡片底板');
+assert(/\.quote \.quote-text \{[^}]*font-size: 13px/.test(cssSrc), '名句正文为小字');
 // i18n：plum.tip 中英各一份且非空（不 echo key 回显）
 {
   const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
