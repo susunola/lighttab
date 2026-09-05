@@ -54,10 +54,22 @@
   --radius-md: 12px;
   --radius-lg: 18px;
   --radius-xl: 22px;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-  --font-num: "SF Pro Display", "Segoe UI Variable Display", "Inter",
+  --font-num: "Inter", "SF Pro Display", "Segoe UI Variable Display",
     -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Bundled variable font (Inter, SIL OFL, latin subset, 48KB) — crisp Latin and digits on every
+ * platform without a single network request. CJK has no Inter glyphs, so 中文 falls through to
+ * PingFang/YaHei as before. The url() is relative to css/, correct for the split extension;
+ * the single-file build inlines it as a data URL (see scripts/build-singlefile.cjs). */
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/inter-var-latin.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 * { box-sizing: border-box; }

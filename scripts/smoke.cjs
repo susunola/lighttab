@@ -147,6 +147,13 @@ console.log('[4] 纯函数');
     assert(/'wp\.dusk':\s*\{\s*zh: '暮山', en: 'Dusk Mountain' \}/.test(i18nSrc), 'wp.dusk 中英词条齐备');
     assert(/replaceAll\('assets\/wallpaper-dusk\.jpg', 'data:image\/jpeg;base64,/.test(read('scripts/build-singlefile.cjs')),
       '单文件构建把打包壁纸内联为 dataURL');
+    // 打包 Inter 可变字体：拉丁/数字更精致，中文仍走系统字体，零网络
+    assert(fs.existsSync(path.join(ROOT, 'assets/fonts/inter-var-latin.woff2')), 'assets/fonts/inter-var-latin.woff2 存在');
+    assert(/@font-face/.test(cssSrc) && /font-family: "Inter";/.test(cssSrc) && /font-weight: 100 900/.test(cssSrc),
+      'CSS 声明 Inter @font-face（可变字重）');
+    assert(/--font-sans: "Inter",/.test(cssSrc) && /--font-num: "Inter",/.test(cssSrc), '字体栈以 Inter 打头');
+    assert(/replaceAll\('\.\.\/assets\/fonts\/inter-var-latin\.woff2', 'data:font\/woff2;base64,/.test(read('scripts/build-singlefile.cjs')),
+      '单文件构建把字体内联为 dataURL');
     // sanitizeIconDataUrl：#50 自定义图标只收本地 base64 光栅图（png/jpeg/webp/gif）
     assert(P.sanitizeIconDataUrl('data:image/png;base64,iVBORw0KGgo=') !== null, '允许 data:image/png;base64');
     assert(P.sanitizeIconDataUrl('data:image/jpeg;base64,/9j/4AAQ') !== null, '允许 data:image/jpeg;base64');

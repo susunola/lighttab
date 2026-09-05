@@ -29,6 +29,11 @@ html = html.replace(/<script src="(js\/[^"]+)"><\/script>/g, (m, src) => {
 const wall = fs.readFileSync(path.join(ROOT, 'assets/wallpaper-dusk.jpg'));
 html = html.replaceAll('assets/wallpaper-dusk.jpg', 'data:image/jpeg;base64,' + wall.toString('base64'));
 
+// Same for the bundled variable font: the inlined <style> resolves relative URLs against the
+// document, not the stylesheet, so '../assets/…' would break outside the repo layout.
+const font = fs.readFileSync(path.join(ROOT, 'assets/fonts/inter-var-latin.woff2'));
+html = html.replaceAll('../assets/fonts/inter-var-latin.woff2', 'data:font/woff2;base64,' + font.toString('base64'));
+
 const outDir = path.join(ROOT, 'dist');
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'newtab.html'), html);
