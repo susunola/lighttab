@@ -194,8 +194,9 @@
     // Garbage-collect coordinates whose card is gone. Without this their cells stay marked occupied
     // forever, so freshly added cards get pushed into later rows and the grid looks scrambled
     // (a short first row above a full one). Keyed on the whole state.items set rather than the
-    // currently rendered subset, so switching groups never discards a coordinate.
-    const alive = new Set((A().state.items || []).map((it) => it.id));
+    // currently rendered subset, so switching groups never discards a coordinate. The grid's
+    // trailing add tile ('__add__') is a permanent resident — it keeps its cell like any card.
+    const alive = new Set([...(A().state.items || []).map((it) => it.id), '__add__']);
     let pruned = 0;
     for (const id in map) if (!alive.has(id)) { delete map[id]; pruned++; }
     // map is the live layout.cards object, so persist once when something was actually dropped -

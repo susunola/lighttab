@@ -908,15 +908,21 @@
   function renderGrid() {
     const grid = document.getElementById('grid');
     const list = state.view === VIEW_ALL ? state.items : state.items.filter(inView);
+    // The grid's last cell is always the add tile (iTab convention) — a button, not an <a>, so
+    // the card context-menu / HTML5-reorder bindings (which only touch `#grid a.card`) skip it.
+    const addTile = `<button type="button" class="card card-add" data-id="__add__" title="${escapeHtml(t('site.add'))}">` +
+      `<div class="ico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>` +
+      `<div class="title">${escapeHtml(t('site.add'))}</div></button>`;
     if (!list.length) {
       const hint = state.view === VIEW_ALL
         ? t('grid.empty')
         : t('grid.empty_view');
-      grid.innerHTML = `<div class="grid-empty">${hint}</div>`;
-      return;
+      grid.innerHTML = `<div class="grid-empty">${hint}</div>` + addTile;
+    } else {
+      grid.innerHTML = list.map(it => cardHtml(it)).join('') + addTile;
     }
-    grid.innerHTML = list.map(it => cardHtml(it)).join('');
     bindCardEvents();
+    grid.querySelector('.card-add').addEventListener('click', () => openSiteModal(null));
     // Canvas mode: right after rendering, apply (col, row) to the cards and assign coordinates to any new ones.
     const C = window.LT_CANVAS;
     if (C.canvasRoot() && C.canvasRoot().classList.contains('canvas') && C.canvasEligible()) {
@@ -2689,10 +2695,7 @@
       window.LT_SYNC.init();
     }
 
-    // Floating add button
-    document.getElementById('add-float').addEventListener('click', () => openSiteModal(null));
-
-    // Plum blossom: rotate the wallpaper and show an inspirational quote in the middle.
+    // Plum blossom: rotate the wallpaper and show an inspirational quote along the bottom.
     document.getElementById('btn-plum').addEventListener('click', rotateWallpaperAndQuote);
 
     // Free canvas layout (draggable blocks): initialised last, once every block has rendered.

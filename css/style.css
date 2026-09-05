@@ -1007,21 +1007,18 @@ svg.logo-tx text { font-family: inherit; }
 .card-actions .mini:hover { background: rgba(0,0,0,0.6); color: #fff; }
 .card-actions .mini.del:hover { color: var(--danger); }
 
-/* Floating add button, bottom right */
-.add-float {
-  position: fixed;
-  right: 30px; bottom: 30px;
-  width: 48px; height: 48px;
-  display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, var(--accent-2), #2563eb);
-  color: #fff;
-  border-radius: 50%;
-  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.45);
-  z-index: 50;
-  transition: transform .15s ease, filter .15s ease;
+/* Add-shortcut tile: always the grid's last cell (iTab convention). Same bare-tile language as
+ * the shortcut cards, but the icon well is a dashed placeholder instead of a brand tile. */
+.card-add .ico {
+  background-color: var(--glass);
+  border: 1.5px dashed var(--line-2);
+  color: var(--ink-2);
+  box-shadow: none;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  transition: background .15s ease, color .15s ease;
 }
-.add-float:hover { transform: scale(1.06); filter: brightness(1.08); }
-.add-float:active { transform: scale(0.95); }
+.card-add:hover .ico { background: var(--glass-2); color: var(--ink); }
 
 /* Plum-blossom button, bottom right (rotate wallpaper + inspirational quote) */
 .plum-float {

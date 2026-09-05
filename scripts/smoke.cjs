@@ -541,6 +541,13 @@ assert(!/\.widget,\s*\n\.card,/.test(cssSrc), '卡片不在共享磨砂层规则
 assert(/\.card \{[^}]*background: none/.test(cssSrc), '卡片静置时无背景（直接坐在壁纸上）');
 assert(/\.card:hover \{[^}]*backdrop-filter/.test(cssSrc), '卡片 hover 才出现玻璃 pill');
 assert(/\.card \.title \{[^}]*text-shadow/.test(cssSrc), '卡片标题带文字阴影（壁纸上可读）');
+// 添加瓷贴：网格最后一格（iTab 惯例），不再有右下角浮动按钮
+assert(!/add-float/.test(html) && !/add-float/.test(cssSrc) && !/add-float/.test(appSrc), '右下角浮动添加按钮已移除');
+assert(/class="card card-add" data-id="__add__"/.test(appSrc), 'renderGrid 渲染 __add__ 添加瓷贴');
+assert(/querySelector\('\.card-add'\)\.addEventListener\('click', \(\) => openSiteModal\(null\)\)/.test(appSrc),
+  '添加瓷贴点击打开新建弹窗');
+assert(/'__add__'\]\)/.test(canvasSrc), '画布坐标回收保留 __add__ 瓷贴的格子');
+assert(/\.card-add \.ico \{[^}]*dashed/.test(cssSrc), '添加瓷贴为虚线占位样式');
 // 用背景层而不是 ::before：组件里已有绝对定位子元素（.w-del / 拖拽把手），
 // 绝对定位的伪元素会盖在它们上面
 assert(!/\.(widget|card|search)::before\s*\{/.test(cssSrc), '磨砂层不用 ::before（会压住绝对定位子元素）');

@@ -119,8 +119,8 @@
     'ctx.del':   { zh: '删除', en: 'Delete' },
 
     // ---------- Grid empty states ----------
-    'grid.empty':      { zh: '暂无快捷方式，点右下角 ＋ 添加', en: 'No shortcuts yet — click ＋ to add' },
-    'grid.empty_view': { zh: '该视图暂无快捷方式，点右下角 ＋ 添加', en: 'No shortcuts in this view — click ＋ to add' },
+    'grid.empty':      { zh: '暂无快捷方式，点 ＋ 添加', en: 'No shortcuts yet — click ＋ to add' },
+    'grid.empty_view': { zh: '该视图暂无快捷方式，点 ＋ 添加', en: 'No shortcuts in this view — click ＋ to add' },
 
     // ---------- Groups ----------
     'group.new':       { zh: '＋ 新建分组', en: '＋ New group' },
