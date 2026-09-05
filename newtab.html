@@ -107,7 +107,7 @@
         <div class="w-head">
           <span class="w-title">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5"/></svg>
-            <span data-i18n="widget.movie">每日电影</span>
+            <span data-i18n="widget.movie">Movie of the day</span>
           </span>
           <span class="movie-date" id="movie-date" aria-hidden="true"></span>
         </div>
@@ -121,7 +121,7 @@
         <div class="w-head">
           <span class="w-title">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2.3M12 18.7V21M3 12h2.3M18.7 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/></svg>
-            <span data-i18n="widget.weather">天气</span>
+            <span data-i18n="widget.weather">Weather</span>
           </span>
           <span class="weather-updated" id="weather-updated" aria-hidden="true"></span>
         </div>
@@ -170,7 +170,7 @@
     </section>
   </main>
 
-  <button class="plum-float" id="btn-plum" data-i18n-title="plum.tip" data-i18n-aria="plum.tip" title="换一张壁纸 · 励志名句" aria-label="换一张壁纸 · 励志名句">
+  <button class="plum-float" id="btn-plum" data-i18n-title="plum.tip" data-i18n-aria="plum.tip" title="New wallpaper · a quote" aria-label="New wallpaper · a quote">
     <svg viewBox="0 0 64 64" width="62" height="62" aria-hidden="true">
       <defs>
         <!-- one plum blossom: five round petals, dark heart, pale stamens with anther dots -->
@@ -286,7 +286,7 @@
           <div class="wall-lib">
             <div class="wall-lib-head">
               <span class="wall-lib-title" data-i18n="wall.lib_title">Wallpaper library</span>
-              <select id="f-wall-src" class="wall-src" title="壁纸源">
+              <select id="f-wall-src" class="wall-src" title="Source">
                 <option value="bing" data-i18n="wall.src_bing">Bing · Daily</option>
                 <option value="wallhaven" data-i18n="wall.src_wallhaven">Wallhaven · 4K</option>
                 <option value="unsplash" data-i18n="wall.src_unsplash" hidden>Unsplash · Photos</option>
@@ -381,7 +381,7 @@
               </label>
               <label class="wgt-row">
                 <input type="checkbox" id="f-w-wmovie" checked>
-                <span class="wgt-name" data-i18n="widget.movie">每日电影</span>
+                <span class="wgt-name" data-i18n="widget.movie">Movie of the day</span>
                 <select id="f-pos-wmovie" class="wgt-pos">
                   <option value="top" data-i18n="wpos.top">Above search</option>
                   <option value="left" data-i18n="wpos.left">Left column</option>
@@ -389,15 +389,15 @@
               </label>
               <label class="wgt-row">
                 <input type="checkbox" id="f-w-wweather">
-                <span class="wgt-name" data-i18n="widget.weather">天气</span>
+                <span class="wgt-name" data-i18n="widget.weather">Weather</span>
                 <select id="f-pos-wweather" class="wgt-pos">
                   <option value="top" data-i18n="wpos.top">Above search</option>
                   <option value="left" data-i18n="wpos.left">Left column</option>
                 </select>
               </label>
               <div class="wgt-city">
-                <input id="f-weather-city" type="text" maxlength="40" data-i18n-ph="weather.city_ph" data-i18n-aria="weather.city_ph" placeholder="天气城市（如 北京）" aria-label="Weather city">
-                <p class="data-tip" data-i18n="weather.city_tip">城市名经 Open-Meteo 解析为经纬度后存本地；天气数据直连 Open-Meteo，无需 API Key。</p>
+                <input id="f-weather-city" type="text" maxlength="40" data-i18n-ph="weather.city_ph" data-i18n-aria="weather.city_ph" placeholder="Weather city (e.g. Beijing)" aria-label="Weather city">
+                <p class="data-tip" data-i18n="weather.city_tip">The city name is resolved to coordinates via Open-Meteo and stored locally; forecasts are fetched directly from Open-Meteo, no API key.</p>
               </div>
             </div>
             <p class="data-tip" data-i18n="gen.widgets_tip">Uncheck to remove a widget; the dropdown moves it between the top stack and the left column. With the left column emptied it collapses and the icon grid spans the full width.</p>

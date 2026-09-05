@@ -61,7 +61,7 @@
 }
 
 /* Bundled variable font (Inter, SIL OFL, latin subset, 48KB) — crisp Latin and digits on every
- * platform without a single network request. CJK has no Inter glyphs, so 中文 falls through to
+ * platform without a single network request. CJK has no Inter glyphs, so Chinese text falls through to
  * PingFang/YaHei as before. The url() is relative to css/, correct for the split extension;
  * the single-file build inlines it as a data URL (see scripts/build-singlefile.cjs). */
 @font-face {
@@ -1065,7 +1065,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
 }
 .card .ico .logo { width: 60%; height: 60%; display: block; }
-/* Wordmark tiles (#59): brands whose logo *is* set type (51CTO, 小鹅通, 艾威教育…). Text needs more
+/* Wordmark tiles (#59): brands whose logo *is* set type (51CTO, Xiaoe Tech, iLearning…). Text needs more
  * of the tile than a glyph does, and it must pick up the UI font stack rather than the SVG default. */
 .card .ico .logo-tx,
 .icon-preview svg.logo-tx { width: 86%; height: 86%; }
@@ -1462,10 +1462,10 @@ svg.logo-tx text { font-family: inherit; }
   font-size: 13px; font-weight: 600; color: var(--ink-2); letter-spacing: 0.02em;
 }
 .wall-lib-head .wall-src {
-  width: auto;             /* 覆盖 .modal-body select { width:100% } */
+  width: auto;             /* override .modal-body select { width:100% } */
   min-width: 150px;
   padding: 7px 10px;
-  margin-left: auto;       /* 把源选择器 + 获取按钮推到右侧 */
+  margin-left: auto;       /* push the source selector + fetch button to the right */
   margin-right: 8px;
 }
 .wall-lib-grid {

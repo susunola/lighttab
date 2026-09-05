@@ -214,7 +214,7 @@
     return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 周${week}`;
   }
   // The slot above the search box wants one glanceable line, not the full date + lunar + ganzhi
-  // sentence the left-column card shows. Mirrors the launcher convention: 9月4日 星期五 七月廿三.
+  // sentence the left-column card shows. Mirrors the launcher convention, e.g. "9/4 Fri · lunar 7/23".
   function compactDateLine(d) {
     if (isEn()) {
       const wk = EN_WEEKS_S[d.getDay()];
@@ -1067,7 +1067,7 @@
   //   1. { d, c }            monochrome simple-icons path, auto-inked against the brand tile `c`
   //   2. { p: [{d,f}], c }   multi-colour brand logo — each sub-path carries its own literal fill,
   //                          `c` is only the tile background (usually #FFFFFF for corporate marks)
-  //   3. { tx, c, f }        wordmark tile — some brands (51CTO, 小鹅通, 艾威教育…) *are* set type;
+  //   3. { tx, c, f }        wordmark tile — some brands (51CTO, Xiaoe Tech, iLearning…) *are* set type;
   //                          drawing them as text is more faithful than a hand-traced silhouette
   // ICONDB is static, authored data — never user input — so the markup below is not sanitised.
   function iconGlyphHtml(icon, glyphColor) {
@@ -1076,7 +1076,7 @@
       return `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
     }
     if (icon.tx) {
-      // Shrink the type as the wordmark gets longer so 51CTO / 小鹅通 both fit the same tile.
+      // Shrink the type as the wordmark gets longer so 51CTO and CJK wordmarks both fit the same tile.
       const n = [...icon.tx].length;
       const size = n <= 1 ? 14 : n === 2 ? 11 : n === 3 ? 7.6 : n <= 5 ? 5.8 : 4.6;
       return `<svg class="logo logo-tx" viewBox="0 0 24 24" aria-hidden="true"><text x="12" y="12.6" fill="${icon.f || inkOn(icon.c)}" font-size="${size}" font-weight="700" text-anchor="middle" dominant-baseline="middle">${escapeHtml(icon.tx)}</text></svg>`;
