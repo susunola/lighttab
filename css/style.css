@@ -19,13 +19,11 @@
   --glass-2: rgba(12, 16, 28, 0.60);
   /* One blur token shared by every primary surface. saturate() is the part that matters: a plain
      blur greys the backdrop out and the pane reads as plastic rather than glass. */
-  --glass-blur: blur(16px) saturate(155%);
-  /* Frost material. Blur alone gives a flat wash of colour — that is what reads as "plastic".
-     Real 磨砂玻璃 needs three more things: a fine grain (light scattering), a directional sheen
-     (the pane catching light) and a specular edge (thickness). */
-  --frost-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23f)' opacity='0.5'/></svg>");
-  --frost-grain-blend: soft-light;
-  --frost-sheen: linear-gradient(135deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.05) 32%, rgba(255,255,255,0) 62%);
+  --glass-blur: blur(20px) saturate(150%);
+  /* Frost material: a directional sheen (the pane catching light) plus a specular edge (thickness).
+     An earlier revision also layered an SVG noise grain on top — it read as dirt over photographs,
+     so the material is now smooth: clean frost, not textured plastic. */
+  --frost-sheen: linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 32%, rgba(255,255,255,0) 62%);
   --frost-edge: inset 0 1px 0 var(--glass-hl), inset 0 -1px 0 rgba(0, 0, 0, 0.18), inset 1px 0 0 rgba(255,255,255,0.05);
   /* Inner top highlight — the bright 1px edge that sells a pane as glass. */
   --glass-hl: rgba(255, 255, 255, 0.14);
@@ -51,7 +49,7 @@
   --accent-ai: #a78bfa;
   --accent-ai-2: #8b5cf6;
   --danger: #f87171;
-  --shadow-1: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-1: 0 12px 32px rgba(0, 0, 0, 0.28);
   --shadow-2: 0 18px 60px rgba(0, 0, 0, 0.45);
   --radius-md: 12px;
   --radius-lg: 18px;
@@ -270,17 +268,14 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 
 
 /* ====== Frosted-glass material ======
- * background-image layers (sheen + grain) instead of a ::before overlay: the widgets already use
+ * A background-image layer (the sheen) instead of a ::before overlay: the widgets already use
  * absolutely-positioned children (.w-del, drag handles), and an absolutely-positioned pseudo
- * element would paint over them. background-blend-mode gets the same grain effect with no
- * stacking-order risk. */
+ * element would paint over them. Shortcut cards are deliberately NOT glass — they sit on the
+ * wallpaper as bare icon tiles (iTab style), with a glass pill only on hover. */
 .widget,
-.card,
 .search {
-  background-image: var(--frost-sheen), var(--frost-grain);
-  background-size: auto, 180px 180px;
-  background-repeat: no-repeat, repeat;
-  background-blend-mode: normal, var(--frost-grain-blend);
+  background-image: var(--frost-sheen);
+  background-repeat: no-repeat;
 }
 
 /* ====== Widget cards ====== */
@@ -291,7 +286,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   border-radius: var(--radius-xl);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--frost-edge), 0 1px 2px rgba(0, 0, 0, 0.22), var(--shadow-1);
+  box-shadow: var(--frost-edge), var(--shadow-1);
   padding: 20px 20px 18px;
 }
 /* #60 remove-widget affordance: same language as the shortcut card's ✕ — invisible until the
@@ -380,7 +375,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   padding: 0;
   text-align: center;
   max-width: 640px;
-  margin: 0 auto 0 0;
+  margin: 0 auto;
 }
 /* Stack gap: flow only. In canvas mode blocks are absolutely positioned and their y already bakes in
  * this gap (it was measured from a flow pass), so leaving the margin on would apply it a second time
@@ -405,8 +400,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .widget.wclock.w-top { padding: clamp(4px, 1.4vh, 14px) 0 clamp(8px, 1.4vh, 16px); }
 .widget.wclock.w-top .clock-row { justify-content: center; gap: 6px; }
 .widget.wclock.w-top .clock-hhmm {
-  font-size: clamp(48px, 4.4vw, 68px);
-  font-weight: 300;
+  font-size: clamp(58px, 5.6vw, 88px);
+  font-weight: 200;
   letter-spacing: 0.01em;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.3);
 }
@@ -773,12 +768,13 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   display: flex; align-items: center;
   height: 48px;
   max-width: 640px;
-  margin: 6px auto 0 0;
+  margin: 6px auto 0;
   background-color: var(--glass);
   border: 1px solid var(--line);
   border-radius: 999px;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--frost-edge), 0 4px 16px rgba(0, 0, 0, 0.18);
   transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
 }
 .search:focus-within {
@@ -918,27 +914,32 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   gap: 13px;
 }
+/* Shortcut cards are bare icon tiles sitting directly on the wallpaper (iTab style): no glass
+ * panel at rest — just a soft tile shadow and a text shadow on the label. A light glass pill
+ * appears on hover. */
 .card {
   position: relative;
   display: flex; flex-direction: column; align-items: center;
-  padding: 20px 8px 14px;
-  background-color: var(--glass);
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--frost-edge), 0 1px 2px rgba(0, 0, 0, 0.18);
-  transition: background .15s ease, border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+  padding: 12px 6px 10px;
+  background: none;
+  border: 0;
+  border-radius: 16px;
+  transition: background-color .15s ease, transform .15s ease;
   user-select: none;
   text-align: center;
   cursor: pointer;
 }
-.card:hover { background-color: var(--glass-2); border-color: var(--line-2); transform: translateY(-2px); box-shadow: var(--frost-edge), 0 8px 24px rgba(0, 0, 0, 0.26); }
+.card:hover {
+  background-color: var(--glass);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  transform: translateY(-2px);
+}
 .card.dragging { opacity: 0.4; cursor: grabbing; transform: none; }
-.card.drag-over { border-color: var(--accent); }
+.card.drag-over { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .card .ico {
-  width: 54px; height: 54px;
-  border-radius: 15px;
+  width: 64px; height: 64px;
+  border-radius: 18px;
   display: flex; align-items: center; justify-content: center;
   background: rgba(255,255,255,0.92);
   color: #1f2937;
@@ -946,6 +947,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   font-size: 20px;
   overflow: hidden;
   position: relative;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
 }
 .card .ico .logo { width: 60%; height: 60%; display: block; }
 /* Wordmark tiles (#59): brands whose logo *is* set type (51CTO, 小鹅通, 艾威教育…). Text needs more
@@ -972,16 +974,16 @@ svg.logo-tx text { font-family: inherit; }
 [data-theme="dark"] .card .ico.has-custom-icon { background: #27272a; }
 [data-theme="light"] .card .ico.has-custom-icon { background: #ffffff; }
 .card .title {
-  margin-top: 10px;
-  font-size: 13px;
-  color: var(--ink-2);
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.2;
 }
-.card:hover .title { color: var(--ink); }
 .card-actions {
   position: absolute;
   top: 8px; right: 8px;
@@ -1357,6 +1359,8 @@ svg.logo-tx text { font-family: inherit; }
 /* ====== Responsive ====== */
 @media (max-width: 1024px) {
   .layout { flex-direction: column; padding: 16px 20px 90px; }
+  /* Clock + search + grid come first (launcher convention); the widget column drops below. */
+  .right { order: -1; }
   .left {
     flex: none;
     width: 100%;
@@ -1366,7 +1370,7 @@ svg.logo-tx text { font-family: inherit; }
   }
   .left .widget { flex: 1; }
   .wclock .clock-hhmm { font-size: 44px; }
-  .search { margin: 0; max-width: 100%; }
+  .search { margin: 6px auto 0; max-width: 100%; }
 }
 @media (max-width: 720px) {
   #topbar { padding: 14px 16px 0; }
@@ -1857,9 +1861,8 @@ html[data-theme="light"] {
      a stronger blur/saturate lets the wallpaper through as real frost. */
   --glass: rgba(255, 255, 255, 0.36);
   --glass-2: rgba(255, 255, 255, 0.46);
-  --glass-blur: blur(16px) saturate(185%);
-  --frost-sheen: linear-gradient(135deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.09) 30%, rgba(255,255,255,0) 62%);
-  --frost-grain-blend: overlay;
+  --glass-blur: blur(20px) saturate(185%);
+  --frost-sheen: linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0) 62%);
   --frost-edge: inset 0 1px 0 var(--glass-hl), inset 0 -1px 0 rgba(17, 24, 39, 0.07), inset 1px 0 0 rgba(255,255,255,0.22);
   --glass-hl: rgba(255, 255, 255, 0.5);
   /* Same sweep, mirrored: worst pairing here is light theme over a DARK wallpaper. Dropped the base
@@ -1902,8 +1905,10 @@ html[data-theme="light"] #wallpaper.bg-light .wp-overlay {
 }
 /* Brand tiles are white in both themes; give them a hairline in light mode so they do not vanish into the white glass. */
 html[data-theme="light"] .card .ico {
-  box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.08), 0 4px 14px rgba(15, 23, 42, 0.12);
 }
+/* Card labels sit directly on the wallpaper: light theme flips the text shadow to a light halo. */
+html[data-theme="light"] .card .title { text-shadow: 0 1px 6px rgba(255, 255, 255, 0.65); }
 /* Checkbox "done" dot: dark navy is tuned for the dark theme; use white in light. */
 html[data-theme="light"] .todo-item.done .t-check::after { background: #fff; }
 
