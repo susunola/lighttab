@@ -601,9 +601,102 @@
       quoteTimer = setTimeout(() => { el.hidden = true; el.classList.remove('quote-out'); quoteTimer = 0; }, 360);
     }, 4200);
   }
+  // ---------- Plum petal burst ----------
+  // Clicking the plum branch scatters a burst of petals from the corner: a one-shot DPR-aware
+  // canvas overlay, torn down when the last petal lands. Respects prefers-reduced-motion.
+  let petalCanvas = null;
+  let petalRaf = 0;
+  const PETAL_COLORS = ['#f9a8d4', '#f472b6', '#ec4899', '#e9d5ff', '#fbcfe8'];
+  function drawPetal(ctx, s) {
+    ctx.beginPath();
+    ctx.moveTo(0, -s);
+    ctx.bezierCurveTo(s * 0.95, -s * 0.55, s * 0.72, s * 0.6, 0, s);
+    ctx.bezierCurveTo(-s * 0.72, s * 0.6, -s * 0.95, -s * 0.55, 0, -s);
+    ctx.fill();
+  }
+  function petalBurst() {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!petalCanvas) {
+      petalCanvas = document.createElement('canvas');
+      petalCanvas.className = 'petal-canvas';
+      petalCanvas.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(petalCanvas);
+    }
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = window.innerWidth, H = window.innerHeight;
+    petalCanvas.width = W * dpr;
+    petalCanvas.height = H * dpr;
+    petalCanvas.style.width = W + 'px';
+    petalCanvas.style.height = H + 'px';
+    const ctx = petalCanvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Origin: the plum button's centre (bottom-right corner).
+    const btn = document.getElementById('btn-plum');
+    const br = btn ? btn.getBoundingClientRect() : { left: W, top: H, width: 0, height: 0 };
+    const ox = br.left + br.width / 2, oy = br.top + br.height / 2;
+    const now = performance.now();
+    const petals = [];
+    for (let i = 0; i < 46; i++) {
+      // Fan up-and-left out of the corner, speeds in px/s.
+      const ang = (-160 + Math.random() * 95) * Math.PI / 180;
+      const spd = 260 + Math.random() * 560;
+      petals.push({
+        x: ox + (Math.random() - 0.5) * 30,
+        y: oy + (Math.random() - 0.5) * 20,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd - 140,
+        rot: Math.random() * Math.PI * 2,
+        vr: (Math.random() - 0.5) * 7,
+        size: 5 + Math.random() * 8,
+        color: PETAL_COLORS[(Math.random() * PETAL_COLORS.length) | 0],
+        swayF: 1.2 + Math.random() * 2.2,   // sway frequency (rad/s)
+        swayA: 20 + Math.random() * 46,     // sway amplitude (px)
+        phase: Math.random() * Math.PI * 2,
+        flipF: 2 + Math.random() * 3.5,     // fake 3D tumble frequency
+        born: now + Math.random() * 180,
+        ttl: 3200 + Math.random() * 1400
+      });
+    }
+    if (petalRaf) cancelAnimationFrame(petalRaf);
+    let prev = now;
+    const GRAV = 460;        // px/s²
+    const DRAG = 0.986;      // per-frame velocity retention
+    function frame(t) {
+      const dt = Math.max(0, Math.min((t - prev) / 1000, 0.05));
+      prev = t;
+      ctx.clearRect(0, 0, W, H);
+      let alive = 0;
+      for (const p of petals) {
+        // Not-yet-born petals still count as alive — an early vsync timestamp (< burst time)
+        // must not kill the loop on its first frame.
+        if (t < p.born) { alive++; continue; }
+        const age = t - p.born;
+        if (age > p.ttl || p.y > H + 60) continue;
+        alive++;
+        p.vy += GRAV * dt;
+        p.vx *= DRAG; p.vy *= DRAG;
+        p.x += (p.vx + Math.sin(t / 1000 * p.swayF + p.phase) * p.swayA) * dt;
+        p.y += p.vy * dt;
+        p.rot += p.vr * dt;
+        const fade = age > p.ttl - 700 ? Math.max(0, (p.ttl - age) / 700) : 1;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.scale(1, 0.35 + 0.65 * Math.abs(Math.cos(t / 1000 * p.flipF + p.phase))); // tumble
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = p.color;
+        drawPetal(ctx, p.size);
+        ctx.restore();
+      }
+      if (alive) petalRaf = requestAnimationFrame(frame);
+      else { petalRaf = 0; ctx.clearRect(0, 0, W, H); }
+    }
+    petalRaf = requestAnimationFrame(frame);
+  }
   async function rotateWallpaperAndQuote() {
     const btn = document.getElementById('btn-plum');
     if (btn) { btn.classList.remove('spin'); void btn.offsetWidth; btn.classList.add('spin'); }
+    petalBurst();
     // Ensure a pool exists (silent network attempt, cached pool as fallback).
     if (!Array.isArray(wallLibImages) || !wallLibImages.length) {
       await fetchWallLib({ silent: true });

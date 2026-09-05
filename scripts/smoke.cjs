@@ -809,6 +809,13 @@ assert(/pickQuoteIndex/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] ||
 assert((appSrc.match(/zh: '[^']*', en: '/g) || []).length >= 10, `quote pool is large enough (currently ${(appSrc.match(/zh: '[^']*', en: '/g) || []).length} entries)`);
 // CSS: plum button + quote overlay styles are complete
 assert(/\.plum-float/.test(cssSrc) && /@keyframes plum-spin/.test(cssSrc), 'CSS defines .plum-float and its spin animation');
+// Plum petal burst: canvas overlay, corner origin, reduced-motion guard, self-cleanup
+assert(/function petalBurst\(\)/.test(appSrc), 'app.js defines petalBurst()');
+assert(/petalBurst\(\);/.test(appSrc), 'plum click triggers the petal burst');
+assert(/prefers-reduced-motion/.test(appSrc), 'petal burst respects prefers-reduced-motion');
+assert(/function drawPetal\(ctx, s\)/.test(appSrc), 'petal path drawn with bezier curves');
+assert(/petalRaf = 0; ctx\.clearRect/.test(appSrc), 'petal canvas self-cleans when the last petal lands');
+assert(/\.petal-canvas \{[^}]*pointer-events: none/.test(cssSrc), 'petal canvas never intercepts clicks');
 assert(/\.quote/.test(cssSrc) && /\.quote-text/.test(cssSrc) && /\.quote-src/.test(cssSrc), 'CSS defines .quote / .quote-text / .quote-src');
 assert(/@keyframes quote-in/.test(cssSrc) && /\.quote\.quote-out/.test(cssSrc), 'CSS defines quote enter/exit animations');
 // The quote is a single small line at the bottom (iTab convention), not a centered glass card

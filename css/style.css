@@ -1159,6 +1159,13 @@ svg.logo-tx text { font-family: inherit; }
   65% { transform: rotate(5deg); }
   100% { transform: rotate(0deg); }
 }
+/* Petal burst overlay: above the page, below modals (z 100), never intercepts clicks. */
+.petal-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+}
 
 /* ====== Menus ====== */
 .menu {
