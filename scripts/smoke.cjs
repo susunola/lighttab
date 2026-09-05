@@ -734,10 +734,24 @@ assert(/https:\/\/geocoding-api\.open-meteo\.com\/v1\/search/.test(appSrc), 'app
 assert(/AbortController/.test(appSrc) && /WEATHER_TIMEOUT_MS = 5000/.test(appSrc), 'weather requests carry an AbortController 5s timeout');
 assert(/WEATHER_REFRESH_MS = 30 \* 60 \* 1000/.test(appSrc), 'weather cache TTL / refresh period is 30 minutes');
 assert(/setInterval\(maybeFetchWeather, WEATHER_REFRESH_MS\)/.test(appSrc), 'auto-refresh every 30 minutes while the page is open');
-// Zero-network principle: never send a request when the widget is invisible or no city is configured
+// Zero-network principle: never send a request when no city is configured. A configured city is
+// the opt-in — with the widget hidden, the weather rides on the clock's date line instead.
 const mfb = appSrc.match(/function maybeFetchWeather\(\) \{([\s\S]*?)\n  \}/);
-assert(!!mfb && mfb[1].includes("if (!widgetVisible('wweather')) return;") && mfb[1].includes('if (!weatherConfigured()) return;'),
-  'maybeFetchWeather checks visibility and city config first, otherwise never sends a request');
+assert(!!mfb && mfb[1].includes('if (!weatherConfigured()) return;') && !mfb[1].includes('widgetVisible'),
+  'maybeFetchWeather gates on city config only (hidden widget still feeds the clock line)');
+// Clock date line carries a compact weather tail when the widget is hidden
+assert(/function clockWeatherText\(\)/.test(appSrc), 'app.js defines clockWeatherText()');
+assert(/if \(widgetVisible\('wweather'\)\) return '';/.test(appSrc), 'clock weather tail only when the widget is hidden');
+assert(/lastDay = dayKey[\s\S]{0,400}\+ clockWeatherText\(\)/.test(appSrc), 'clock date line appends the weather tail');
+assert(/clockIsTop\(\) \? 't' : 'l'\}\|\$\{clockWeatherText\(\)\}/.test(appSrc), 'weather tail participates in the date cache key');
+// Settings: the avatar upload label must not be crushed by the global modal label rules
+assert(/\.modal-body label\.file-btn \{[^}]*display: inline-flex/.test(cssSrc)
+  && /\.modal-body label\.file-btn > span/.test(cssSrc),
+  'avatar upload/remove buttons stay aligned (label specificity override)');
+// Canvas: a block dropped on the icon grid displaces the covered cards instead of overlapping
+assert(/function resolveCardCollisions/.test(canvasSrc), 'canvas.js defines resolveCardCollisions()');
+assert(/resolveCardCollisions\(block\.key\)/.test(canvasSrc), 'block drag end resolves card collisions');
+assert(/if \(movedKey === 'grid'\) return;/.test(canvasSrc), 'moving the grid itself never displaces its own cards');
 // WMO code mapping: covers clear/partly cloudy/overcast/fog/drizzle/rain/snow/showers/thunderstorm, one per language
 assert(/const WMO_TEXT = \[/.test(appSrc), 'app.js defines the WMO_TEXT weather-code mapping');
 for (const pair of ["0, 0, '晴', 'Clear'", "1, 2, '多云', 'Partly cloudy'", "3, 3, '阴', 'Overcast'",

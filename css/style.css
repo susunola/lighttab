@@ -1388,6 +1388,11 @@ svg.logo-tx text { font-family: inherit; }
 }
 .btn.ghost:hover { background: var(--tint-3); color: var(--ink); }
 .file-btn { position: relative; display: inline-flex; cursor: pointer; }
+/* The upload button is a <label class="btn file-btn">: the global modal label rules would give it
+ * display:block + margin-bottom and restyle its inner span, breaking vertical alignment with the
+ * neighbouring Remove button. Same specificity game as the widget rows above. */
+.modal-body label.file-btn { display: inline-flex; margin-bottom: 0; }
+.modal-body label.file-btn > span { display: inline; font-size: inherit; color: inherit; margin-bottom: 0; letter-spacing: inherit; }
 
 /* ====== Wallpaper swatches ====== */
 /* #49 daily auto-rotate row: the shared .modal-body input rule is full-width, so a checkbox needs an override. */

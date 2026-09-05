@@ -407,6 +407,53 @@
     }
   }
 
+  // When a block lands on the icon grid, the covered cards move aside instead of overlapping:
+  // displaced cards take the earliest free, uncovered cells in reading order.
+  function resolveCardCollisions(movedKey) {
+    if (movedKey === 'grid') return; // cards live inside the grid block — they move with it
+    const root = canvasRoot();
+    const grid = document.getElementById('grid');
+    if (!root || !root.classList.contains('canvas') || !grid) return;
+    const block = blockEls().find(b => b.key === movedKey);
+    if (!block) return;
+    const cell = getCardCellSize();
+    if (!cell) return;
+    const br = block.el.getBoundingClientRect();
+    const gr = grid.getBoundingClientRect();
+    if (br.right <= gr.left || br.left >= gr.right || br.bottom <= gr.top || br.top >= gr.bottom) return;
+    const cols = getCardCols(grid.clientWidth);
+    // A cell is covered when its rect intersects the dropped block's rect.
+    const covered = (col, row) => {
+      const x = gr.left + col * cell.stepX, y = gr.top + row * cell.stepY;
+      return x < br.right && x + cell.cardW > br.left && y < br.bottom && y + cell.cardH > br.top;
+    };
+    const map = getCardLayout();
+    const occupied = new Set();
+    const displaced = [];
+    for (const c of grid.querySelectorAll('.card')) {
+      const p = map[c.dataset.id];
+      if (!p || typeof p.col !== 'number') continue;
+      if (covered(p.col, p.row)) displaced.push(c.dataset.id);
+      else occupied.add(p.col + ',' + p.row);
+    }
+    if (!displaced.length) return;
+    let idx = 0;
+    for (const id of displaced) {
+      for (;;) {
+        const col = idx % cols, row = Math.floor(idx / cols);
+        idx++;
+        const key = col + ',' + row;
+        if (occupied.has(key) || covered(col, row)) continue;
+        occupied.add(key);
+        map[id] = { col, row };
+        break;
+      }
+    }
+    setCardLayoutMap(map);
+    applyCardCanvas();
+    A().Store.set(A().K.settings, A().state.settings);
+  }
+
   function bindBlockDrag() {
     const root = canvasRoot();
     if (!root) return;
@@ -470,6 +517,7 @@
       l.auto = false; // hand-placed from now on: never silently re-derive these coordinates
       A().Store.set(A().K.settings, A().state.settings);
       applyCanvas(); // re-anchor: a top-stack widget follows the search box it belongs to
+      resolveCardCollisions(block.key); // a block dropped on the icon grid pushes cards aside
     }
 
     root.addEventListener('pointerdown', onPointerDown);

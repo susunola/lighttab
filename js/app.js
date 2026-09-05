@@ -654,12 +654,12 @@
         greetEl.textContent = `${greetingFor(d)}${nm}`;
         chipEl.textContent = `${chipDate(d)} · ${chipFor(d)}`;
       }
-      const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}|${clockIsTop() ? 't' : 'l'}`;
+      const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}|${clockIsTop() ? 't' : 'l'}|${clockWeatherText()}`;
       if (dayKey !== lastDay) {
         lastDay = dayKey;
         // Lifted above the search box: one compact line. Left-column card: the full date + lunar pair.
         const top = clockIsTop();
-        dateEl.textContent = top ? compactDateLine(d) : dateLine(d);
+        dateEl.textContent = (top ? compactDateLine(d) : dateLine(d)) + clockWeatherText();
         if (lunarEl) lunarEl.textContent = top ? '' : lunarLine(d);
         // Runs on boot (lastDay starts empty) and again on every midnight rollover, so a tab left open
         // across days still rotates the wallpaper. Guarded internally by settings + the today marker.
@@ -2360,11 +2360,19 @@
         '<span>' + escapeHtml(t('weather.humidity')) + ' ' + last.rh + '%</span>' +
       '</div>';
   }
-  // Fetch only when the widget is visible AND a city is configured AND the cache is stale or missing
-  // (a city change drops the old cache, so it counts as stale too). Everything else renders from
-  // settings.weather.last without touching the network.
+  // Compact weather tail on the clock's date line, shown only when the weather widget itself is
+  // hidden — configuring a city is the opt-in, so a hidden widget should not waste the data.
+  function clockWeatherText() {
+    if (widgetVisible('wweather')) return '';
+    const w = state.settings.weather;
+    if (!w || !w.last || typeof w.last.temp !== 'number') return '';
+    return ` · ${w.name} ${w.last.temp}° ${weatherText(w.last.code)}`;
+  }
+  // Fetch only when a city is configured AND the cache is stale or missing (a city change drops
+  // the old cache, so it counts as stale too). A hidden widget means the clock line shows the
+  // weather instead — still a reason to fetch. Everything else renders from settings.weather.last
+  // without touching the network.
   function maybeFetchWeather() {
-    if (!widgetVisible('wweather')) return;
     if (!weatherConfigured()) return;
     const w = state.settings.weather;
     if (w.fetchedAt && Date.now() - w.fetchedAt < WEATHER_REFRESH_MS) return;
