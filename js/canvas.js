@@ -108,7 +108,15 @@
       const gwb = gw.bottom - rr.top;
       if (gwb > maxBottom) maxBottom = gwb;
     }
-    root.style.height = (maxBottom + 90) + 'px';
+    // Keep drop room below the lowest block so blocks can still be dragged further down.
+    // But that headroom must never be the sole reason a scrollbar appears: on the default
+    // layout the content already fits above the fold, so cap the height at the viewport edge.
+    // (Re-evaluated on resize — see the resize listener at the bottom of this file.)
+    const DROP_ROOM = 90;
+    const avail = Math.max(0, window.innerHeight - rr.top);
+    let h = maxBottom + DROP_ROOM;
+    if (maxBottom <= avail && h > avail) h = avail;
+    root.style.height = h + 'px';
   }
 
   // ---------- Canvas mode: free card dragging with snap-to-grid ----------

@@ -271,7 +271,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   gap: clamp(24px, 3vw, 44px);
   max-width: 1440px;
   margin: 0 auto;
-  padding: clamp(18px, 3vh, 30px) 40px 90px;
+  /* Tightened top inset: the content block reads as one group under the topbar instead of
+   * floating mid-screen, and the freed height lets the left stack fit small windows. */
+  padding: clamp(12px, 2vh, 22px) 40px 90px;
 }
 .left {
   flex: 0 0 320px;
@@ -417,7 +419,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .widget.wmovie.w-top { --wtop-del: 176px; } /* 320px movie card */
 
 /* --- clock in the top stack: big time over one compact date line (launcher convention) --- */
-.widget.wclock.w-top { padding: clamp(4px, 1.4vh, 14px) 0 clamp(8px, 1.4vh, 16px); }
+.widget.wclock.w-top { padding: clamp(2px, 0.8vh, 10px) 0 clamp(4px, 0.9vh, 12px); }
 .widget.wclock.w-top .clock-row { justify-content: center; gap: 6px; }
 .widget.wclock.w-top .clock-hhmm {
   font-size: clamp(48px, 4.4vw, 68px);
@@ -830,6 +832,91 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .movie-next { margin-left: auto; }
 
+/* Left-column (default) compact strip.
+ * The full-bleed poster tile is great in the top stack / detail window, but stacked under the
+ * calendar + to-do it made the left column ~1010px tall — taller than every common viewport.
+ * Here the same markup is re-flowed as a horizontal strip: small poster thumb + text column.
+ * Specificity note: (0,4,0), matching `.widget.wmovie.w-top .movie-tile` so the two modes are
+ * mutually exclusive and neither can be shadowed by the (0,1,0) base rules further up. */
+.widget.wmovie:not(.w-top) { padding: 14px 16px 13px; }
+.widget.wmovie:not(.w-top) .w-head { margin-bottom: 9px; }
+.widget.wmovie:not(.w-top) .movie-card { gap: 8px; }
+.widget.wmovie:not(.w-top) .movie-tile {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 11px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+}
+.widget.wmovie:not(.w-top) .movie-tile:hover {
+  transform: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+.widget.wmovie:not(.w-top) .movie-tile:hover .movie-tile-bg {
+  border-color: var(--line-2);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.34);
+}
+/* the dark scrim exists to keep white text legible over the poster; the strip has real text colors */
+.widget.wmovie:not(.w-top) .movie-tile::after { content: none; }
+.widget.wmovie:not(.w-top) .movie-tile-bg {
+  position: static;
+  width: 62px; height: 92px;
+  border-radius: 9px;
+  object-fit: cover;
+  transform: none;
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.26);
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+/* both are redundant in strip mode: the date already sits in .w-head, the name in .w-title */
+.widget.wmovie:not(.w-top) .movie-tile-date,
+.widget.wmovie:not(.w-top) .movie-tile-tag { display: none; }
+.widget.wmovie:not(.w-top) .movie-tile-info {
+  position: static;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  color: var(--ink);
+}
+.widget.wmovie:not(.w-top) .movie-tile-title {
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--ink);
+  text-shadow: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.widget.wmovie:not(.w-top) .movie-tile-rate {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+.widget.wmovie:not(.w-top) .movie-tile-quote {
+  font-size: 11.5px;
+  line-height: 1.42;
+  color: var(--ink-2);
+  text-shadow: none;
+  -webkit-line-clamp: 2;
+}
+
+/* Short windows (≈1366×768 laptops, where the browser leaves ~720px of viewport): tighten the
+ * left stack a notch more so the default layout still fits without scrolling. Only the strip
+ * thumb, its padding and the stack gap shrink — no content is hidden.
+ * Placed after the base rules on purpose: equal-specificity rules are resolved by order. */
+@media (max-height: 780px) {
+  .left { gap: 10px; }
+  .widget.wmovie:not(.w-top) { padding: 12px 14px 11px; }
+  .widget.wmovie:not(.w-top) .movie-tile { grid-template-columns: 54px minmax(0, 1fr); gap: 10px; }
+  .widget.wmovie:not(.w-top) .movie-tile-bg { width: 54px; height: 80px; }
+}
+
 /* top stack: keep movie tile compact and readable */
 .widget.wmovie.w-top .movie-card { max-width: 360px; margin: 0 auto; }
 .widget.wmovie.w-top .movie-tile { min-height: 300px; border-radius: 18px; }
@@ -1148,7 +1235,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 /* ====== Icon grid ====== */
-#grid-wrap { margin-top: clamp(22px, 3.5vh, 34px); }
+#grid-wrap { margin-top: clamp(14px, 2.2vh, 24px); }
 .group-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
   margin-bottom: 14px;

@@ -2352,10 +2352,38 @@
       ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]
       : ['日', '一', '二', '三', '四', '五', '六'][day];
   }
+  // Placeholder poster for entries without a real still.
+  // The SAME data-URI is rendered at ~300-420px in the poster tile AND at 62px in the
+  // left-column strip, so it must be built from scale-independent shapes only: the previous
+  // version baked in 36/72px title text, which collapsed into an illegible smudge at thumbnail
+  // size. The title needs no duplication here — both modes already show it as real DOM text
+  // (overlaid on the tile, beside the thumb in the strip). A hue derived from the title keeps
+  // consecutive "换一部" picks visually distinct even with no artwork available.
   function moviePosterFallback(m) {
-    const zh = String(m && m.zh ? m.zh : '电影').slice(0, 8);
-    const en = String(m && m.en ? m.en : 'MOVIE').slice(0, 24);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1080"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1f2937"/><stop offset="55%" stop-color="#0f172a"/><stop offset="100%" stop-color="#334155"/></linearGradient></defs><rect width="720" height="1080" fill="url(#g)"/><rect x="34" y="34" width="652" height="1012" rx="26" fill="none" stroke="rgba(255,255,255,0.18)"/><text x="60" y="858" fill="rgba(255,255,255,0.94)" font-family="system-ui,-apple-system,Segoe UI,Roboto,PingFang SC,Microsoft YaHei,sans-serif" font-size="72" font-weight="700">${escapeHtml(zh)}</text><text x="60" y="925" fill="rgba(255,255,255,0.72)" font-family="Inter,system-ui,sans-serif" font-size="36" letter-spacing="2">${escapeHtml(en)}</text></svg>`;
+    const key = String((m && (m.zh || m.en)) || 'film');
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) % 360;
+    const h1 = hash, h2 = (hash + 42) % 360;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1080">` +
+      `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+        `<stop offset="0%" stop-color="hsl(${h1} 26% 25%)"/>` +
+        `<stop offset="55%" stop-color="hsl(${h2} 30% 13%)"/>` +
+        `<stop offset="100%" stop-color="hsl(${h1} 22% 31%)"/>` +
+      `</linearGradient></defs>` +
+      `<rect width="720" height="1080" fill="url(#g)"/>` +
+      `<rect x="34" y="34" width="652" height="1012" rx="26" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="6"/>` +
+      // centered film-strip mark: body + two rails + sprocket holes, all large enough to survive
+      // being scaled down to a 62px-wide thumbnail
+      `<g fill="none" stroke="rgba(255,255,255,0.46)" stroke-width="16" stroke-linejoin="round">` +
+        `<rect x="196" y="394" width="328" height="292" rx="26"/>` +
+        `<line x1="266" y1="394" x2="266" y2="686"/>` +
+        `<line x1="454" y1="394" x2="454" y2="686"/>` +
+      `</g>` +
+      `<g fill="rgba(255,255,255,0.46)">` +
+        `<circle cx="231" cy="446" r="13"/><circle cx="231" cy="540" r="13"/><circle cx="231" cy="634" r="13"/>` +
+        `<circle cx="489" cy="446" r="13"/><circle cx="489" cy="540" r="13"/><circle cx="489" cy="634" r="13"/>` +
+      `</g>` +
+      `</svg>`;
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   }
   function moviePoster(m) {

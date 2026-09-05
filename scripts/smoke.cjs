@@ -747,6 +747,33 @@ assert(/\.wall-reco-badge/.test(cssSrc) && /\.wall-reco-tip/.test(cssSrc), 'CSS 
   I.setLang('zh');
 }
 
+// ---------- 16) 默认排版包围盒：电影紧凑条 + 上移收紧 + 无强制滚动条 ----------
+console.log('[16] 默认排版 · 左栏装得下 + 内容收紧');
+// 电影组件双形态：左栏(:not(.w-top)) 走横排紧凑条，顶部态保留整幅海报
+assert(/\.widget\.wmovie:not\(\.w-top\) \.movie-tile \{/.test(cssSrc), '左栏态定义 .movie-tile 紧凑条规则');
+assert(/\.widget\.wmovie:not\(\.w-top\) \.movie-tile \{[^}]*display:\s*grid/.test(cssSrc), '紧凑条用 grid 横排（小海报 + 文字两列）');
+assert(/\.widget\.wmovie:not\(\.w-top\) \.movie-tile-bg \{[^}]*position:\s*static/.test(cssSrc), '紧凑条海报改 static（不再绝对定位铺满）');
+assert(/\.widget\.wmovie:not\(\.w-top\) \.movie-tile-date,\s*\n\s*\.widget\.wmovie:not\(\.w-top\) \.movie-tile-tag \{[^}]*display:\s*none/.test(cssSrc),
+  '紧凑条隐藏日期角标与底部标签（信息已在 .w-head / .w-title）');
+assert(/\.widget\.wmovie:not\(\.w-top\) \.movie-tile[^{]*\{[^}]*content:\s*none/.test(cssSrc), '紧凑条移除海报暗色蒙层 ::after');
+// 顶部态必须仍是大海报，两种形态不可互相污染
+assert(/\.widget\.wmovie\.w-top \.movie-tile \{[^}]*min-height:\s*300px/.test(cssSrc), '顶部态保留 300px 大海报');
+assert(/\.movie-tile \{[^}]*min-height:\s*420px/.test(cssSrc), '基础态（详情/其它场景）仍是 420px 整幅海报');
+// 矮窗口再收一档，且只缩尺寸不隐藏内容
+assert(/@media \(max-height: 780px\) \{[\s\S]{0,600}?\.widget\.wmovie:not\(\.w-top\) \.movie-tile-bg \{[^}]*height:\s*80px/.test(cssSrc),
+  '矮窗口(≤780px)海报缩到 80px');
+assert(!/@media \(max-height: 780px\) \{[\s\S]{0,600}?movie-tile-quote[^}]*display:\s*none/.test(cssSrc),
+  '矮窗口只缩尺寸、不隐藏短句');
+// 上移收紧的三处来源（都用 vh 比例，不写死像素）
+assert(/\.layout \{[\s\S]*?padding: clamp\(12px, 2vh, 22px\) 40px 90px/.test(cssSrc), '.layout 顶部内边距收紧为 clamp(12px, 2vh, 22px)');
+assert(/\.widget\.wclock\.w-top \{ padding: clamp\(2px, 0\.8vh, 10px\) 0 clamp\(4px, 0\.9vh, 12px\)/.test(cssSrc), '顶部时钟上下留白收紧');
+assert(/#grid-wrap \{ margin-top: clamp\(14px, 2\.2vh, 24px\)/.test(cssSrc), '搜索框到网格的间距收紧为 clamp(14px, 2.2vh, 24px)');
+// 画布高度：90px 拖拽余量不得单独制造滚动条
+assert(/const DROP_ROOM = 90/.test(canvasSrc), 'canvas.js 保留 90px 拖拽余量常量');
+assert(/if \(maxBottom <= avail && h > avail\) h = avail;/.test(canvasSrc), '内容已在首屏内时，画布高度封顶到视口（不出滚动条）');
+assert(/window\.innerHeight - rr\.top/.test(canvasSrc), '余量按视口实时计算');
+assert(/addEventListener\('resize'/.test(canvasSrc), 'resize 时重算画布高度（视口感知的前提）');
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} 项失败`);
