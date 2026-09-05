@@ -2492,8 +2492,10 @@
       left.hidden = !WIDGETS.some((id) =>
         vis[id] && document.querySelector('.widget.' + id)?.closest('.left'));
     }
-    // In free-canvas mode the block coordinates are frozen, so hiding a widget would leave a hole.
-    window.LT_CANVAS.recaptureBlocksFromFlow();
+    // In free-canvas mode the block coordinates are frozen: toggling a widget without a reflow
+    // leaves a hole where it was — and a revived widget may have no coords at all and park at the
+    // origin. Force a re-measure even for hand-arranged layouts; this is an explicit structural edit.
+    window.LT_CANVAS.recaptureBlocksFromFlow(true);
   }
   // Per-widget placement (#62). Coerce anything off disk / out of an imported file into a full
   // {wclock,wcal,wtodo} map of 'left' | 'top'; unknown values fall back to the shipped default so a

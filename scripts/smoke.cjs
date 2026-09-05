@@ -416,7 +416,9 @@ assert(/layout\.auto = true/.test(canvasSrc), 'captureLayout 标记 auto 布局'
 assert((canvasSrc.match(/\.auto = false/g) || []).length >= 2, '块拖拽与卡片拖拽都会把布局标记为手动');
 assert(/function widgetLayoutStale/.test(canvasSrc), 'canvas.js 定义 widgetLayoutStale()（冷启动陈旧坐标检测）');
 assert(/function recaptureBlocksFromFlow/.test(canvasSrc), 'canvas.js 定义 recaptureBlocksFromFlow()');
-assert(/if \(!l \|\| l\.auto === false\) return/.test(canvasSrc), '手动布局不被自动重算覆盖');
+assert(/if \(!l \|\| \(l\.auto === false && !force\)\) return/.test(canvasSrc), '手动布局不被自动重算覆盖');
+assert(/recaptureBlocksFromFlow\(true\)/.test(appSrc), '组件开关/换列是显式结构改动，强制重排（保留手动标记）');
+assert(/next\.auto = l\.auto !== false/.test(canvasSrc), '强制重排只刷新坐标，保留手动布局标记');
 assert(/next\.cards = captureCardLayout\(\)/.test(canvasSrc), '重算时卡片坐标一并重新推导（网格变宽会改列数）');
 assert(/if \(window\.LT_CANVAS\.widgetLayoutStale\(\)\) window\.LT_CANVAS\.recaptureBlocksFromFlow\(\)/.test(appSrc), '启动时修正陈旧的画布坐标');
 

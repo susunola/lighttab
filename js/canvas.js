@@ -495,14 +495,17 @@
     return false;
   }
 
-  // Removing a left-column widget leaves a hole in the frozen canvas coordinates, so re-derive the
-  // block positions from a fresh flow pass. Only ever applied to an auto layout — once the user has
-  // dragged a block or a card the arrangement is theirs and we leave it exactly as they left it.
-  function recaptureBlocksFromFlow() {
+  // Toggling a widget or moving it between columns leaves the frozen canvas coordinates describing
+  // a different page (a hole where the widget was, or a revived widget with no coords parked at the
+  // origin), so re-derive the block positions from a fresh flow pass. Automatic callers (boot-time
+  // stale checks, overlap self-healing) only ever touch an auto layout; applyWidgets passes force
+  // because a visibility/position change is a structural edit the user just asked for. The manual
+  // marker survives a forced reflow — only the numbers are refreshed.
+  function recaptureBlocksFromFlow(force) {
     const root = canvasRoot();
     if (!root || !root.classList.contains('canvas')) return; // flow layout reflows on its own
     const l = getLayout();
-    if (!l || l.auto === false) return;
+    if (!l || (l.auto === false && !force)) return;
     leaveCanvas(); // drop absolute positioning so the browser reflows around the hidden widgets
     const rr = root.getBoundingClientRect();
     const next = {};
@@ -515,7 +518,7 @@
     // the grid wider, which changes the track count — so the card map has to be re-derived too,
     // otherwise old column indices scatter the icons across the new width.
     next.cards = captureCardLayout();
-    next.auto = true;
+    next.auto = l.auto !== false; // a forced reflow refreshes geometry but keeps the manual marker
     A().state.settings.layout = next;
     A().Store.set(A().K.settings, A().state.settings);
     applyCanvas();
