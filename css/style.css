@@ -1026,17 +1026,19 @@ svg.logo-tx text { font-family: inherit; }
 /* Plum-blossom button, bottom right (rotate wallpaper + inspirational quote) */
 .plum-float {
   position: fixed;
-  right: 90px; bottom: 30px;
-  width: 48px; height: 48px;
+  right: 84px; bottom: 22px;
+  width: 56px; height: 56px;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #f43f5e, #ec4899);
-  color: #fff;
-  border-radius: 50%;
-  box-shadow: 0 8px 24px rgba(236, 72, 153, 0.45);
+  /* No circular button chrome — a bare plum branch sitting on the wallpaper. */
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
   z-index: 50;
-  transition: transform .15s ease, filter .15s ease;
+  transition: transform .18s ease, filter .18s ease;
 }
-.plum-float:hover { transform: scale(1.06) rotate(18deg); filter: brightness(1.08); }
+.plum-float:hover { transform: scale(1.08) rotate(5deg); filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5)) brightness(1.1); }
 .plum-float:active { transform: scale(0.95); }
 .plum-float.spin { animation: plum-spin .5s ease; }
 @keyframes plum-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
