@@ -161,6 +161,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink-2);
   cursor: pointer;
   overflow: hidden;
+  position: relative;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
@@ -168,9 +169,23 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .avatar-btn:hover { border-color: var(--line-2); box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.16); }
 .avatar-btn:active { transform: scale(0.95); }
 .avatar-btn .avatar-img {
+  position: absolute;
+  inset: 0;
   width: 100%; height: 100%;
-  background: center/cover no-repeat;
   display: block;
+  z-index: 1;
+}
+.avatar-btn .avatar-img img {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-btn .avatar-initial,
+.avatar-btn .avatar-fallback {
+  position: relative;
+  z-index: 0;
 }
 .avatar-btn .avatar-initial {
   font-size: 14px; font-weight: 600;
@@ -215,7 +230,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink);
   font-size: 20px; font-weight: 600;
 }
-.avatar-big img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-big img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .avatar-big svg { color: var(--ink-2); }
 .avatar-item {
   display: flex; align-items: center; gap: 10px;
@@ -247,26 +262,116 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink);
   font-size: 17px; font-weight: 600;
 }
-.avatar-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
-/* ====== Two-column layout ====== */
+/* ====== iTab-style layout ======
+ * Top of the page: a centred top-stack holding the clock and the search bar. Below it: a body-row
+ * with the movie widget promoted to a hero card on the left and the shortcut grid on the right.
+ * The old left column that stacked wclock / wcal / wtodo / wmovie has been replaced; wcal and wtodo
+ * are kept in the DOM (the user can re-enable them via top-stack placement) but hidden by default.
+ */
 .layout {
   display: flex;
-  align-items: flex-start;
-  gap: clamp(24px, 3vw, 44px);
+  flex-direction: column;
+  align-items: center;
   max-width: 1440px;
   margin: 0 auto;
-  padding: clamp(18px, 3vh, 30px) 40px 90px;
+  padding: clamp(12px, 2vh, 22px) 40px 90px;
 }
+.top-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 720px;
+}
+/* The default-mode clock: centred above the search. Reuses the w-top visual contract
+ * (large time + date below) so it stays glanceable in either layout mode. */
+.top-stack > .widget.wclock {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  /* The base .widget card also carries a frosted backdrop-filter (--glass-blur + saturate), which
+   * is NOT covered by resetting background/border/shadow: the element stays transparent but still
+   * saturates and blurs the wallpaper behind it, painting a visible lighter rectangle exactly
+   * around the clock text. Reset it too, or the "chrome-less" header isn't chrome-less. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: clamp(2px, 0.8vh, 10px) 0 clamp(4px, 0.9vh, 12px);
+}
+.top-stack > .widget.wclock .clock-row { justify-content: center; gap: 6px; }
+.top-stack > .widget.wclock .clock-hhmm {
+  font-size: clamp(54px, 9vh, 88px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.35);
+}
+.top-stack > .widget.wclock .clock-sec { display: none; }
+.top-stack > .widget.wclock .clock-date,
+.top-stack > .widget.wclock .clock-lunar,
+.top-stack > .widget.wclock .clock-greet {
+  text-align: center;
+}
+.top-stack > .widget.wclock .clock-date { font-size: 14px; margin-top: 2px; }
+.top-stack > .widget.wclock .clock-lunar { font-size: 12px; opacity: .85; }
+.top-stack > .widget.wclock .clock-greet { font-size: 13px; opacity: .9; margin-top: 2px; }
+/* The user-visible clock chrome (delete button) gets in the way when the clock is the page header. */
+.top-stack > .widget.wclock .w-del { display: none; }
+
+/* search in the top-stack is centred and full-width up to 640px, matching the column it used to
+ * share with the grid. margin-top tightens the rhythm under the date line. */
+.top-stack > #search {
+  margin: clamp(8px, 1.4vh, 14px) auto 0;
+  width: 100%;
+  max-width: 640px;
+}
+
+/* Body row: movie hero on the left, grid on the right. */
+.body-row {
+  display: flex;
+  /* Stated explicitly (not left to the flex default) because the <=1024px media query flips this
+   * to `column` — a reader scanning this rule should see the axis it is being reversed from. */
+  flex-direction: row;
+  align-items: flex-start;
+  gap: clamp(20px, 2.6vw, 36px);
+  width: 100%;
+  margin-top: clamp(10px, 1.6vh, 18px);
+}
+/* Default-mode left column: holds the movie card beside the grid. wcal + wtodo are DOM-present
+ * but hidden here; re-enabling them in Settings promotes them into the top-stack instead
+ * (see applyWidgetPos), so this column stays a single-card strip. */
 .left {
   flex: 0 0 320px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  position: sticky;
-  top: 18px;
 }
+/* Hide the calendar + to-do widgets in the default iTab layout — they're not part of the
+ * reference shape and they'd make this column much taller than the card beside it. The user can
+ * re-enable them in Settings, which then promotes them into the top-stack via applyWidgetPos()
+ * (at which point they're no longer under .left and this rule stops matching them). */
+.layout:not(.canvas) .left > .widget.wcal,
+.layout:not(.canvas) .left > .widget.wtodo { display: none; }
+
+/* The movie card keeps the compact-strip contract (small poster thumb + text column, see the
+ * `.widget.wmovie:not(.w-top)` block further down) at every width.
+ *
+ * A taller "poster hero" variant was tried here and removed for two reasons:
+ *   1. It was unreachable in practice. Viewports >1024 auto-enter free-canvas at boot, and canvas
+ *      mode is excluded by `.layout:not(.canvas)`, so the hero only ever rendered in flow mode on
+ *      a wide window — a state a user can't normally reach.
+ *   2. Where it DID apply (<=1024, which never enters canvas) the body-row is stacked, so the card
+ *      spans the full width: a 360px min-height tile wrapped 92px of content and left a ~210px
+ *      void with the action buttons stranded at the bottom.
+ * The compact strip is also what probe-layout.cjs pins (h <= 220 at five viewports) — it was the
+ * fix for the movie tile clipping the fold in an earlier pass. Don't reintroduce a tall default. */
+
 .right { flex: 1 1 auto; min-width: 0; }
+
+/* In canvas mode the new wrappers are flattened so the existing absolute-positioning logic still
+ * finds the children directly off .layout — same contract as before, no JS changes needed. */
+.layout.canvas > .top-stack,
+.layout.canvas > .body-row { display: contents; }
 
 
 /* ====== Frosted-glass material ======
@@ -402,7 +507,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .widget.wmovie.w-top { --wtop-del: 176px; } /* 320px movie card */
 
 /* --- clock in the top stack: big time over one compact date line (launcher convention) --- */
-.widget.wclock.w-top { padding: clamp(4px, 1.4vh, 14px) 0 clamp(8px, 1.4vh, 16px); }
+.widget.wclock.w-top { padding: clamp(2px, 0.8vh, 10px) 0 clamp(4px, 0.9vh, 12px); }
 .widget.wclock.w-top .clock-row { justify-content: center; gap: 6px; }
 .widget.wclock.w-top .clock-hhmm {
   font-size: clamp(48px, 4.4vw, 68px);
@@ -676,81 +781,126 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .cal-cell.today i { color: var(--accent); }
 .cal-cell.empty { cursor: default; }
 
-/* Movie-of-the-day widget (built-in Douban annual-best pool) */
+/* Movie-of-the-day widget + detail window */
 .wmovie .movie-date {
   font-size: 11.5px;
   color: var(--ink-3);
   letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
+.wmovie .w-head .w-title > span { white-space: nowrap; }
 .movie-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
-.movie-top {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-.movie-rate {
-  flex: none;
-  width: 44px; height: 44px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(125, 211, 252, 0.18), rgba(37, 99, 235, 0.18));
-  color: var(--accent);
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.movie-body { flex: 1; min-width: 0; }
-.movie-title {
-  display: flex; align-items: baseline; gap: 7px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-  line-height: 1.25;
-}
-.movie-title .movie-year {
-  font-family: var(--font-num);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink-3);
-}
-.movie-en {
-  margin-top: 1px;
-  font-size: 11.5px;
-  color: var(--ink-3);
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.movie-genre {
-  display: inline-block;
-  margin-top: 5px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--tint-2);
+.movie-tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 420px;
+  border-radius: 22px;
   border: 1px solid var(--line);
-  font-size: 10.5px;
-  color: var(--ink-2);
+  overflow: hidden;
+  cursor: pointer;
+  background: linear-gradient(135deg, #334155, #0f172a);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
 }
-.movie-blurb {
-  margin: 7px 0 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--ink-2);
+.movie-tile:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.36);
+  box-shadow: 0 22px 40px rgba(0, 0, 0, 0.4);
+}
+.movie-tile-bg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transform: scale(1.02);
+}
+.movie-tile::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(3, 7, 18, 0.08), rgba(3, 7, 18, 0.22) 30%, rgba(2, 6, 23, 0.68) 72%, rgba(2, 6, 23, 0.82));
+}
+.movie-tile-date {
+  position: absolute;
+  top: 22px; right: 22px;
+  z-index: 2;
+  text-align: right;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.42);
+}
+.movie-tile-date b {
+  display: block;
+  font-family: var(--font-num);
+  font-size: 54px;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  font-weight: 500;
+}
+.movie-tile-date i {
+  display: block;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  opacity: 0.95;
+}
+.movie-tile-info {
+  position: absolute;
+  left: 20px; right: 20px; bottom: 54px;
+  z-index: 2;
+  display: grid;
+  gap: 9px;
+  text-align: left;
+  color: #fff;
+}
+.movie-tile-title {
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 600;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+}
+.movie-tile-rate {
+  justify-self: start;
+  font-size: 16px;
+  line-height: 1;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #fbbf24;
+  color: #0f172a;
+  font-weight: 700;
+}
+.movie-tile-quote {
+  font-size: 16px;
+  line-height: 1.46;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.movie-tile-tag {
+  position: absolute;
+  left: 0; right: 0; bottom: 12px;
+  z-index: 2;
+  text-align: center;
+  font-size: 18px;
+  line-height: 1.1;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.45);
 }
 .movie-actions {
-  display: flex; align-items: center; gap: 8px;
-  padding-top: 9px;
-  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .movie-link,
-.movie-next {
+.movie-next,
+.movie-detail-link {
   font-size: 12px;
   line-height: 1;
   padding: 6px 11px;
@@ -763,8 +913,320 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
 .movie-link:hover,
-.movie-next:hover { background: var(--tint-3); color: var(--ink); }
+.movie-next:hover,
+.movie-detail-link:hover {
+  background: var(--tint-3);
+  color: var(--ink);
+}
 .movie-next { margin-left: auto; }
+
+/* Left-column (default) compact strip.
+ * The full-bleed poster tile is great in the top stack / detail window, but stacked under the
+ * calendar + to-do it made the left column ~1010px tall — taller than every common viewport.
+ * Here the same markup is re-flowed as a horizontal strip: small poster thumb + text column.
+ * Specificity note: (0,4,0), matching `.widget.wmovie.w-top .movie-tile` so the two modes are
+ * mutually exclusive and neither can be shadowed by the (0,1,0) base rules further up. */
+.widget.wmovie:not(.w-top) { padding: 14px 16px 13px; }
+.widget.wmovie:not(.w-top) .w-head { margin-bottom: 9px; }
+.widget.wmovie:not(.w-top) .movie-card { gap: 8px; }
+.widget.wmovie:not(.w-top) .movie-tile {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 11px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+}
+.widget.wmovie:not(.w-top) .movie-tile:hover {
+  transform: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+.widget.wmovie:not(.w-top) .movie-tile:hover .movie-tile-bg {
+  border-color: var(--line-2);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.34);
+}
+/* the dark scrim exists to keep white text legible over the poster; the strip has real text colors */
+.widget.wmovie:not(.w-top) .movie-tile::after { content: none; }
+.widget.wmovie:not(.w-top) .movie-tile-bg {
+  position: static;
+  width: 62px; height: 92px;
+  border-radius: 9px;
+  object-fit: cover;
+  transform: none;
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.26);
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+/* both are redundant in strip mode: the date already sits in .w-head, the name in .w-title */
+.widget.wmovie:not(.w-top) .movie-tile-date,
+.widget.wmovie:not(.w-top) .movie-tile-tag { display: none; }
+.widget.wmovie:not(.w-top) .movie-tile-info {
+  position: static;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  color: var(--ink);
+}
+.widget.wmovie:not(.w-top) .movie-tile-title {
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--ink);
+  text-shadow: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.widget.wmovie:not(.w-top) .movie-tile-rate {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+.widget.wmovie:not(.w-top) .movie-tile-quote {
+  font-size: 11.5px;
+  line-height: 1.42;
+  color: var(--ink-2);
+  text-shadow: none;
+  -webkit-line-clamp: 2;
+}
+
+/* Short windows (≈1366×768 laptops, where the browser leaves ~720px of viewport): tighten the
+ * left stack a notch more so the default layout still fits without scrolling. Only the strip
+ * thumb, its padding and the stack gap shrink — no content is hidden.
+ * Placed after the base rules on purpose: equal-specificity rules are resolved by order. */
+@media (max-height: 780px) {
+  .left { gap: 10px; }
+  .widget.wmovie:not(.w-top) { padding: 12px 14px 11px; }
+  .widget.wmovie:not(.w-top) .movie-tile { grid-template-columns: 54px minmax(0, 1fr); gap: 10px; }
+  .widget.wmovie:not(.w-top) .movie-tile-bg { width: 54px; height: 80px; }
+}
+
+/* top stack: keep movie tile compact and readable */
+.widget.wmovie.w-top .movie-card { max-width: 360px; margin: 0 auto; }
+.widget.wmovie.w-top .movie-tile { min-height: 300px; border-radius: 18px; }
+.widget.wmovie.w-top .movie-tile-date { top: 16px; right: 16px; }
+.widget.wmovie.w-top .movie-tile-date b { font-size: 44px; }
+.widget.wmovie.w-top .movie-tile-date i { font-size: 18px; }
+.widget.wmovie.w-top .movie-tile-info { left: 16px; right: 16px; bottom: 44px; gap: 7px; }
+.widget.wmovie.w-top .movie-tile-title { font-size: 24px; }
+.widget.wmovie.w-top .movie-tile-rate { font-size: 14px; padding: 4px 10px; }
+.widget.wmovie.w-top .movie-tile-quote { font-size: 14px; }
+.widget.wmovie.w-top .movie-tile-tag { font-size: 16px; }
+
+/* movie detail window */
+.movie-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(2, 6, 23, 0.58);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.movie-window {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1120px, calc(100vw - 28px));
+  height: min(620px, calc(100vh - 28px));
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: radial-gradient(120% 130% at 20% 0%, rgba(255,255,255,0.08), rgba(255,255,255,0.03) 40%, rgba(15, 23, 42, 0.92) 100%);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.48);
+  overflow: hidden;
+}
+.movie-window.dragging { cursor: grabbing; user-select: none; }
+.movie-window-head {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  cursor: grab;
+}
+.movie-window-dots {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.movie-window-dots .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.movie-window-dots .dot.green { background: #22c55e; }
+.movie-window-dots .dot.red { background: #f87171; }
+.movie-window-title {
+  flex: 1;
+  min-width: 0;
+  color: rgba(255,255,255,0.85);
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.movie-window-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.movie-window-close:hover { background: rgba(255,255,255,0.13); }
+.movie-detail {
+  height: calc(100% - 42px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+  padding: 18px;
+}
+.movie-detail-main { min-width: 0; display: flex; flex-direction: column; }
+.movie-detail-topline {
+  color: rgba(255,255,255,0.76);
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+.movie-detail-title {
+  margin: 0;
+  font-size: 48px;
+  line-height: 1.05;
+  color: #fff;
+}
+.movie-detail-en {
+  margin-left: 14px;
+  font-size: 19px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.72);
+}
+.movie-detail-rate {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255,255,255,0.9);
+}
+.movie-stars { color: #fbbf24; letter-spacing: 1px; font-size: 24px; }
+.movie-stars.empty { color: rgba(255,255,255,0.3); }
+.movie-stars.half { color: rgba(251,191,36,0.85); }
+.movie-detail-rate b {
+  font-size: 38px;
+  line-height: 1;
+  font-family: var(--font-num);
+  letter-spacing: -0.02em;
+}
+.movie-detail-rate span:last-child { color: rgba(255,255,255,0.72); }
+.movie-detail-meta {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.movie-detail-meta span {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.17);
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.9);
+  font-size: 16px;
+}
+.movie-detail-row {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.movie-detail-row strong {
+  color: rgba(255,255,255,0.84);
+  font-size: 16px;
+  font-weight: 600;
+}
+.movie-detail-row span {
+  color: rgba(255,255,255,0.86);
+  font-size: 20px;
+  line-height: 1.45;
+}
+.movie-detail-quote {
+  margin-top: 11px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.32);
+  background: rgba(251,191,36,0.09);
+  color: #fff;
+  font-size: 24px;
+  line-height: 1.45;
+}
+.movie-detail-summary {
+  margin-top: 10px;
+  min-height: 0;
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  padding: 12px;
+  overflow: auto;
+}
+.movie-detail-summary h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: rgba(255,255,255,0.92);
+}
+.movie-detail-summary p {
+  margin: 0;
+  color: rgba(255,255,255,0.88);
+  font-size: 19px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.movie-detail-link {
+  margin-top: 10px;
+  align-self: flex-start;
+}
+.movie-detail-poster-wrap {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.movie-detail-poster {
+  width: 100%;
+  max-width: 300px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 18px 36px rgba(0,0,0,0.35);
+  object-fit: cover;
+}
+@media (max-width: 1024px) {
+  .movie-window {
+    width: calc(100vw - 16px);
+    height: calc(100vh - 16px);
+    border-radius: 14px;
+  }
+  .movie-detail {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 12px;
+  }
+  .movie-detail-poster-wrap {
+    justify-content: flex-start;
+    order: -1;
+  }
+  .movie-detail-poster { max-width: 180px; }
+  .movie-detail-title { font-size: 30px; }
+  .movie-detail-en { display: block; margin: 6px 0 0; font-size: 15px; }
+  .movie-detail-rate b { font-size: 28px; }
+  .movie-detail-row span,
+  .movie-detail-quote,
+  .movie-detail-summary p { font-size: 15px; }
+}
 
 /* ====== Search ====== */
 .search {
@@ -861,7 +1323,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 /* ====== Icon grid ====== */
-#grid-wrap { margin-top: clamp(22px, 3.5vh, 34px); }
+/* Clamp the grid to the same 640-wide column the search box and the top-stack widgets share, so
+ * the whole right column reads as one centred group instead of the grid ballooning past the search
+ * pill's right edge (left-aligned but extending ~360px further right). 640 = search max-width. */
+#grid-wrap { margin-top: clamp(14px, 2.2vh, 24px); max-width: 640px; }
 .group-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
   margin-bottom: 14px;
@@ -1019,19 +1484,44 @@ svg.logo-tx text { font-family: inherit; }
 .plum-float {
   position: fixed;
   right: 90px; bottom: 30px;
-  width: 48px; height: 48px;
+  width: 52px; height: 52px;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #f43f5e, #ec4899);
+  background: radial-gradient(120% 120% at 28% 22%, #c084fc, #a855f7 52%, #7c3aed 100%);
   color: #fff;
   border-radius: 50%;
-  box-shadow: 0 8px 24px rgba(236, 72, 153, 0.45);
+  box-shadow: 0 10px 26px rgba(139, 92, 246, 0.52), 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
   z-index: 50;
   transition: transform .15s ease, filter .15s ease;
 }
-.plum-float:hover { transform: scale(1.06) rotate(18deg); filter: brightness(1.08); }
+.plum-float svg { filter: drop-shadow(0 1px 2px rgba(60, 0, 90, 0.35)); }
+.plum-float:hover { transform: scale(1.07); filter: brightness(1.08); }
 .plum-float:active { transform: scale(0.95); }
-.plum-float.spin { animation: plum-spin .5s ease; }
+.plum-float.spin { animation: plum-spin .52s ease; }
 @keyframes plum-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Click effect: plum petals drifting down */
+.plum-petal {
+  position: fixed;
+  left: 0; top: 0;
+  width: 12px; height: 10px;
+  pointer-events: none;
+  z-index: 70;
+  opacity: 0;
+  background: radial-gradient(100% 100% at 35% 35%, #f0d0ff, #c084fc 62%, #9333ea 100%);
+  border-radius: 72% 72% 72% 72% / 82% 82% 62% 62%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  animation: plum-petal-fall var(--dur, 1.8s) ease-in forwards;
+  transform: translate(0, 0) rotate(var(--rot, 0deg));
+}
+@keyframes plum-petal-fall {
+  0% { opacity: 0; transform: translate(0, 0) rotate(var(--rot, 0deg)) scale(0.8); }
+  10% { opacity: 0.95; }
+  75% { opacity: 0.8; }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0px), var(--dy, 140px)) rotate(var(--spin, 180deg)) scale(0.6);
+  }
+}
 
 /* ====== Menus ====== */
 .menu {
@@ -1103,19 +1593,21 @@ svg.logo-tx text { font-family: inherit; }
 }
 .quote .quote-text {
   position: relative;
-  font-size: clamp(22px, 4vw, 34px);
+  font-size: clamp(16px, 2.4vw, 22px);
   font-weight: 600;
-  line-height: 1.55;
+  line-height: 1.6;
   letter-spacing: .02em;
   color: #fff;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
 }
 .quote .quote-src {
   position: relative;
-  margin-top: 16px;
-  font-size: 14px;
-  letter-spacing: .14em;
-  color: rgba(255, 255, 255, 0.86);
+  display: block;
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .12em;
+  color: rgba(255, 255, 255, 0.72);
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
 }
 @keyframes quote-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); } }
@@ -1353,27 +1845,61 @@ svg.logo-tx text { font-family: inherit; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .wall-lib-tip { margin-top: 2px; }
+.wall-reco-badge {
+  position: absolute; top: 8px; left: 8px;
+  padding: 2px 8px;
+  font-size: 10.5px; font-weight: 600; line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: linear-gradient(135deg, #f43f5e, #ec4899);
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+.wall-reco-tip { margin-top: 2px; color: var(--accent); }
 
-/* ====== Responsive ====== */
+/* ====== Responsive ======
+ * Stack the iTab shell vertically: the top-stack stays centred and the body-row collapses so the
+ * movie card and the icon grid each get the full content width. The 320px left column only makes
+ * sense when there's a grid beside it to flank.
+ *
+ * Two declarations from the pre-iTab version were dropped on purpose:
+ *   - `.left { flex-direction: row }`: the old left column stacked three widgets and turning it
+ *     into a row spread them across the width. There's one card in it now, and inside a
+ *     column-direction body-row a row-direction left column just re-introduced overflow.
+ *   - `.wclock .clock-hhmm { font-size: 44px }`: `.top-stack > .widget.wclock .clock-hhmm` already
+ *     scales via clamp(54px, 9vh, 88px), so a fixed 44px only fought it on tablets.
+ * The movie card needs no rules here — it uses the same compact strip at every width. */
 @media (max-width: 1024px) {
-  .layout { flex-direction: column; padding: 16px 20px 90px; }
-  .left {
-    flex: none;
-    width: 100%;
-    flex-direction: row;
-    position: static;
-    align-items: stretch;
+  .layout { padding: 16px 20px 90px; }
+  .top-stack > #search { margin: 14px auto 0; max-width: 100%; }
+  .body-row {
+    flex-direction: column;
+    gap: 18px;
+    margin-top: 18px;
   }
-  .left .widget { flex: 1; }
-  .wclock .clock-hhmm { font-size: 44px; }
-  .search { margin: 0; max-width: 100%; }
+  .left, .right { width: 100%; min-width: 0; }
+  /* Reset the flex shorthand, not just the width. `.left { flex: 0 0 320px }` sizes the MAIN axis —
+   * which is horizontal only while .body-row is a row. Once it flips to `column` that 320px becomes
+   * a fixed HEIGHT, so the left column rendered 320px tall around a 167px movie card and opened a
+   * ~153px void above the icon grid. `.right { flex: 1 1 auto }` would likewise stretch vertically. */
+  .left, .right { flex: 0 0 auto; }
+  /* Stacked mode is ONE centred column, so every block must share the same left/right edge.
+   * Left to their own devices they don't: the pill centres itself inside the 720px `.top-stack`,
+   * `#grid-wrap` keeps its 640px desktop cap left-anchored in the now-full-width right column,
+   * and the movie card spans the whole padding box — three different edges running down the page
+   * (measured at 1024px: search x=152 w=720, grid x=20 w=640, movie x=20 w=984).
+   * Cap the columns at the same 720px as the top-stack and centre them; the 640px grid cap is a
+   * desktop-only constraint (keep the grid inside the search column) and has nothing to hold on to
+   * here, so release it and let the grid fill its column flush with the pill. */
+  .top-stack, .left, .right { max-width: 720px; margin-left: auto; margin-right: auto; }
+  #grid-wrap { max-width: 100%; }
 }
 @media (max-width: 720px) {
   #topbar { padding: 14px 16px 0; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 9px; }
   .card { padding: 14px 6px 10px; border-radius: 16px; }
   .card .ico { width: 44px; height: 44px; font-size: 17px; }
-  .left { flex-direction: column; }
   .palette { width: min(560px, calc(100vw - 32px)); }
   .prompt-row .pr-tmpl { display: none; }
   .prompt-row .pr-tags { max-width: 110px; }
@@ -1760,6 +2286,10 @@ svg.logo-tx text { font-family: inherit; }
   margin: 0;
   max-width: none;
 }
+/* Override the generic max-width: none for the grid block specifically — see #grid-wrap rule
+ * above; the right column reads as one centred group only if the grid stays inside the 640-wide
+ * column the search box defines. */
+.layout.canvas #grid-wrap { max-width: 640px; }
 /* Drag handle: appears on block hover, floating at the top centre of the block. */
 .drag-handle {
   position: absolute;

@@ -13,12 +13,36 @@
     { key: 'wclock', sel: '.wclock' },
     { key: 'wcal',   sel: '.wcal' },
     { key: 'wtodo',  sel: '#todo-widget' },
+    { key: 'wmovie', sel: '#movie-widget' },
     { key: 'search', sel: '#search' },
     { key: 'grid',   sel: '#grid-wrap' }
   ];
   const CANVAS_MIN_W = 1024;
   const DRAG_THRESHOLD = 6;
   const DRAG_INTERACTIVE = 'input,button,a,select,textarea,.card,.gchip,.todo-item,.cal-nav-btn,.cal-cell,.engine-list,.menu,.palette,[data-act]';
+  /* The grid block must stay inside the same 640-wide column the search box and top-stack widgets
+   * share; otherwise its cards balloon past the search pill's right edge and the right column reads
+   * as two unaligned strips instead of one centred group. Clamp at capture AND at apply time so a
+   * stale layout (captured before this rule existed) doesn't reintroduce the wide block on next
+   * load. */
+  const GRID_MAX_W = 640;
+  const clampBlockW = (key, w) => (key === 'grid' ? Math.min(+w || 0, GRID_MAX_W) : w);
+
+  /* clampBlockW only fixes the grid's WIDTH. Its x stays wherever the flow pass left it — the
+   * body-row right column's left edge (396 at 1440px) — while #search centres itself in the
+   * viewport (400 at 1440px). Same 640 width, stacked vertically, 4px apart: that is the
+   * "two unaligned strips" the clamp exists to prevent, just at a scale small enough to miss.
+   * So re-anchor the grid on the search pill's centre line as well.
+   * Auto layouts only: once the user has dragged a block the arrangement is theirs. */
+  function alignGridToSearch(layout) {
+    if (!layout || layout.auto === false) return layout;
+    const g = layout.grid, s = layout.search;
+    if (!g || !s || typeof g.x !== 'number' || typeof s.x !== 'number' || !s.w) return layout;
+    const gw = clampBlockW('grid', g.w);
+    if (!gw) return layout;
+    g.x = Math.round(s.x + (s.w - gw) / 2);
+    return layout;
+  }
 
   function blockEls() {
     return BLOCK_DEFS.map(b => ({ ...b, el: document.querySelector(b.sel) })).filter(b => b.el);
@@ -34,13 +58,16 @@
     const root = canvasRoot();
     const l = getLayout();
     if (!root || !l) return;
+    // Normalize on the way in too, so a layout frozen before these rules existed still lands aligned.
+    alignGridToSearch(l);
     root.classList.add('canvas');
     for (const b of blockEls()) {
       const c = l[b.key];
       if (!c || typeof c.x !== 'number' || typeof c.y !== 'number') continue;
       b.el.style.left = c.x + 'px';
       b.el.style.top = c.y + 'px';
-      b.el.style.width = c.w ? c.w + 'px' : '';
+      const cw = clampBlockW(b.key, c.w);
+      b.el.style.width = cw ? cw + 'px' : '';
     }
     applyCardCanvas();
     refreshCanvasHeight();
@@ -77,6 +104,7 @@
     // auto=true marks coordinates the app derived from the flow layout rather than the user dragging
     // blocks around. Only an auto layout may be silently re-derived (see recaptureBlocksFromFlow).
     layout.auto = true;
+    alignGridToSearch(layout);
     A().state.settings.layout = layout;
     A().Store.set(A().K.settings, A().state.settings);
     return layout;
@@ -107,7 +135,15 @@
       const gwb = gw.bottom - rr.top;
       if (gwb > maxBottom) maxBottom = gwb;
     }
-    root.style.height = (maxBottom + 90) + 'px';
+    // Keep drop room below the lowest block so blocks can still be dragged further down.
+    // But that headroom must never be the sole reason a scrollbar appears: on the default
+    // layout the content already fits above the fold, so cap the height at the viewport edge.
+    // (Re-evaluated on resize — see the resize listener at the bottom of this file.)
+    const DROP_ROOM = 90;
+    const avail = Math.max(0, window.innerHeight - rr.top);
+    let h = maxBottom + DROP_ROOM;
+    if (maxBottom <= avail && h > avail) h = avail;
+    root.style.height = h + 'px';
   }
 
   // ---------- Canvas mode: free card dragging with snap-to-grid ----------
@@ -461,6 +497,13 @@
     const st = A().state.settings;
     const vis = A().normalizeWidgets(st && st.widgets);
     if (A().WIDGETS.some((id) => !vis[id] && l[id])) return true;
+    // Any visible block missing coordinates means this layout predates a structure change
+    // (for example, a newly-added widget in BLOCK_DEFS). Re-capture once from flow, otherwise the
+    // missing absolute block shrinks to content width in canvas mode and looks "挤在一条窄条里".
+    for (const b of blockEls()) {
+      if (b.el.hidden) continue;
+      if (!l[b.key]) return true;
+    }
     // Placement has to agree with the frozen coordinates too. Lifted above the search box means the
     // widget shares the right column's left edge; parked in the left column means it starts further
     // left. Compare blocks against each other, never against a constant (coordinates are relative to
@@ -488,13 +531,14 @@
     for (const b of blockEls()) {
       const r = b.el.getBoundingClientRect();
       if (!r.width && !r.height) continue; // a removed widget contributes no coordinates
-      next[b.key] = { x: Math.round(r.left - rr.left), y: Math.round(r.top - rr.top), w: Math.round(r.width) };
+      next[b.key] = { x: Math.round(r.left - rr.left), y: Math.round(r.top - rr.top), w: clampBlockW(b.key, Math.round(r.width)) };
     }
     // Card coordinates are (col, row) against the grid's track width. A collapsed left column makes
     // the grid wider, which changes the track count — so the card map has to be re-derived too,
     // otherwise old column indices scatter the icons across the new width.
     next.cards = captureCardLayout();
     next.auto = true;
+    alignGridToSearch(next);
     A().state.settings.layout = next;
     A().Store.set(A().K.settings, A().state.settings);
     applyCanvas();

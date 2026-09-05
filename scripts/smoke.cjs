@@ -221,6 +221,46 @@ console.log('[4] 纯函数');
     const qi = P.pickQuoteIndex(5, 2);
     assert(qi >= 0 && qi < 5 && qi !== 2, 'pickQuoteIndex 跳过上一条（5 中 2）');
     assert(P.pickQuoteIndex(5, -1) >= 0 && P.pickQuoteIndex(5, -1) < 5, 'pickQuoteIndex 无上次随机取一条');
+    // #66 wallpaper habit recommendation: derive preference profile from pick events
+    const ev = (o) => Object.assign({ type: 'image', via: 'library', source: 'bing', at: 0 }, o);
+    let prefs = P.deriveWallPrefs([]);
+    assert(prefs.total === 0 && prefs.favoriteUrls.length === 0, 'deriveWallPrefs 空事件 → 全零画像');
+    prefs = P.deriveWallPrefs([
+      ev({ type: 'gradient', source: 'gradient', via: 'swatch' }),
+      ev({ url: 'https://x/1.jpg', source: 'bing', via: 'library', at: 1000 }),
+      ev({ url: 'https://x/1.jpg', source: 'bing', via: 'plum', at: 2000 }),
+      ev({ url: 'https://x/2.jpg', source: 'wallhaven', via: 'library', at: 3000 }),
+      ev({ type: 'image', source: 'upload', via: 'upload', light: true })
+    ]);
+    assert(prefs.total === 5, 'deriveWallPrefs 事件计数', String(prefs.total));
+    assert(prefs.imageCount === 4 && prefs.gradientCount === 1, 'deriveWallPrefs 图/渐变计数');
+    assert(prefs.sourceCounts.bing === 2 && prefs.sourceCounts.wallhaven === 1 && prefs.sourceCounts.upload === 1 && prefs.sourceCounts.gradient === 1, 'deriveWallPrefs 来源计数');
+    assert(prefs.manualSourceCounts.bing === 2 && prefs.manualSourceCounts.upload === 1, 'deriveWallPrefs 手动来源计数');
+    assert(prefs.lightPicks === 1 && prefs.darkPicks === 0, 'deriveWallPrefs 明暗计数');
+    assert(prefs.favoriteUrls.length === 1 && prefs.favoriteUrls[0] === 'https://x/1.jpg', 'deriveWallPrefs 重复选择 = 收藏');
+    assert(prefs.lastSeen['https://x/1.jpg'] === 2000, 'deriveWallPrefs lastSeen 取最新时间戳');
+    // scoreWallCandidates: favorite boost + recency penalty + novelty bonus
+    const pool2 = [
+      { url: 'https://x/fav.jpg' },
+      { url: 'https://x/recent.jpg' },
+      { url: 'https://x/fresh.jpg' },
+      { url: 'https://x/old.jpg' }
+    ];
+    const prefs2 = P.deriveWallPrefs([
+      ev({ url: 'https://x/fav.jpg', via: 'library', at: 0 }),
+      ev({ url: 'https://x/fav.jpg', via: 'plum', at: 0 }),
+      ev({ url: 'https://x/recent.jpg', via: 'library', at: Date.now() }),
+      ev({ url: 'https://x/old.jpg', via: 'library', at: Date.now() - 20 * 86400000 })
+    ]);
+    const ordered = P.scoreWallCandidates(pool2, prefs2);
+    assert(Array.isArray(ordered) && ordered.length === 4, 'scoreWallCandidates 返回同长度数组');
+    assert(ordered[0].url === 'https://x/fav.jpg', 'scoreWallCandidates 收藏优先', ordered.map(i => i.url).join(','));
+    assert(ordered[3].url === 'https://x/recent.jpg', 'scoreWallCandidates 最近看过排末位', ordered.map(i => i.url).join(','));
+    assert(P.pickRecommended(pool2, prefs2, '').url === 'https://x/fav.jpg', 'pickRecommended 空当前值取最优');
+    assert(P.pickRecommended(pool2, prefs2, 'https://x/fav.jpg').url !== 'https://x/fav.jpg', 'pickRecommended 跳过当前');
+    assert(P.pickRecommended([], prefs2, '') === null, 'pickRecommended 空池 null');
+    assert(P.pickRecommended(null, prefs2, '') === null, 'pickRecommended 非数组池 null');
+    assert(P.pickRecommended([{ url: 'https://x/only.jpg' }], prefs2, 'https://x/only.jpg').url === 'https://x/only.jpg', 'pickRecommended 全部为当前时回退');
   }
   void elStub;
 }
@@ -341,7 +381,7 @@ assert(/<\/html>\s*$/.test(html), '文档以 </html> 收尾（结构完整）');
 // ---------- 6) #48 主题静态结构 ----------
 console.log('[6] #48 主题');
 assert(/<html lang="en" data-theme="dark"/.test(html), 'html 标签默认 data-theme="dark"');
-const themeSel = html.match(/<select id="f-theme">([\s\S]*?)<\/select>/);
+const themeSel = html.match(/<select\s[^>]*id="f-theme"[^>]*>([\s\S]*?)<\/select>/);
 assert(!!themeSel, '设置页含 #f-theme 下拉');
 if (themeSel) {
   const opts = [...themeSel[1].matchAll(/<option value="(dark|light|system)"/g)].map(m => m[1]);
@@ -351,7 +391,7 @@ assert(/data-i18n="gen\.theme"/.test(html), '主题标签带 data-i18n="gen.them
 
 // ---------- 7) #49 壁纸轮换静态结构 ----------
 console.log('[7] #49 壁纸轮换');
-assert(/<input type="checkbox" id="f-wall-rotate">/.test(html), '设置页含 #f-wall-rotate 复选框');
+assert(/<input[^>]*type="checkbox"[^>]*id="f-wall-rotate"[^>]*>/.test(html), '设置页含 #f-wall-rotate 复选框');
 assert(/data-i18n="wall\.rotate"/.test(html), '轮换标签带 data-i18n="wall.rotate"');
 assert(/data-i18n="wall\.rotate_tip"/.test(html), '轮换提示带 data-i18n="wall.rotate_tip"');
 assert(/walllib:\s*'lt\.walllib'/.test(appSrc), 'K 映射含 lt.walllib（本地缓存池）');
@@ -551,7 +591,7 @@ assert(/function avatarState/.test(appSrc) && /function renderAvatar/.test(appSr
 assert(/function openSettingsTab/.test(appSrc) && /function bindAvatar/.test(appSrc), 'app.js 定义 openSettingsTab / bindAvatar');
 assert(/const AVATAR_FALLBACK_SVG = '<svg/.test(appSrc), 'app.js 定义 AVATAR_FALLBACK_SVG 默认人形');
 assert(/avatar = sanitizeIconDataUrl\(state\.settings\.avatar\)/.test(appSrc), '头像渲染前经 sanitizeIconDataUrl 守卫');
-assert(/state\.settings\.avatar = await compressIconSquare\(f, 96\)/.test(appSrc), '上传走 compressIconSquare 裁成 96px 方形');
+assert(/state\.settings\.avatar = await compressAvatarFit\(f, 96\)/.test(appSrc), '上传走 compressAvatarFit 保留完整照片（96px 画布）');
 assert(/f\.size > 4 \* 1024 \* 1024/.test(appSrc), '上传限 4MB（超限提示 toast.image_too_big）');
 assert(/bindAvatar\(\);\s*renderAvatar\(\)/.test(appSrc), 'boot 里绑定并首次渲染头像');
 assert((appSrc.match(/renderAvatar\(\)/g) || []).length >= 6, 'renderAvatar 在启动/改名/导入/重置/云拉取/同步面板均被调用');
@@ -592,21 +632,38 @@ assert(/function renderMovie/.test(appSrc) && /function movieIndexForToday/.test
   'app.js 定义 renderMovie / movieIndexForToday（按一年第几天确定性取片）');
 assert(/movieCursor/.test(appSrc), 'app.js 维护 movieCursor 手动浏览游标');
 assert(/renderMovie\(\);/.test(appSrc), 'boot / reset 均调用 renderMovie');
-assert(/encodeURIComponent\(m\.zh\)/.test(appSrc), '豆瓣跳转链接对片名做 URL 编码');
+assert(/encodeURIComponent\(m\.zh \|\| m\.en \|\| ''\)/.test(appSrc), '豆瓣跳转链接对片名做 URL 编码');
 assert(/escape|&amp;/.test(appSrc), '片名/简介渲染前做 HTML 转义');
-// CSS：卡片布局（评分徽章 + 正文 + 动作行）
-for (const sel of ['.movie-card', '.movie-rate', '.movie-title', '.movie-en', '.movie-genre', '.movie-blurb', '.movie-actions', '.movie-link', '.movie-next']) {
+// 详情窗口：静态结构 + 可拖拽窗口壳
+for (const id of ['movie-modal', 'movie-window', 'movie-window-head', 'movie-window-title', 'movie-window-close', 'movie-detail']) {
+  assert(new RegExp(`id="${id}"`).test(html), `newtab.html 含 #${id}`);
+}
+assert(/id="movie-widget"/.test(html), '电影 widget 含 #movie-widget（供 canvas 拖拽识别）');
+assert(/wmovie', sel: '#movie-widget'/.test(read('js/canvas.js')), 'canvas BLOCK_DEFS 含 wmovie，可拖拽');
+assert(/function bindMovieDetailWindow/.test(appSrc) && /function openMovieDetailByIndex/.test(appSrc),
+  'app.js 定义 bindMovieDetailWindow / openMovieDetailByIndex');
+assert(/movie-window-head/.test(appSrc) && /pointerdown/.test(appSrc) && /pointermove/.test(appSrc),
+  '详情窗口头部支持 pointer 拖拽');
+assert(/const MOVIE_POSTER_MAP/.test(appSrc) && /function moviePoster/.test(appSrc),
+  'app.js 定义海报映射与海报回退逻辑');
+assert(/The Lovely Bones/.test(appSrc) && /The_Lovely_Bones_Poster/.test(appSrc), '片单含可爱的骨头与海报');
+
+// CSS：新电影卡片 + 固定尺寸详情窗口
+for (const sel of ['.movie-card', '.movie-tile', '.movie-tile-bg', '.movie-tile-date', '.movie-tile-title', '.movie-tile-rate', '.movie-tile-quote', '.movie-modal', '.movie-window', '.movie-window-head', '.movie-detail']) {
   assert(cssSrc.includes(sel), `CSS 定义 ${sel}`);
 }
+assert(/\.movie-window\s*\{[\s\S]*width:\s*min\(1120px/.test(cssSrc), '详情窗口固定主尺寸宽度 1120px（含小屏兜底）');
+assert(/\.movie-window\s*\{[\s\S]*height:\s*min\(620px/.test(cssSrc), '详情窗口固定主尺寸高度 620px（含小屏兜底）');
 assert(/\.widget\.wmovie\.w-top/.test(cssSrc), '电影顶部态有专属样式');
 assert(/\.widget\.wmovie\.w-top \{\s*--wtop-del:\s*176px/.test(cssSrc), '电影顶部态定义 --wtop-del');
-// i18n：标题 / 评分 / 豆瓣 / 换一部 中英各一份且非空
+
+// i18n：电影详情词条中英各一份且非空
 {
   const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
   vm.createContext(sandbox);
   vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
   const I = sandbox.window.LT_I18N;
-  const mvKeys = ['widget.movie', 'movie.rating', 'movie.douban', 'movie.next'];
+  const mvKeys = ['widget.movie', 'movie.rating', 'movie.rating_short', 'movie.next', 'movie.open', 'movie.source', 'movie.summary', 'movie.director', 'movie.cast', 'movie.unknown'];
   const mvOk = (lang) => mvKeys.every(k => I.t(k) !== k && I.t(k).length > 0);
   I.setLang('zh');
   assert(mvOk('zh'), '电影词条 中文已译', mvKeys.map(k => I.t(k)).join(' | '));
@@ -625,17 +682,36 @@ assert(/data-i18n-title="plum\.tip"/.test(html) && /data-i18n-aria="plum\.tip"/.
 assert(/const QUOTES = \[/.test(appSrc), 'app.js 定义 QUOTES 励志名句池');
 assert(/function pickQuoteIndex/.test(appSrc), 'app.js 定义 pickQuoteIndex()');
 assert(/function showQuote/.test(appSrc), 'app.js 定义 showQuote()');
+assert(/function spawnPlumPetals/.test(appSrc), 'app.js 定义 spawnPlumPetals()');
 assert(/function rotateWallpaperAndQuote/.test(appSrc), 'app.js 定义 rotateWallpaperAndQuote()');
 assert(/getElementById\('btn-plum'\)\.addEventListener\('click', rotateWallpaperAndQuote\)/.test(appSrc), 'boot 绑定梅花点击');
-assert(/pickRotateCandidate\(pool, cur\)/.test(appSrc), '梅花复用 pickRotateCandidate（与每日轮换同源）');
+assert(/pickRecommended\(pool, await getWallPrefs\(\), cur\)/.test(appSrc), '梅花复用 pickRecommended（基于已学习偏好推荐）');
+assert(/spawnPlumPetals\(btn\)/.test(appSrc), '梅花点击触发花瓣飘落特效');
 assert(/markManualPickToday\(\)/.test(appSrc), '梅花点击后标记当日手动选择');
 assert(/pickQuoteIndex/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'pickQuoteIndex 已导出到 LT_PURE');
 // 名句池：中英各一份且数量充足
 assert((appSrc.match(/zh: '[^']*', en: '/g) || []).length >= 10, `励志名句池条目充足（当前 ${(appSrc.match(/zh: '[^']*', en: '/g) || []).length} 条）`);
 // CSS：梅花按钮 + 名句浮层样式齐备
 assert(/\.plum-float/.test(cssSrc) && /@keyframes plum-spin/.test(cssSrc), 'CSS 定义 .plum-float 及旋转动效');
+assert(/\.plum-petal/.test(cssSrc) && /@keyframes plum-petal-fall/.test(cssSrc), 'CSS 定义花瓣飘落特效');
 assert(/\.quote/.test(cssSrc) && /\.quote-text/.test(cssSrc) && /\.quote-src/.test(cssSrc), 'CSS 定义 .quote / .quote-text / .quote-src');
 assert(/@keyframes quote-in/.test(cssSrc) && /\.quote\.quote-out/.test(cssSrc), 'CSS 定义名句入场/退场动画');
+// 梅花 SVG：传统水墨梅花（墨黑枝干 + 米色花瓣 + 中国红描边 + 红色花蕊 + 闭合花蕾）—— 防 AI 回退到抽象五椭圆
+{
+  const m = html.match(/<button class="plum-float"[\s\S]*?<\/button>/);
+  assert(!!m, '提取 #btn-plum SVG 块');
+  const block = m ? m[0] : '';
+  assert(/stroke="#0a0a0a"/.test(block), '墨黑枝干 stroke=#0a0a0a');
+  assert(/fill="#fff8ec"/.test(block) && /stroke="#dc2626"/.test(block), '花瓣：米色 fill + 中国红 stroke');
+  assert(/fill="#1f2937"/.test(block), '花心深色点 #1f2937');
+  // 5 瓣（旋转 0/72/144/216/288）
+  assert((block.match(/<g transform="rotate\(\d+\)">/g) || []).length >= 5, '5 片花瓣路径（rotate(0|72|144|216|288)）');
+  // 闭合花蕾（米色椭圆 + 红描边 + 顶部尖瓣 path）
+  assert(/<ellipse[^>]*fill="#fff8ec"[^>]*stroke="#dc2626"/.test(block) && /M -1\.1 -2\.3 L 0 -3\.3 L 1\.1 -2\.3/.test(block), '闭合花蕾：椭圆 + 红色尖瓣');
+  // 已废弃的抽象五椭圆 token 不能复现
+  assert(!/rx="4\.8"/.test(block) && !/rx="2\.4"/.test(block), '旧版抽象五椭圆瓣（rx=4.8/2.4）已移除');
+  assert(!/#e0b0ff/.test(block) && !/#6d1fa0/.test(block) && !/#f0d5ff/.test(block), '旧版紫色晕染/花心（#e0b0ff/#6d1fa0/#f0d5ff）已移除');
+}
 // i18n：plum.tip 中英各一份且非空（不 echo key 回显）
 {
   const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
@@ -647,6 +723,175 @@ assert(/@keyframes quote-in/.test(cssSrc) && /\.quote\.quote-out/.test(cssSrc), 
   I.setLang('en');
   assert(I.t('plum.tip') === 'New wallpaper · a quote', 'plum.tip 英文', I.t('plum.tip'));
   I.setLang('zh');
+}
+
+// ---------- 15) #66 壁纸习惯收集 + 个性化推荐 ----------
+console.log('[15] #66 壁纸习惯 · 学习偏好 + 推荐');
+// 存储键：lt.wallhist 为本地独占（不入同步/导出，与 walllib/rot 同源）
+assert(/wallhist:\s*'lt\.wallhist'/.test(appSrc), 'K 映射含 wallhist → lt.wallhist');
+// 记录点：六处壁纸变更都带 via 标签（swatch/library/auto/plum/reset/upload）
+for (const via of ['swatch', 'library', 'auto', 'plum', 'reset', 'upload']) {
+  assert(new RegExp(`setWallpaper\\([^)]*, '${via}'\\)`).test(appSrc), `setWallpaper 记录 via='${via}'`);
+}
+// 核心函数齐备且纯函数导出到 LT_PURE
+for (const fn of ['recordWallpaperPick', 'deriveWallPrefs', 'scoreWallCandidates', 'pickRecommended', 'getWallPrefs', 'renderWallRecoTip']) {
+  assert(new RegExp(`function ${fn}`).test(appSrc), `app.js 定义 ${fn}()`);
+}
+assert(/deriveWallPrefs, scoreWallCandidates, pickRecommended/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), '推荐纯函数已导出到 LT_PURE');
+// 上传 dataURL 永不落盘（隐私 + 体积）
+assert(/never persist|startsWith\('data:image'\)/.test(appSrc), '上传 dataURL 不写入习惯记录');
+// 梅花 / 每日轮换改为基于推荐，而非简单顺序轮换
+assert(/pickRecommended\(pool, await getWallPrefs\(\), cur\)/.test(appSrc), '每日自动轮换复用 pickRecommended');
+// 壁纸库网格按推荐排序 + 顶部推荐角标 + 学习提示行
+assert(/scoreWallCandidates\(wallLibImages, prefs\)/.test(appSrc), '壁纸库网格按推荐排序');
+assert(/wall-reco-badge/.test(appSrc) && /wall-reco-tip/.test(appSrc), '推荐角标 + 学习提示行注入');
+assert(/id="wall-reco-tip"/.test(html), 'newtab.html 含 #wall-reco-tip 提示行');
+// CSS：推荐角标 / 学习提示行样式
+assert(/\.wall-reco-badge/.test(cssSrc) && /\.wall-reco-tip/.test(cssSrc), 'CSS 定义 .wall-reco-badge / .wall-reco-tip');
+// i18n：推荐角标 + 学习提示中英各一份且非空
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  I.setLang('zh');
+  assert(I.t('wall.reco_badge') === '推荐', 'wall.reco_badge 中文', I.t('wall.reco_badge'));
+  assert(/\{n\}/.test(I.t('wall.reco_tip')), 'wall.reco_tip 中文含 {n} 占位', I.t('wall.reco_tip'));
+  I.setLang('en');
+  assert(I.t('wall.reco_badge') === 'For you', 'wall.reco_badge 英文', I.t('wall.reco_badge'));
+  assert(/\{n\}/.test(I.t('wall.reco_tip')), 'wall.reco_tip 英文含 {n} 占位', I.t('wall.reco_tip'));
+  I.setLang('zh');
+}
+
+// ---------- 16) 默认排版包围盒：电影紧凑条 + 上移收紧 + 无强制滚动条 ----------
+console.log('[16] 默认排版 · 左栏装得下 + 内容收紧');
+// 电影组件双形态：左栏(:not(.w-top)) 走横排紧凑条，顶部态保留整幅海报
+assert(/\.widget\.wmovie:not\(\.w-top\) \.movie-tile \{/.test(cssSrc), '左栏态定义 .movie-tile 紧凑条规则');
+assert(/\.widget\.wmovie:not\(\.w-top\) \.movie-tile \{[^}]*display:\s*grid/.test(cssSrc), '紧凑条用 grid 横排（小海报 + 文字两列）');
+assert(/\.widget\.wmovie:not\(\.w-top\) \.movie-tile-bg \{[^}]*position:\s*static/.test(cssSrc), '紧凑条海报改 static（不再绝对定位铺满）');
+assert(/\.widget\.wmovie:not\(\.w-top\) \.movie-tile-date,\s*\n\s*\.widget\.wmovie:not\(\.w-top\) \.movie-tile-tag \{[^}]*display:\s*none/.test(cssSrc),
+  '紧凑条隐藏日期角标与底部标签（信息已在 .w-head / .w-title）');
+assert(/\.widget\.wmovie:not\(\.w-top\) \.movie-tile[^{]*\{[^}]*content:\s*none/.test(cssSrc), '紧凑条移除海报暗色蒙层 ::after');
+// 顶部态必须仍是大海报，两种形态不可互相污染
+assert(/\.widget\.wmovie\.w-top \.movie-tile \{[^}]*min-height:\s*300px/.test(cssSrc), '顶部态保留 300px 大海报');
+assert(/\.movie-tile \{[^}]*min-height:\s*420px/.test(cssSrc), '基础态（详情/其它场景）仍是 420px 整幅海报');
+// 矮窗口再收一档，且只缩尺寸不隐藏内容
+assert(/@media \(max-height: 780px\) \{[\s\S]{0,600}?\.widget\.wmovie:not\(\.w-top\) \.movie-tile-bg \{[^}]*height:\s*80px/.test(cssSrc),
+  '矮窗口(≤780px)海报缩到 80px');
+assert(!/@media \(max-height: 780px\) \{[\s\S]{0,600}?movie-tile-quote[^}]*display:\s*none/.test(cssSrc),
+  '矮窗口只缩尺寸、不隐藏短句');
+// 上移收紧的三处来源（都用 vh 比例，不写死像素）
+assert(/\.layout \{[\s\S]*?padding: clamp\(12px, 2vh, 22px\) 40px 90px/.test(cssSrc), '.layout 顶部内边距收紧为 clamp(12px, 2vh, 22px)');
+assert(/\.widget\.wclock\.w-top \{ padding: clamp\(2px, 0\.8vh, 10px\) 0 clamp\(4px, 0\.9vh, 12px\)/.test(cssSrc), '顶部时钟上下留白收紧');
+assert(/#grid-wrap \{ margin-top: clamp\(14px, 2\.2vh, 24px\)/.test(cssSrc), '搜索框到网格的间距收紧为 clamp(14px, 2.2vh, 24px)');
+// 网格宽度钳到与搜索框同列（640），否则卡片会一路右移到布局右缘，把整个右列撕成两段不对齐的竖条
+assert(/#grid-wrap \{[\s\S]{0,200}max-width:\s*640px/.test(cssSrc), '网格区收窄到 640px（与搜索/顶部时钟同列）');
+assert(/\.layout\.canvas #grid-wrap \{[\s\S]{0,80}max-width:\s*640px/.test(cssSrc), '画布态覆盖 max-width:none，把网格宽度强制在 640 内');
+assert(/const GRID_MAX_W = 640/.test(canvasSrc), 'canvas.js 定义 GRID_MAX_W 常量');
+assert(/clampBlockW\(b\.key, c\.w\)/.test(canvasSrc), 'canvas.js 应用网格宽度时走钳位函数');
+assert(/clampBlockW\(b\.key, Math\.round\(r\.width\)\)/.test(canvasSrc), 'canvas.js 重新捕获时同样钳位网格宽度');
+// 画布高度：90px 拖拽余量不得单独制造滚动条
+assert(/const DROP_ROOM = 90/.test(canvasSrc), 'canvas.js 保留 90px 拖拽余量常量');
+assert(/if \(maxBottom <= avail && h > avail\) h = avail;/.test(canvasSrc), '内容已在首屏内时，画布高度封顶到视口（不出滚动条）');
+assert(/window\.innerHeight - rr\.top/.test(canvasSrc), '余量按视口实时计算');
+assert(/addEventListener\('resize'/.test(canvasSrc), 'resize 时重算画布高度（视口感知的前提）');
+
+// ---------- 17) iTab 版式外壳：顶部栈（时钟 + 搜索）在上，body-row（电影 + 图标）在下 ----------
+console.log('');
+console.log('[17] iTab 版式外壳 · top-stack / body-row');
+// 结构：newtab.html 必须是 .layout > (.top-stack, .body-row) 两层
+assert(/<div class="top-stack">/.test(html), 'newtab.html 含 .top-stack 容器');
+assert(/<div class="top-stack-extra"><\/div>/.test(html), 'newtab.html 含空的 .top-stack-extra 插槽（用户提升组件时才填）');
+assert(/<div class="body-row">/.test(html), 'newtab.html 含 .body-row 容器');
+{
+  // 顺序断言：top-stack 里时钟在搜索之前；body-row 在 top-stack 之后；#grid-wrap 落在 body-row 内
+  const iTop = html.indexOf('<div class="top-stack">');
+  const iClock = html.indexOf('widget wclock');
+  const iSearch = html.indexOf('id="search"');
+  const iBody = html.indexOf('<div class="body-row">');
+  const iLeft = html.indexOf('<aside class="left"');
+  const iGrid = html.indexOf('id="grid-wrap"');
+  assert(iTop > 0 && iTop < iClock && iClock < iSearch && iSearch < iBody,
+    'top-stack 内顺序为 时钟 → 搜索，且都在 body-row 之前', `top=${iTop} clock=${iClock} search=${iSearch} body=${iBody}`);
+  assert(iBody < iLeft && iLeft < iGrid, 'body-row 内顺序为 .left（电影）→ .right（#grid-wrap）', `body=${iBody} left=${iLeft} grid=${iGrid}`);
+}
+// CSS：外壳三件套
+assert(/\.layout \{[^}]*flex-direction:\s*column/.test(cssSrc), '.layout 改为纵向排布（顶部栈在上）');
+assert(/\.top-stack \{[^}]*flex-direction:\s*column/.test(cssSrc), '.top-stack 为居中纵向栈');
+assert(/\.body-row \{[^}]*flex-direction:\s*row/.test(cssSrc), '.body-row 为横向两列');
+// 画布态用 display:contents 把新增的两层壳「摊平」，这样 canvas.js 仍能把子块当作 .layout 的直接子元素定位
+assert(/\.layout\.canvas > \.top-stack,\s*\n?\s*\.layout\.canvas > \.body-row \{[^}]*display:\s*contents/.test(cssSrc),
+  '画布态用 display:contents 摊平 top-stack / body-row（canvas.js 无需改动）');
+// 时钟是页面页眉，不是插槽占用者：必须是 .top-stack 直接子元素且不带 .w-top
+assert(/\.top-stack > \.widget\.wclock/.test(cssSrc), 'CSS 用 .top-stack > .widget.wclock 定义大号页眉时钟');
+assert(/\.top-stack > \.widget\.wclock \.clock-hhmm \{[^}]*font-size:\s*clamp\(54px/.test(cssSrc), 'iTab 时钟字号 clamp(54px, 9vh, 88px)');
+assert(/\.top-stack > \.widget\.wclock \.clock-hhmm \{[^}]*font-weight:\s*600/.test(cssSrc), 'iTab 时钟字重 600（不是旧的 300 细体）');
+// 页眉时钟必须连 backdrop-filter 一起清掉：只清背景/边框/阴影时它仍会把壁纸提亮成一块可见矩形
+assert(/\.top-stack > \.widget\.wclock \{[^}]*backdrop-filter:\s*none/.test(cssSrc), '页眉时钟清除 backdrop-filter（否则壁纸被提亮出矩形）');
+// 默认快捷方式不得有重复项（原先 GitHub 出现两次）
+{
+  const m = appSrc.match(/const DEFAULT_SITES = \[([\s\S]*?)\n  \];/);
+  assert(!!m, 'app.js 含 DEFAULT_SITES 定义');
+  const titles = [...m[1].matchAll(/title: '([^']+)'/g)].map(x => x[1]);
+  const dup = titles.filter((t, i) => titles.indexOf(t) !== i);
+  assert(dup.length === 0, `默认快捷方式无重复（共 ${titles.length} 项）`, `重复: ${dup.join(', ')}`);
+  const urls = [...m[1].matchAll(/url: '([^']+)'/g)].map(x => x[1]);
+  const dupU = urls.filter((u, i) => urls.indexOf(u) !== i);
+  assert(dupU.length === 0, '默认快捷方式无重复 URL', `重复: ${dupU.join(', ')}`);
+}
+// app.js：默认只开时钟 + 电影；日历/待办留在 DOM 里但默认隐藏，用户可在设置里重新打开
+assert(/wclock:\s*true,\s*wcal:\s*false,\s*wtodo:\s*false,\s*wmovie:\s*true/.test(appSrc),
+  'DEFAULT_SETTINGS.widgets 默认 = 时钟 + 电影（日历/待办关闭）');
+assert(/\.layout:not\(\.canvas\) \.left > \.widget\.wcal,\s*\n?\s*\.layout:not\(\.canvas\) \.left > \.widget\.wtodo \{[^}]*display:\s*none/.test(cssSrc),
+  '流式态下左栏的日历/待办默认隐藏（提升到顶部后离开 .left，该规则自动失效）');
+// applyWidgetPos 必须给时钟开特例，否则它会被塞进 .top-stack-extra 并加上 .w-top，
+// 命中更靠后声明的 .widget.wclock.w-top（同 (0,4,0) 特异度、后来者胜）→ 退回 66px/300 细体并隐藏问候语
+assert(/const isClock = \(id === 'wclock'\)/.test(appSrc), 'applyWidgetPos 对时钟单独判定');
+assert(/topStack\.insertBefore\(el, topExtra\)/.test(appSrc), '时钟保持为 .top-stack 直接子元素（插在插槽之前）');
+assert(/classList\.toggle\('w-top', pos\[id\] === 'top' && !isClock\)/.test(appSrc), '时钟永不加 .w-top（避免命中旧的细体规则）');
+assert(/\.layout > \.body-row > \.left/.test(appSrc), 'applyWidgets / applyWidgetPos 走新的 .body-row > .left 选择器');
+// 电影卡在所有宽度都保持紧凑条，之前那版「整幅海报 hero」已移除且不许回来
+assert(!/\.layout:not\(\.canvas\) \.left > \.widget\.wmovie:not\(\.w-top\) \.movie-tile \{[^}]*min-height:\s*3\d\dpx/.test(cssSrc),
+  '不存在 hero 版电影卡覆盖（>1024 进画布态时它不可达，≤1024 时又会撑出约 210px 空洞）');
+// 响应式：≤1024 收成单列，且旧的 pre-iTab 声明必须已删除
+// 用「按大括号配平抽出整块」代替固定宽度的 [\s\S]{0,N} 前瞻——注释一长，窗口就会截断，
+// 断言会假失败（本次就踩到了）。
+const mq1024 = (() => {
+  // 文件里有两个 @media (max-width: 1024px)：一个管电影详情窗，一个管版式外壳。取含 .body-row 的那个。
+  const re = /@media \(max-width: 1024px\) \{/g;
+  let mm;
+  while ((mm = re.exec(cssSrc))) {
+    let i = mm.index + mm[0].length, depth = 1;
+    while (i < cssSrc.length && depth > 0) {
+      if (cssSrc[i] === '{') depth++;
+      else if (cssSrc[i] === '}') depth--;
+      i++;
+    }
+    const body = cssSrc.slice(mm.index, i);
+    if (/\.body-row/.test(body)) return body;
+  }
+  return '';
+})();
+assert(mq1024.length > 0, '抽出 ≤1024px 版式外壳的 media 块');
+assert(/\.body-row \{[^}]*flex-direction:\s*column/.test(mq1024), '≤1024px 时 .body-row 收成纵向单列');
+assert(/\.left, \.right \{[^}]*width:\s*100%/.test(mq1024), '≤1024px 时左右两列各占满宽');
+assert(!/\.left \{[^}]*flex-direction:\s*row/.test(mq1024),
+  '已删除旧的 .left { flex-direction: row }（会把左栏摊平并把网格挤成 0 宽）');
+// 列排后必须连 flex 一起重置：flex:0 0 320px 量的是主轴，改成 column 后 320px 变成固定「高度」
+assert(/\.left, \.right \{[^}]*flex:\s*0 0 auto/.test(mq1024),
+  '≤1024px 时重置 .left/.right 的 flex（否则 320px 基准变成竖向高度，撑出约 153px 空洞）');
+// 堆叠态收成同一列：三块共用 720px 上限并居中
+assert(/\.top-stack, \.left, \.right \{[^}]*max-width:\s*720px/.test(mq1024), '≤1024px 时 top-stack / 左右列统一 720px 上限');
+assert(/\.top-stack, \.left, \.right \{[^}]*margin-left:\s*auto/.test(mq1024), '≤1024px 时三块居中（margin auto）');
+assert(/#grid-wrap \{[^}]*max-width:\s*100%/.test(mq1024), '≤1024px 时释放网格 640px 上限（桌面态才需要与搜索同列）');
+// 网格与搜索框对齐：只钳宽度不够，x 还要重锚到搜索框中线，否则两者差 4px
+assert(/function alignGridToSearch/.test(canvasSrc), 'canvas.js 定义 alignGridToSearch（把网格重锚到搜索框中线）');
+assert(/g\.x = Math\.round\(s\.x \+ \(s\.w - gw\) \/ 2\)/.test(canvasSrc), '按搜索框中线计算网格 x');
+assert(/layout\.auto === false/.test(canvasSrc), '仅归一化 auto 布局（用户拖过就不再改动）');
+{
+  const hits = (canvasSrc.match(/alignGridToSearch\(/g) || []).length;
+  // 定义 1 次 + 调用 3 次（applyCanvas / captureLayout / recaptureBlocksFromFlow）
+  assert(hits >= 4, 'alignGridToSearch 在应用/捕获/重捕获三处都被调用', `出现 ${hits} 次`);
 }
 
 console.log('');
