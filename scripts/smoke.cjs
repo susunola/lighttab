@@ -696,6 +696,22 @@ assert(/\.plum-float/.test(cssSrc) && /@keyframes plum-spin/.test(cssSrc), 'CSS 
 assert(/\.plum-petal/.test(cssSrc) && /@keyframes plum-petal-fall/.test(cssSrc), 'CSS 定义花瓣飘落特效');
 assert(/\.quote/.test(cssSrc) && /\.quote-text/.test(cssSrc) && /\.quote-src/.test(cssSrc), 'CSS 定义 .quote / .quote-text / .quote-src');
 assert(/@keyframes quote-in/.test(cssSrc) && /\.quote\.quote-out/.test(cssSrc), 'CSS 定义名句入场/退场动画');
+// 梅花 SVG：传统水墨梅花（墨黑枝干 + 米色花瓣 + 中国红描边 + 红色花蕊 + 闭合花蕾）—— 防 AI 回退到抽象五椭圆
+{
+  const m = html.match(/<button class="plum-float"[\s\S]*?<\/button>/);
+  assert(!!m, '提取 #btn-plum SVG 块');
+  const block = m ? m[0] : '';
+  assert(/stroke="#0a0a0a"/.test(block), '墨黑枝干 stroke=#0a0a0a');
+  assert(/fill="#fff8ec"/.test(block) && /stroke="#dc2626"/.test(block), '花瓣：米色 fill + 中国红 stroke');
+  assert(/fill="#1f2937"/.test(block), '花心深色点 #1f2937');
+  // 5 瓣（旋转 0/72/144/216/288）
+  assert((block.match(/<g transform="rotate\(\d+\)">/g) || []).length >= 5, '5 片花瓣路径（rotate(0|72|144|216|288)）');
+  // 闭合花蕾（米色椭圆 + 红描边 + 顶部尖瓣 path）
+  assert(/<ellipse[^>]*fill="#fff8ec"[^>]*stroke="#dc2626"/.test(block) && /M -1\.1 -2\.3 L 0 -3\.3 L 1\.1 -2\.3/.test(block), '闭合花蕾：椭圆 + 红色尖瓣');
+  // 已废弃的抽象五椭圆 token 不能复现
+  assert(!/rx="4\.8"/.test(block) && !/rx="2\.4"/.test(block), '旧版抽象五椭圆瓣（rx=4.8/2.4）已移除');
+  assert(!/#e0b0ff/.test(block) && !/#6d1fa0/.test(block) && !/#f0d5ff/.test(block), '旧版紫色晕染/花心（#e0b0ff/#6d1fa0/#f0d5ff）已移除');
+}
 // i18n：plum.tip 中英各一份且非空（不 echo key 回显）
 {
   const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };

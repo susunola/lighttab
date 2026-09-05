@@ -50,19 +50,44 @@ const assert = (c, n, d) => (c ? ok(n, d) : fail(n, d));
   assert(await page.$eval('#quote', el => el.hidden), '#quote 初始隐藏');
   assert(await page.$eval('#quote', el => el.getAttribute('aria-live') === 'polite'), '#quote aria-live=polite');
 
-  // 2) plum blossom SVG: 5 big outer petals + per-petal inner tint + stamens/center cluster
-  //    Enriched design = 10 ellipses (5 outer white rx=4.8 + 5 inner tint rx=2.4) and 7 circles
-  //    (5 stamen tips + center disk + center dot). Contract: exactly 5 big petals, tint layer
-  //    present, and a stamen/center cluster of >= 6 circles.
-  const petalInfo = await page.$eval('#btn-plum svg', svg => ({
-    big: svg.querySelectorAll('ellipse[rx="4.8"]').length,
-    tint: svg.querySelectorAll('ellipse[rx="2.4"]').length,
-    ellipse: svg.querySelectorAll('ellipse').length,
-    circle: svg.querySelectorAll('circle').length,
-    fill: svg.getAttribute('fill')
-  }));
-  assert(petalInfo.big === 5 && petalInfo.tint === 5 && petalInfo.ellipse === 10 && petalInfo.circle >= 6,
-    `梅花 SVG 5 大瓣+5 晕染层+花心簇（big=${petalInfo.big} tint=${petalInfo.tint} ellipse=${petalInfo.ellipse} circle=${petalInfo.circle}, fill=${petalInfo.fill}）`);
+  // 2) plum blossom SVG: traditional Chinese ink-painting (水墨梅花) with a calligraphic ink branch,
+  //    one open flower (5 cream petals outlined in Chinese red, plus stamen cluster), and one closed
+  //    bud. Contract: at least 5 petal paths (cream fill + red outline), a stamen cluster of >=5 red
+  //    lines + >=5 red tip dots + 1 dark centre, and an ink-black branch with >= 2 path strokes.
+  const plumSvg = await page.$eval('#btn-plum svg', svg => {
+    const all = Array.from(svg.querySelectorAll('*'));
+    const petals = all.filter(el => {
+      const f = el.getAttribute('fill') || '';
+      const s = el.getAttribute('stroke') || '';
+      return f.toLowerCase() === '#fff8ec' && s.toLowerCase() === '#dc2626' && el.tagName.toLowerCase() === 'path';
+    });
+    const stamenLines = all.filter(el => {
+      if (el.tagName.toLowerCase() !== 'line') return false;
+      // stamen lines inherit stroke="#dc2626" from the wrapping <g>; follow the parent when the line
+      // itself carries no stroke (presentation attribute inheritance is the common SVG idiom).
+      const own = (el.getAttribute('stroke') || '').toLowerCase();
+      const parent = (el.parentElement && el.parentElement.getAttribute('stroke') || '').toLowerCase();
+      return own === '#dc2626' || parent === '#dc2626';
+    });
+    const stamenTips = all.filter(el => el.tagName.toLowerCase() === 'circle' && (el.getAttribute('fill') || '').toLowerCase() === '#dc2626');
+    const branches = all.filter(el => {
+      const s = (el.getAttribute('stroke') || '').toLowerCase();
+      return el.tagName.toLowerCase() === 'path' && s === '#0a0a0a';
+    });
+    const budEllipses = all.filter(el => {
+      const f = (el.getAttribute('fill') || '').toLowerCase();
+      const s = (el.getAttribute('stroke') || '').toLowerCase();
+      return el.tagName.toLowerCase() === 'ellipse' && f === '#fff8ec' && s === '#dc2626';
+    });
+    const center = all.find(el => el.tagName.toLowerCase() === 'circle' && (el.getAttribute('fill') || '').toLowerCase() === '#1f2937');
+    return { petals: petals.length, stamenLines: stamenLines.length, stamenTips: stamenTips.length, branches: branches.length, budEllipses: budEllipses.length, hasCenter: !!center };
+  });
+  assert(plumSvg.petals === 5, `水墨梅花：5 瓣米色+红描边花瓣（实测 ${plumSvg.petals}）`);
+  assert(plumSvg.stamenLines >= 5, `花蕊放射线 ≥5（实测 ${plumSvg.stamenLines}）`);
+  assert(plumSvg.stamenTips >= 5, `红色花蕊顶端圆点 ≥5（实测 ${plumSvg.stamenTips}）`);
+  assert(plumSvg.branches >= 2, `墨黑枝干 path ≥2 段（实测 ${plumSvg.branches}）`);
+  assert(plumSvg.budEllipses >= 1, `闭合花蕾椭圆 ≥1（实测 ${plumSvg.budEllipses}）`);
+  assert(plumSvg.hasCenter, '花心存在（深色 #1f2937 圆点）');
 
   // 3) geometry: bottom-right, left of the + button, no overlap
   const plumBox = await page.locator('#btn-plum').boundingBox();
