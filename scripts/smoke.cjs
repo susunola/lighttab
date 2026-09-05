@@ -483,6 +483,12 @@ assert(/\.layout:not\(\.canvas\) \.widget\.w-top \+ \.widget\.w-top/.test(cssSrc
 // 日历格子是「日期 + 农历」两行，钉死高度/行高会裁掉第二行
 assert(!/\.widget\.wcal\.w-top \.cal-cell[^}]*line-height/.test(cssSrc),
   '日历顶部态未给格子写死 line-height（会裁掉农历行）');
+// 顶部态组件的 x/w 始终锚定搜索框（手动布局也不会因旧坐标跑偏），y 仍是用户的
+assert(/pos\[b\.key\] === 'top'/.test(canvasSrc), 'applyCanvas 识别顶部态组件');
+assert(/sc\.x \+ \(\(typeof sc\.w === 'number' \? sc\.w : w\) - w\) \/ 2/.test(canvasSrc),
+  '顶部态组件水平居中于搜索框（坐标过期的手动布局也不会跑偏）');
+assert(/Math\.min\(typeof w === 'number' \? w : 640, 640\)/.test(canvasSrc),
+  '顶部态组件宽度收敛到 640（画布模式 max-width:none 会放开旧坐标宽度）');
 // 顶部态没有卡片底色，文字直接压在壁纸上：亮壁纸 + 深色主题时白字必须有足够阴影，
 // 否则 88px/细字重的时钟会淡到近乎不可见（"时钟不见了"）
 assert(/\.widget\.w-top \{[^}]*text-shadow/.test(cssSrc), '顶部态组件带继承的文字阴影（亮壁纸可读）');

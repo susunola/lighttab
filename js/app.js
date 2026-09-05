@@ -207,7 +207,8 @@
       const base = `${wk}, ${EN_MONTHS_S[d.getMonth()]} ${d.getDate()}`;
       if (!window.LT_LUNAR) return base;
       const lu = window.LT_LUNAR.toLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
-      return lu ? `${base}  ${window.LT_LUNAR.dayNameEn(lu.day)}` : base;
+      // "Sep 5 · Lunar 7/24" — a bare ordinal ("Sep 5 24th") reads as part of the Gregorian date.
+      return lu ? `${base} · Lunar ${lu.month}/${lu.day}` : base;
     }
     const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
     const base = `${d.getMonth() + 1}月${d.getDate()}日 星期${week}`;

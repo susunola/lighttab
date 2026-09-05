@@ -36,12 +36,23 @@
     const l = getLayout();
     if (!root || !l) return;
     root.classList.add('canvas');
+    // A widget placed "top" lives above the search box by definition, so only its y is the user's
+    // to keep. Its x/w track the search block: coordinates frozen under older CSS or another
+    // window size (and manual layouts are never re-derived) must not strand the clock away from
+    // the search it belongs to.
+    const pos = A().normalizeWidgetPos(A().state.settings && A().state.settings.widgetPos);
+    const sc = l.search;
     for (const b of blockEls()) {
       const c = l[b.key];
       if (!c || typeof c.x !== 'number' || typeof c.y !== 'number') continue;
-      b.el.style.left = c.x + 'px';
+      let x = c.x, w = c.w;
+      if (A().WIDGETS.includes(b.key) && pos[b.key] === 'top' && sc && typeof sc.x === 'number') {
+        w = Math.min(typeof w === 'number' ? w : 640, 640);
+        x = Math.round(sc.x + ((typeof sc.w === 'number' ? sc.w : w) - w) / 2);
+      }
+      b.el.style.left = x + 'px';
       b.el.style.top = c.y + 'px';
-      b.el.style.width = c.w ? c.w + 'px' : '';
+      b.el.style.width = w ? w + 'px' : '';
     }
     applyCardCanvas();
     refreshCanvasHeight();
@@ -446,7 +457,7 @@
       };
       l.auto = false; // hand-placed from now on: never silently re-derive these coordinates
       A().Store.set(A().K.settings, A().state.settings);
-      refreshCanvasHeight();
+      applyCanvas(); // re-anchor: a top-stack widget follows the search box it belongs to
     }
 
     root.addEventListener('pointerdown', onPointerDown);
