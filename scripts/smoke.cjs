@@ -474,6 +474,8 @@ assert(/id="engm-list"/.test(html) && /id="engm-add"/.test(html) && /id="engm-re
 assert(/url\.includes\('\{q\}'\)/.test(appSrc), 'custom engine URLs must contain the {q} placeholder');
 assert(/toast\.eng_last/.test(appSrc), 'forbid deleting when only one engine remains');
 assert(/toast\.eng_removed.*toast\.undo/.test(appSrc), 'engine deletion goes through an undo toast');
+assert(!/if \(ttl\) toastTimer/.test(appSrc), 'toast without an explicit ttl still auto-dismisses (no permanent toast)');
+assert(/const ms = ttl \|\| \(actionLabel \? 6000 : 2600\)/.test(appSrc), 'toast default ttl: 2.6s plain / 6s with action');
 for (const k of ['engm.title','engm.name_ph','engm.url_ph','engm.add','engm.restore','engm.tip','engm.del','engm.deeplink','toast.eng_added','toast.eng_removed','toast.eng_invalid','toast.eng_last']) {
   const re = new RegExp("'" + k.replace('.', '\\.') + "':\\s*\\{\\s*zh: '[^']+', en: '[^']+' \\}");
   assert(re.test(i18nSrc), `i18n entry ${k} complete in zh/en`);

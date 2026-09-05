@@ -2133,7 +2133,10 @@
       });
     }
     if (toastTimer) { clearTimeout(toastTimer); toastTimer = 0; }
-    if (ttl) toastTimer = setTimeout(() => { box.hidden = true; toastTimer = 0; }, ttl);
+    // Every toast auto-dismisses: 2.6s for plain notices, longer when it carries an action
+    // (undo) so the button is reachable. A toast without a timer would sit there forever.
+    const ms = ttl || (actionLabel ? 6000 : 2600);
+    toastTimer = setTimeout(() => { box.hidden = true; toastTimer = 0; }, ms);
   }
   function copyText(text) {
     if (navigator.clipboard) {
