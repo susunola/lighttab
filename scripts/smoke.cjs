@@ -483,6 +483,15 @@ assert(/\.layout:not\(\.canvas\) \.widget\.w-top \+ \.widget\.w-top/.test(cssSrc
 // 日历格子是「日期 + 农历」两行，钉死高度/行高会裁掉第二行
 assert(!/\.widget\.wcal\.w-top \.cal-cell[^}]*line-height/.test(cssSrc),
   '日历顶部态未给格子写死 line-height（会裁掉农历行）');
+// 顶部态没有卡片底色，文字直接压在壁纸上：亮壁纸 + 深色主题时白字必须有足够阴影，
+// 否则 88px/细字重的时钟会淡到近乎不可见（"时钟不见了"）
+assert(/\.widget\.w-top \{[^}]*text-shadow/.test(cssSrc), '顶部态组件带继承的文字阴影（亮壁纸可读）');
+assert(/\.widget\.wclock\.w-top \.clock-hhmm \{[^}]*text-shadow: 0 1px 3px/.test(cssSrc),
+  '顶部时钟为多层加强阴影');
+assert(!/\.widget\.wclock\.w-top \.clock-hhmm \{[^}]*font-weight: 200/.test(cssSrc),
+  '顶部时钟不再用 200 字重（亮壁纸上几乎隐形）');
+assert(/\.widget\.wclock\.w-top \.clock-date \{[^}]*color: var\(--ink\)/.test(cssSrc),
+  '顶部时钟日期行用 --ink 而非更暗的 --ink-2');
 // 陈旧检测与自愈重排
 assert(/normalizeWidgetPos\(st && st\.widgetPos\)/.test(canvasSrc), '画布陈旧检测按每组件位置判定');
 assert(/function topStackOverlaps/.test(canvasSrc), 'canvas.js 定义 topStackOverlaps()');

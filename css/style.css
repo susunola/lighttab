@@ -376,6 +376,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   text-align: center;
   max-width: 640px;
   margin: 0 auto;
+  /* No card chrome up here, so text floats directly on the wallpaper: an inherited soft shadow
+     keeps it legible when the wallpaper is bright. The clock overrides this with a stronger stack. */
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
 }
 /* Stack gap: flow only. In canvas mode blocks are absolutely positioned and their y already bakes in
  * this gap (it was measured from a flow pass), so leaving the margin on would apply it a second time
@@ -401,9 +404,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .widget.wclock.w-top .clock-row { justify-content: center; gap: 6px; }
 .widget.wclock.w-top .clock-hhmm {
   font-size: clamp(58px, 5.6vw, 88px);
-  font-weight: 200;
+  font-weight: 300;
   letter-spacing: 0.01em;
-  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.3);
+  /* No panel behind the top clock, so the digits themselves must carry the contrast: a tight
+     contact shadow plus two wider halos keep white text readable on a bright wallpaper
+     (weight 200 with a single soft shadow all but vanished — iOS/iTab do the same layering). */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 2px 14px rgba(0, 0, 0, 0.42), 0 6px 36px rgba(0, 0, 0, 0.35);
 }
 .widget.wclock.w-top .clock-sec { display: none; }  /* seconds are noise at this size */
 /* The compact line already carries weekday + lunar, so the separate lunar row and the greeting
@@ -414,8 +420,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   margin: 4px 0 0;
   font-size: clamp(12.5px, 1vw, 14.5px);
   letter-spacing: 0.04em;
-  color: var(--ink-2);
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 10px rgba(0, 0, 0, 0.4), 0 3px 22px rgba(0, 0, 0, 0.32);
 }
 
 /* --- calendar in the top stack: compact month strip, no card, header inline --- */
