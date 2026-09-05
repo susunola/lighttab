@@ -53,7 +53,7 @@
   ];
 
   const DEFAULT_SETTINGS = {
-    engine: 'baidu',
+    engine: 'google',
     name: '',
     // Top-right profile avatar: a local raster dataURL (data:image/png|jpeg|webp|gif;base64,…).
     // Empty = show the name initial, or a default person glyph when no name is set.
@@ -2293,7 +2293,10 @@
     const fb = document.getElementById('avatar-fallback');
     if (img) { img.style.backgroundImage = s.avatar ? `url("${s.avatar}")` : ''; img.hidden = !s.avatar; }
     if (ini) { ini.textContent = s.initial; ini.hidden = !(!s.avatar && s.initial); }
-    if (fb) fb.hidden = !!(s.avatar || s.initial);
+    // The fallback is an <svg>: SVGElement.hidden does not reflect to the attribute in every
+    // engine, so a property assignment can leave the glyph visible beside the photo (the photo
+    // then flex-shrinks and no longer fills the button). Toggle the attribute explicitly.
+    if (fb) fb.toggleAttribute('hidden', !!(s.avatar || s.initial));
     const big = document.getElementById('avatar-big');
     if (big) {
       if (s.avatar) big.innerHTML = `<img src="${s.avatar}" alt="">`;

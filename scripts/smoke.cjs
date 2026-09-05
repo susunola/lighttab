@@ -566,6 +566,10 @@ assert(/id="f-avatar"[^>]*type="file"/.test(html), '设置页含 #f-avatar 文�
 assert(/accept="image\/png,image\/jpeg,image\/webp,image\/gif"/.test(html), '上传仅收光栅图（png/jpeg/webp/gif）');
 // JS：头像 dataURL + 名称首字 + 默认人形三层回退；云同步登录态仅在下拉里镜像
 assert(/avatar:\s*''/.test(appSrc), "DEFAULT_SETTINGS 含 avatar: '' 默认空");
+assert(/engine:\s*'google'/.test(appSrc), 'DEFAULT_SETTINGS 默认搜索引擎为 google');
+// 回退人形是 <svg>：SVGElement.hidden 属性和特性不同步，必须用 toggleAttribute 显式控制
+assert(!/fb\.hidden =/.test(appSrc), 'SVG 回退图标不再用 .hidden 属性赋值（特性不同步）');
+assert(/fb\.toggleAttribute\('hidden',/.test(appSrc), 'SVG 回退图标用 toggleAttribute 控制显隐');
 assert(/function avatarState/.test(appSrc) && /function renderAvatar/.test(appSrc) && /function renderAvatarPreview/.test(appSrc),
   'app.js 定义 avatarState / renderAvatar / renderAvatarPreview');
 assert(/function openSettingsTab/.test(appSrc) && /function bindAvatar/.test(appSrc), 'app.js 定义 openSettingsTab / bindAvatar');
