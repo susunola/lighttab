@@ -796,6 +796,104 @@ assert(/if \(maxBottom <= avail && h > avail\) h = avail;/.test(canvasSrc), '内
 assert(/window\.innerHeight - rr\.top/.test(canvasSrc), '余量按视口实时计算');
 assert(/addEventListener\('resize'/.test(canvasSrc), 'resize 时重算画布高度（视口感知的前提）');
 
+// ---------- 17) iTab 版式外壳：顶部栈（时钟 + 搜索）在上，body-row（电影 + 图标）在下 ----------
+console.log('');
+console.log('[17] iTab 版式外壳 · top-stack / body-row');
+// 结构：newtab.html 必须是 .layout > (.top-stack, .body-row) 两层
+assert(/<div class="top-stack">/.test(html), 'newtab.html 含 .top-stack 容器');
+assert(/<div class="top-stack-extra"><\/div>/.test(html), 'newtab.html 含空的 .top-stack-extra 插槽（用户提升组件时才填）');
+assert(/<div class="body-row">/.test(html), 'newtab.html 含 .body-row 容器');
+{
+  // 顺序断言：top-stack 里时钟在搜索之前；body-row 在 top-stack 之后；#grid-wrap 落在 body-row 内
+  const iTop = html.indexOf('<div class="top-stack">');
+  const iClock = html.indexOf('widget wclock');
+  const iSearch = html.indexOf('id="search"');
+  const iBody = html.indexOf('<div class="body-row">');
+  const iLeft = html.indexOf('<aside class="left"');
+  const iGrid = html.indexOf('id="grid-wrap"');
+  assert(iTop > 0 && iTop < iClock && iClock < iSearch && iSearch < iBody,
+    'top-stack 内顺序为 时钟 → 搜索，且都在 body-row 之前', `top=${iTop} clock=${iClock} search=${iSearch} body=${iBody}`);
+  assert(iBody < iLeft && iLeft < iGrid, 'body-row 内顺序为 .left（电影）→ .right（#grid-wrap）', `body=${iBody} left=${iLeft} grid=${iGrid}`);
+}
+// CSS：外壳三件套
+assert(/\.layout \{[^}]*flex-direction:\s*column/.test(cssSrc), '.layout 改为纵向排布（顶部栈在上）');
+assert(/\.top-stack \{[^}]*flex-direction:\s*column/.test(cssSrc), '.top-stack 为居中纵向栈');
+assert(/\.body-row \{[^}]*flex-direction:\s*row/.test(cssSrc), '.body-row 为横向两列');
+// 画布态用 display:contents 把新增的两层壳「摊平」，这样 canvas.js 仍能把子块当作 .layout 的直接子元素定位
+assert(/\.layout\.canvas > \.top-stack,\s*\n?\s*\.layout\.canvas > \.body-row \{[^}]*display:\s*contents/.test(cssSrc),
+  '画布态用 display:contents 摊平 top-stack / body-row（canvas.js 无需改动）');
+// 时钟是页面页眉，不是插槽占用者：必须是 .top-stack 直接子元素且不带 .w-top
+assert(/\.top-stack > \.widget\.wclock/.test(cssSrc), 'CSS 用 .top-stack > .widget.wclock 定义大号页眉时钟');
+assert(/\.top-stack > \.widget\.wclock \.clock-hhmm \{[^}]*font-size:\s*clamp\(54px/.test(cssSrc), 'iTab 时钟字号 clamp(54px, 9vh, 88px)');
+assert(/\.top-stack > \.widget\.wclock \.clock-hhmm \{[^}]*font-weight:\s*600/.test(cssSrc), 'iTab 时钟字重 600（不是旧的 300 细体）');
+// 页眉时钟必须连 backdrop-filter 一起清掉：只清背景/边框/阴影时它仍会把壁纸提亮成一块可见矩形
+assert(/\.top-stack > \.widget\.wclock \{[^}]*backdrop-filter:\s*none/.test(cssSrc), '页眉时钟清除 backdrop-filter（否则壁纸被提亮出矩形）');
+// 默认快捷方式不得有重复项（原先 GitHub 出现两次）
+{
+  const m = appSrc.match(/const DEFAULT_SITES = \[([\s\S]*?)\n  \];/);
+  assert(!!m, 'app.js 含 DEFAULT_SITES 定义');
+  const titles = [...m[1].matchAll(/title: '([^']+)'/g)].map(x => x[1]);
+  const dup = titles.filter((t, i) => titles.indexOf(t) !== i);
+  assert(dup.length === 0, `默认快捷方式无重复（共 ${titles.length} 项）`, `重复: ${dup.join(', ')}`);
+  const urls = [...m[1].matchAll(/url: '([^']+)'/g)].map(x => x[1]);
+  const dupU = urls.filter((u, i) => urls.indexOf(u) !== i);
+  assert(dupU.length === 0, '默认快捷方式无重复 URL', `重复: ${dupU.join(', ')}`);
+}
+// app.js：默认只开时钟 + 电影；日历/待办留在 DOM 里但默认隐藏，用户可在设置里重新打开
+assert(/wclock:\s*true,\s*wcal:\s*false,\s*wtodo:\s*false,\s*wmovie:\s*true/.test(appSrc),
+  'DEFAULT_SETTINGS.widgets 默认 = 时钟 + 电影（日历/待办关闭）');
+assert(/\.layout:not\(\.canvas\) \.left > \.widget\.wcal,\s*\n?\s*\.layout:not\(\.canvas\) \.left > \.widget\.wtodo \{[^}]*display:\s*none/.test(cssSrc),
+  '流式态下左栏的日历/待办默认隐藏（提升到顶部后离开 .left，该规则自动失效）');
+// applyWidgetPos 必须给时钟开特例，否则它会被塞进 .top-stack-extra 并加上 .w-top，
+// 命中更靠后声明的 .widget.wclock.w-top（同 (0,4,0) 特异度、后来者胜）→ 退回 66px/300 细体并隐藏问候语
+assert(/const isClock = \(id === 'wclock'\)/.test(appSrc), 'applyWidgetPos 对时钟单独判定');
+assert(/topStack\.insertBefore\(el, topExtra\)/.test(appSrc), '时钟保持为 .top-stack 直接子元素（插在插槽之前）');
+assert(/classList\.toggle\('w-top', pos\[id\] === 'top' && !isClock\)/.test(appSrc), '时钟永不加 .w-top（避免命中旧的细体规则）');
+assert(/\.layout > \.body-row > \.left/.test(appSrc), 'applyWidgets / applyWidgetPos 走新的 .body-row > .left 选择器');
+// 电影卡在所有宽度都保持紧凑条，之前那版「整幅海报 hero」已移除且不许回来
+assert(!/\.layout:not\(\.canvas\) \.left > \.widget\.wmovie:not\(\.w-top\) \.movie-tile \{[^}]*min-height:\s*3\d\dpx/.test(cssSrc),
+  '不存在 hero 版电影卡覆盖（>1024 进画布态时它不可达，≤1024 时又会撑出约 210px 空洞）');
+// 响应式：≤1024 收成单列，且旧的 pre-iTab 声明必须已删除
+// 用「按大括号配平抽出整块」代替固定宽度的 [\s\S]{0,N} 前瞻——注释一长，窗口就会截断，
+// 断言会假失败（本次就踩到了）。
+const mq1024 = (() => {
+  // 文件里有两个 @media (max-width: 1024px)：一个管电影详情窗，一个管版式外壳。取含 .body-row 的那个。
+  const re = /@media \(max-width: 1024px\) \{/g;
+  let mm;
+  while ((mm = re.exec(cssSrc))) {
+    let i = mm.index + mm[0].length, depth = 1;
+    while (i < cssSrc.length && depth > 0) {
+      if (cssSrc[i] === '{') depth++;
+      else if (cssSrc[i] === '}') depth--;
+      i++;
+    }
+    const body = cssSrc.slice(mm.index, i);
+    if (/\.body-row/.test(body)) return body;
+  }
+  return '';
+})();
+assert(mq1024.length > 0, '抽出 ≤1024px 版式外壳的 media 块');
+assert(/\.body-row \{[^}]*flex-direction:\s*column/.test(mq1024), '≤1024px 时 .body-row 收成纵向单列');
+assert(/\.left, \.right \{[^}]*width:\s*100%/.test(mq1024), '≤1024px 时左右两列各占满宽');
+assert(!/\.left \{[^}]*flex-direction:\s*row/.test(mq1024),
+  '已删除旧的 .left { flex-direction: row }（会把左栏摊平并把网格挤成 0 宽）');
+// 列排后必须连 flex 一起重置：flex:0 0 320px 量的是主轴，改成 column 后 320px 变成固定「高度」
+assert(/\.left, \.right \{[^}]*flex:\s*0 0 auto/.test(mq1024),
+  '≤1024px 时重置 .left/.right 的 flex（否则 320px 基准变成竖向高度，撑出约 153px 空洞）');
+// 堆叠态收成同一列：三块共用 720px 上限并居中
+assert(/\.top-stack, \.left, \.right \{[^}]*max-width:\s*720px/.test(mq1024), '≤1024px 时 top-stack / 左右列统一 720px 上限');
+assert(/\.top-stack, \.left, \.right \{[^}]*margin-left:\s*auto/.test(mq1024), '≤1024px 时三块居中（margin auto）');
+assert(/#grid-wrap \{[^}]*max-width:\s*100%/.test(mq1024), '≤1024px 时释放网格 640px 上限（桌面态才需要与搜索同列）');
+// 网格与搜索框对齐：只钳宽度不够，x 还要重锚到搜索框中线，否则两者差 4px
+assert(/function alignGridToSearch/.test(canvasSrc), 'canvas.js 定义 alignGridToSearch（把网格重锚到搜索框中线）');
+assert(/g\.x = Math\.round\(s\.x \+ \(s\.w - gw\) \/ 2\)/.test(canvasSrc), '按搜索框中线计算网格 x');
+assert(/layout\.auto === false/.test(canvasSrc), '仅归一化 auto 布局（用户拖过就不再改动）');
+{
+  const hits = (canvasSrc.match(/alignGridToSearch\(/g) || []).length;
+  // 定义 1 次 + 调用 3 次（applyCanvas / captureLayout / recaptureBlocksFromFlow）
+  assert(hits >= 4, 'alignGridToSearch 在应用/捕获/重捕获三处都被调用', `出现 ${hits} 次`);
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} 项失败`);

@@ -46,8 +46,8 @@
   </header>
 
   <main class="layout" data-page-node-id="DVZo8k2iMhCzAjtkJeevrd" >
-    <!-- Left widget column -->
-    <aside class="left" data-page-node-id="HAMP5KGEXJVtqDBPfXaxDv" >
+    <!-- iTab-style: top stack (clock + search) on top, body-row (movie hero + grid) below -->
+    <div class="top-stack">
       <section class="widget wclock" data-i18n-aria="widget.clock" aria-label="Clock" data-page-node-id="yAkxumNw6uyfs3NvAWAlD5" >
         <button type="button" class="w-del" data-widget="wclock" data-i18n-aria="widget.remove" aria-label="Remove this widget" data-page-node-id="UVzgngzZZwNQP8lCsqOdjA" >
           <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" data-page-node-id="O3jb0cK7U589MBcwwbSSV0" ><line x1="5" y1="5" x2="19" y2="19" data-page-node-id="bqjwQHxhmCJIBQ8YUXmg0F" /><line x1="19" y1="5" x2="5" y2="19" data-page-node-id="GsSn4pmwaojLfVl2TaETNc" /></svg>
@@ -61,62 +61,9 @@
         <div class="clock-greet" id="clock-greet" data-page-node-id="oDcX369dfhN1DU3z5nGAGk" ></div>
       </section>
 
-      <section class="widget wcal" data-i18n-aria="widget.calendar" aria-label="Calendar" data-page-node-id="fGg5EZctGBBCH8Ggo2J9rt" >
-        <button type="button" class="w-del" data-widget="wcal" data-i18n-aria="widget.remove" aria-label="Remove this widget" data-page-node-id="GjgafKB13OyuEQfUQDCE3D" >
-          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" data-page-node-id="C6PYFUDXmUEENhOSICnk3X" ><line x1="5" y1="5" x2="19" y2="19" data-page-node-id="0LoEXPSTBYnLqAhAOiH0ux" /><line x1="19" y1="5" x2="5" y2="19" data-page-node-id="KbDbEer5E6fgSFvKrLAQ4n" /></svg>
-        </button>
-        <div class="w-head" data-page-node-id="EfBrO5wttreZ4rBtHmETTK" >
-          <span class="w-title" data-page-node-id="O50nhzdkGxZdntd3Jjm7CY" >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="hM6YIi3CB4Bz8s4rG7r6Ce" ><rect x="3" y="4" width="18" height="17" rx="2" data-page-node-id="OtgfFb37uruAAnawF7P6mi" /><line x1="8" y1="2" x2="8" y2="6" data-page-node-id="ZACYcOZ6x98pszwDZJJGGW" /><line x1="16" y1="2" x2="16" y2="6" data-page-node-id="LgtbScishRnuTVoMAUUqVr" /><line x1="3" y1="10" x2="21" y2="10" data-page-node-id="Kn93LQcOu1b3LhWfYNWBLX" /></svg>
-            <span data-i18n="widget.calendar" data-page-node-id="DO2kzXBcZ83gG2LxduOOSL" >Calendar</span>
-          </span>
-          <div class="cal-nav" data-page-node-id="9DNTUEIIF8pcMppFSfR06S" >
-            <button id="cal-prev" class="cal-nav-btn" data-i18n-aria="cal.prev" aria-label="Previous month" data-page-node-id="q8ogndsyncmEXw4gvriFDj" >‹</button>
-            <span id="cal-title" class="cal-title" data-page-node-id="MolGOG7OlbAKiS3N4qlQiz" ></span>
-            <button id="cal-next" class="cal-nav-btn" data-i18n-aria="cal.next" aria-label="Next month" data-page-node-id="IQH2PtCZD3gELOW0VeA7DL" >›</button>
-          </div>
-        </div>
-        <div class="cal-week" aria-hidden="true" data-page-node-id="nM1AWOmtd0YHxmd6NAwfdK" >
-          <span data-i18n="cal.d0" data-page-node-id="EmVwfrW0SdY38UcnOZHdnL" >Su</span><span data-i18n="cal.d1" data-page-node-id="HozAAGHRMlHuSx8EMN8uSr" >Mo</span><span data-i18n="cal.d2" data-page-node-id="ZHV412dCCejpcNxXEXn1Fn" >Tu</span><span data-i18n="cal.d3" data-page-node-id="g8UeUmMe0OOsa38TYXVyxJ" >We</span><span data-i18n="cal.d4" data-page-node-id="D5TN6Qc3bRP4zJHZ6GJE0b" >Th</span><span data-i18n="cal.d5" data-page-node-id="Y21LJ8CA9DWAEYWfABCqmb" >Fr</span><span data-i18n="cal.d6" data-page-node-id="nIfSklG4niVB69QOTGcFMH" >Sa</span>
-        </div>
-        <div class="cal-grid" id="cal-grid" data-page-node-id="5ICUTfWPgzQIolkr4Hkr1T" ></div>
-      </section>
+      <!-- Top-stack widgets that the user explicitly re-enables get inserted here by applyWidgetPos() -->
+      <div class="top-stack-extra"></div>
 
-      <section class="widget wtodo" id="todo-widget" data-i18n-aria="widget.todo" aria-label="To-dos" data-page-node-id="JLlQYH86sdKFWWl7sCB9j1" >
-        <button type="button" class="w-del" data-widget="wtodo" data-i18n-aria="widget.remove" aria-label="Remove this widget" data-page-node-id="GAJR4KO95gRM8d04AYWSyW" >
-          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" data-page-node-id="mskBs8bi4JpWHZejlGVUjs" ><line x1="5" y1="5" x2="19" y2="19" data-page-node-id="PAF5jrHegkkC1sIpYs8S3c" /><line x1="19" y1="5" x2="5" y2="19" data-page-node-id="bhXPqz7Pb9VYHTmSpScEiw" /></svg>
-        </button>
-        <div class="w-head" data-page-node-id="OyixKJ9XUp5iG1oXFxLd4K" >
-          <span class="w-title" data-page-node-id="tV2VqrP8LxTYyawpiVQKO4" >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="LIJsXNpI8PJII6BaY2pbrS" ><rect x="3" y="4" width="18" height="17" rx="2" data-page-node-id="0twiu2wyqtcGajmAk3Z8kT" /><line x1="8" y1="2" x2="8" y2="6" data-page-node-id="1nLnzEEN5A0fXztTgSLCt0" /><line x1="16" y1="2" x2="16" y2="6" data-page-node-id="rqi1qmr0eCsERy1wirD1rU" /><line x1="8" y1="11" x2="16" y2="11" data-page-node-id="ZjGjOdfR9d9Z1YxbVHhJG5" /><line x1="8" y1="15" x2="13" y2="15" data-page-node-id="q54s5q1BoysPbwvaqJsKF7" /></svg>
-            <span data-i18n="widget.todo" data-page-node-id="HehJoPbYbTeXUixjDBFJvp" >To-dos</span>
-          </span>
-          <span class="w-count" id="todo-count" data-page-node-id="50nzp2LkCVK5xEvcMjmKzu" >0</span>
-        </div>
-        <form class="todo-add" id="todo-form" autocomplete="off" data-page-node-id="WFMgPW6zqTNCz5gyxFrvHS" >
-          <input id="todo-input" type="text" data-i18n-ph="todo.placeholder" data-i18n-aria="todo.aria" placeholder="Add a task…" maxlength="60" aria-label="To-do item" data-page-node-id="jKcSDlxkp4cqaMQdqiMfZr" >
-          <button type="submit" class="todo-submit" data-i18n-aria="todo.add" aria-label="Add" data-page-node-id="QJvbH7QDMYo8lFOuut46VO" >+</button>
-        </form>
-        <ul class="todo-list" id="todo-list" data-page-node-id="EC8n8AeqqQdVie89Oolart" ></ul>
-      </section>
-
-      <section class="widget wmovie" id="movie-widget" data-i18n-aria="widget.movie" aria-label="Movie of the day" data-page-node-id="WKIDf4SWDSCHNv1LFU5jC4" >
-        <button type="button" class="w-del" data-widget="wmovie" data-i18n-aria="widget.remove" aria-label="Remove this widget" data-page-node-id="VZR0KEbUKKMFEhA1CHZBQ3" >
-          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" data-page-node-id="pzfqzX18Bsso9bY3nblcAG" ><line x1="5" y1="5" x2="19" y2="19" data-page-node-id="kqeU3kgkARvx2hRi9NYDsP" /><line x1="19" y1="5" x2="5" y2="19" data-page-node-id="RgzpBJlKdEopV43bLLMqEm" /></svg>
-        </button>
-        <div class="w-head" data-page-node-id="ZW2yAvDkZrT9or4PcrlUUN" >
-          <span class="w-title" data-page-node-id="5Kc9wIOwFUaTZzI6yd9Je4" >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="4MaNEFEPT8zx4N5apviyzh" ><rect x="2" y="3" width="20" height="18" rx="2" data-page-node-id="NHDtk8qQwTBVXJzekAPa0W" /><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5" data-page-node-id="FNAkC0mxu77918CL1EyV4r" /></svg>
-            <span data-i18n="widget.movie" data-page-node-id="BVhxQOs4ZoRzzzL4NYKMwV" >每日电影</span>
-          </span>
-          <span class="movie-date" id="movie-date" aria-hidden="true" data-page-node-id="fhTRqzxlbZUQKU2qPhi0Q7" ></span>
-        </div>
-        <div class="movie-card" id="movie-card" data-page-node-id="YFivNM13FpQ33DmUxYFLEN" ></div>
-      </section>
-    </aside>
-
-    <!-- Right: search + icon grid -->
-    <section class="right" data-page-node-id="uiDwEnsJECmfwGqUQEpCiG" >
       <div id="search" class="search" role="search" data-page-node-id="LLZvLGi7eOpfDHT7hhfYTD" >
         <button id="engine-btn" class="engine-btn" aria-haspopup="listbox" aria-expanded="false" data-page-node-id="F0lHsht2x6NeQsLqONM8h2" >
           <span class="eng-dot" aria-hidden="true" data-page-node-id="1tAzjDrsRB7WuCCwgPasP6" ></span>
@@ -148,12 +95,68 @@
           <div class="palette-foot" data-page-node-id="2ZGnZYSY79Gqe92XC246TB" ><span  data-page-node-id="KAhxn8Gd7KnXm4bI0SDX8I"><kbd  data-page-node-id="vpKSkHZK37dcAYlmNHFHaB">↑</kbd><kbd  data-page-node-id="4Ljmtg8axpS9JKERnaToE6">↓</kbd> <span data-i18n="palette.foot_select" data-page-node-id="k7FkVhHa2MxSpyrunZoxY4" >select</span> · <kbd  data-page-node-id="6FYCxdRgJ4C93UGoqpatSy">Enter</kbd> <span data-i18n="palette.foot_use" data-page-node-id="VJiBikdIVUZXHoPo5VKkIV" >use</span> · <kbd  data-page-node-id="GypvsnlPHRVesyxmtAb4OA">Esc</kbd> <span data-i18n="palette.foot_close" data-page-node-id="NGKYmcOIaGzYGGUcqXIAlO" >close</span></span><span data-i18n="palette.foot_edit" data-page-node-id="RtjJj7MTG2HAovZ6lftROH" >Manage in Settings → Templates</span></div>
         </div>
       </div>
+    </div>
 
-      <div id="grid-wrap" data-page-node-id="gEU4EKSKmfghDdbLYwdzEJ" >
+    <div class="body-row">
+      <aside class="left">
+        <section class="widget wcal" data-i18n-aria="widget.calendar" aria-label="Calendar" data-page-node-id="fGg5EZctGBBCH8Ggo2J9rt" >
+        <button type="button" class="w-del" data-widget="wcal" data-i18n-aria="widget.remove" aria-label="Remove this widget" data-page-node-id="GjgafKB13OyuEQfUQDCE3D" >
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" data-page-node-id="C6PYFUDXmUEENhOSICnk3X" ><line x1="5" y1="5" x2="19" y2="19" data-page-node-id="0LoEXPSTBYnLqAhAOiH0ux" /><line x1="19" y1="5" x2="5" y2="19" data-page-node-id="KbDbEer5E6fgSFvKrLAQ4n" /></svg>
+        </button>
+        <div class="w-head" data-page-node-id="EfBrO5wttreZ4rBtHmETTK" >
+          <span class="w-title" data-page-node-id="O50nhzdkGxZdntd3Jjm7CY" >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="hM6YIi3CB4Bz8s4rG7r6Ce" ><rect x="3" y="4" width="18" height="17" rx="2" data-page-node-id="OtgfFb37uruAAnawF7P6mi" /><line x1="8" y1="2" x2="8" y2="6" data-page-node-id="ZACYcOZ6x98pszwDZJJGGW" /><line x1="16" y1="2" x2="16" y2="6" data-page-node-id="LgtbScishRnuTVoMAUUqVr" /><line x1="3" y1="10" x2="21" y2="10" data-page-node-id="Kn93LQcOu1b3LhWfYNWBLX" /></svg>
+            <span data-i18n="widget.calendar" data-page-node-id="DO2kzXBcZ83gG2LxduOOSL" >Calendar</span>
+          </span>
+          <div class="cal-nav" data-page-node-id="9DNTUEIIF8pcMppFSfR06S" >
+            <button id="cal-prev" class="cal-nav-btn" data-i18n-aria="cal.prev" aria-label="Previous month" data-page-node-id="q8ogndsyncmEXw4gvriFDj" >‹</button>
+            <span id="cal-title" class="cal-title" data-page-node-id="MolGOG7OlbAKiS3N4qlQiz" ></span>
+            <button id="cal-next" class="cal-nav-btn" data-i18n-aria="cal.next" aria-label="Next month" data-page-node-id="IQH2PtCZD3gELOW0VeA7DL" >›</button>
+          </div>
+        </div>
+        <div class="cal-week" aria-hidden="true" data-page-node-id="nM1AWOmtd0YHxmd6NAwfdK" >
+          <span data-i18n="cal.d0" data-page-node-id="EmVwfrW0SdY38UcnOZHdnL" >Su</span><span data-i18n="cal.d1" data-page-node-id="HozAAGHRMlHuSx8EMN8uSr" >Mo</span><span data-i18n="cal.d2" data-page-node-id="ZHV412dCCejpcNxXEXn1Fn" >Tu</span><span data-i18n="cal.d3" data-page-node-id="g8UeUmMe0OOsa38TYXVyxJ" >We</span><span data-i18n="cal.d4" data-page-node-id="D5TN6Qc3bRP4zJHZ6GJE0b" >Th</span><span data-i18n="cal.d5" data-page-node-id="Y21LJ8CA9DWAEYWfABCqmb" >Fr</span><span data-i18n="cal.d6" data-page-node-id="nIfSklG4niVB69QOTGcFMH" >Sa</span>
+        </div>
+        <div class="cal-grid" id="cal-grid" data-page-node-id="5ICUTfWPgzQIolkr4Hkr1T" ></div>
+      </section>
+        <section class="widget wtodo" id="todo-widget" data-i18n-aria="widget.todo" aria-label="To-dos" data-page-node-id="JLlQYH86sdKFWWl7sCB9j1" >
+        <button type="button" class="w-del" data-widget="wtodo" data-i18n-aria="widget.remove" aria-label="Remove this widget" data-page-node-id="GAJR4KO95gRM8d04AYWSyW" >
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" data-page-node-id="mskBs8bi4JpWHZejlGVUjs" ><line x1="5" y1="5" x2="19" y2="19" data-page-node-id="PAF5jrHegkkC1sIpYs8S3c" /><line x1="19" y1="5" x2="5" y2="19" data-page-node-id="bhXPqz7Pb9VYHTmSpScEiw" /></svg>
+        </button>
+        <div class="w-head" data-page-node-id="OyixKJ9XUp5iG1oXFxLd4K" >
+          <span class="w-title" data-page-node-id="tV2VqrP8LxTYyawpiVQKO4" >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="LIJsXNpI8PJII6BaY2pbrS" ><rect x="3" y="4" width="18" height="17" rx="2" data-page-node-id="0twiu2wyqtcGajmAk3Z8kT" /><line x1="8" y1="2" x2="8" y2="6" data-page-node-id="1nLnzEEN5A0fXztTgSLCt0" /><line x1="16" y1="2" x2="16" y2="6" data-page-node-id="rqi1qmr0eCsERy1wirD1rU" /><line x1="8" y1="11" x2="16" y2="11" data-page-node-id="ZjGjOdfR9d9Z1YxbVHhJG5" /><line x1="8" y1="15" x2="13" y2="15" data-page-node-id="q54s5q1BoysPbwvaqJsKF7" /></svg>
+            <span data-i18n="widget.todo" data-page-node-id="HehJoPbYbTeXUixjDBFJvp" >To-dos</span>
+          </span>
+          <span class="w-count" id="todo-count" data-page-node-id="50nzp2LkCVK5xEvcMjmKzu" >0</span>
+        </div>
+        <form class="todo-add" id="todo-form" autocomplete="off" data-page-node-id="WFMgPW6zqTNCz5gyxFrvHS" >
+          <input id="todo-input" type="text" data-i18n-ph="todo.placeholder" data-i18n-aria="todo.aria" placeholder="Add a task…" maxlength="60" aria-label="To-do item" data-page-node-id="jKcSDlxkp4cqaMQdqiMfZr" >
+          <button type="submit" class="todo-submit" data-i18n-aria="todo.add" aria-label="Add" data-page-node-id="QJvbH7QDMYo8lFOuut46VO" >+</button>
+        </form>
+        <ul class="todo-list" id="todo-list" data-page-node-id="EC8n8AeqqQdVie89Oolart" ></ul>
+      </section>
+        <section class="widget wmovie" id="movie-widget" data-i18n-aria="widget.movie" aria-label="Movie of the day" data-page-node-id="WKIDf4SWDSCHNv1LFU5jC4" >
+        <button type="button" class="w-del" data-widget="wmovie" data-i18n-aria="widget.remove" aria-label="Remove this widget" data-page-node-id="VZR0KEbUKKMFEhA1CHZBQ3" >
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" data-page-node-id="pzfqzX18Bsso9bY3nblcAG" ><line x1="5" y1="5" x2="19" y2="19" data-page-node-id="kqeU3kgkARvx2hRi9NYDsP" /><line x1="19" y1="5" x2="5" y2="19" data-page-node-id="RgzpBJlKdEopV43bLLMqEm" /></svg>
+        </button>
+        <div class="w-head" data-page-node-id="ZW2yAvDkZrT9or4PcrlUUN" >
+          <span class="w-title" data-page-node-id="5Kc9wIOwFUaTZzI6yd9Je4" >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="4MaNEFEPT8zx4N5apviyzh" ><rect x="2" y="3" width="20" height="18" rx="2" data-page-node-id="NHDtk8qQwTBVXJzekAPa0W" /><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5" data-page-node-id="FNAkC0mxu77918CL1EyV4r" /></svg>
+            <span data-i18n="widget.movie" data-page-node-id="BVhxQOs4ZoRzzzL4NYKMwV" >每日电影</span>
+          </span>
+          <span class="movie-date" id="movie-date" aria-hidden="true" data-page-node-id="fhTRqzxlbZUQKU2qPhi0Q7" ></span>
+        </div>
+        <div class="movie-card" id="movie-card" data-page-node-id="YFivNM13FpQ33DmUxYFLEN" ></div>
+      </section>
+      </aside>
+      <section class="right">
+        <div id="grid-wrap" data-page-node-id="gEU4EKSKmfghDdbLYwdzEJ" >
         <div id="group-bar" class="group-bar" hidden data-page-node-id="454TZiU0cRCvLHg9Kdabgo" ></div>
         <div id="grid" class="grid" data-page-node-id="iABNuGBuYGpsUmpxexmAaO" ></div>
       </div>
-    </section>
+      </section>
+    </div>
   </main>
 
   <button class="add-float" id="add-float" data-i18n-title="site.add" data-i18n-aria="site.add" title="Add shortcut" aria-label="Add shortcut" data-page-node-id="DYozsJw57vDaqaQmL1g2zS" >

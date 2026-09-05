@@ -56,7 +56,9 @@ async function stub(page) {
     const boxes = {};
     const add = (k, s) => { const b = boxv(q(s)); if (b) boxes[k] = b; };
     const rootRect = q('.layout').getBoundingClientRect();
-    const rel = b => b && { x: +(b.x - rootRect.x).toFixed(1), y: +(b.y - rootRect.y).toFixed(1), w: b.w, h: b.h, r: +(b.r - rootRect.x).toFixed(1), btm: +(b.btm - rootRect.y).toFixed(1) };
+    // Keep the same key set as box() — cx/cy used to be missing here, which let a centre-based
+    // assertion silently read `undefined` instead of failing loudly.
+    const rel = b => b && { x: +(b.x - rootRect.x).toFixed(1), y: +(b.y - rootRect.y).toFixed(1), w: b.w, h: b.h, r: +(b.r - rootRect.x).toFixed(1), btm: +(b.btm - rootRect.y).toFixed(1), cx: +(b.cx - rootRect.x).toFixed(1), cy: +(b.cy - rootRect.y).toFixed(1) };
 
     // --- structural (canvas mode: absolute blocks) ---
     add('topbar', '#topbar');
@@ -131,14 +133,28 @@ async function stub(page) {
       console.log(`  info  左栏右缘=${colRight.toFixed(1)} 右块左缘=${rowLeft.toFixed(1)} 列间距=${(rowLeft - colRight).toFixed(1)}px`);
     }
   }
-  // 3. Search pill is horizontally centred in the *right area* and lines up with the clock above
+  // 3. Clock and search pill share a horizontal CENTER (iTab top-stack contract).
+  //
+  //    This used to assert left-edge equality (`search.x === wclock.x`). That was correct in the
+  //    pre-iTab era: the clock was promoted into the search column as a `.w-top` block, so it
+  //    inherited the same 640px width and therefore the same left edge as the pill.
+  //
+  //    In the iTab shell the clock is a content-width element centred inside `.top-stack`
+  //    (typ. w≈171), while the pill is a fixed 640px centred box. Their left edges legitimately
+  //    differ by ~235px; what must hold is that both are centred on the same vertical axis.
   if (B['w-wclock'] && B['search']) {
-    const dx = R['search'].x - R['w-wclock'].x;
-    assert(near(dx, 0, EPS), '时钟与搜索框左缘对齐', d('Δx', R['search'].x, R['w-wclock'].x));
-    if (audit.wtop) {
-      const wclkW = B['w-wclock'].w, sw = B['search'].w;
-      console.log(`  info  时钟宽=${wclkW} 搜索宽=${sw} 中心: 时钟=${R['w-wclock'].cx} 搜索=${R['search'].cx}`);
-    }
+    const ccx = R['w-wclock'].cx, scx = R['search'].cx;
+    assert(near(ccx, scx, EPS2), '时钟与搜索框水平中心对齐', d('中心', ccx.toFixed(1), scx.toFixed(1)));
+    console.log(`  info  时钟宽=${B['w-wclock'].w} 搜索宽=${B['search'].w} 左缘: 时钟=${R['w-wclock'].x.toFixed(1)} 搜索=${R['search'].x.toFixed(1)}`);
+    // The clock must sit ABOVE the pill, not beside it.
+    assert(R['w-wclock'].btm <= R['search'].y + EPS, '时钟位于搜索框上方', d('时钟底/搜索顶', R['w-wclock'].btm.toFixed(1), R['search'].y.toFixed(1)));
+  }
+  // 3b. Search pill and icon grid form ONE centred column, not two offset strips.
+  //     canvas.js clamps the grid to 640 (= the pill width) and re-anchors it on the pill's centre
+  //     line; without the re-anchor the grid keeps the flow column's left edge and sits ~4px off.
+  if (B['search'] && B['grid-wrap']) {
+    assert(near(R['grid-wrap'].x, R['search'].x, EPS), '搜索框与图标区左缘对齐', d('x', R['grid-wrap'].x, R['search'].x));
+    assert(near(R['grid-wrap'].r, R['search'].r, EPS), '搜索框与图标区右缘对齐', d('r', R['grid-wrap'].r, R['search'].r));
   }
   // 4. Search pill internals vertical center
   if (B['engine-btn'] && B['search-go'] && B['search']) {

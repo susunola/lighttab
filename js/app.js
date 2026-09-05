@@ -42,9 +42,9 @@
 
   const DEFAULT_SITES = [
     { id: nid(), title: 'GitHub',         url: 'https://github.com',            color: '#181717' },
-    { id: nid(), title: 'GitHub',     url: 'https://github.com',         color: '#1f2937' },
-    { id: nid(), title: 'ChatGPT',    url: 'https://chatgpt.com',        color: '#10a37f' },
-    { id: nid(), title: 'Gmail',      url: 'https://mail.google.com',    color: '#EA4335' },
+    { id: nid(), title: 'YouTube',        url: 'https://www.youtube.com',       color: '#FF0000' },
+    { id: nid(), title: 'ChatGPT',        url: 'https://chatgpt.com',           color: '#10a37f' },
+    { id: nid(), title: 'Gmail',          url: 'https://mail.google.com',       color: '#EA4335' },
     { id: nid(), title: 'X',              url: 'https://x.com',                 color: '#000000' },
     { id: nid(), title: 'Reddit',         url: 'https://www.reddit.com',        color: '#FF4500' },
     { id: nid(), title: 'Wikipedia',      url: 'https://en.wikipedia.org',      color: '#000000' },
@@ -75,10 +75,12 @@
     // Left-column widgets the user kept. Removing one hides it in both the flow and canvas layouts;
     // removing all three collapses the whole left column so the icon grid spans the full width.
     // Lives inside settings on purpose — it then rides along with export / import / cloud sync for free.
-    widgets: { wclock: true, wcal: true, wtodo: true, wmovie: true },
-    // Per-widget placement: 'left' keeps the widget as a left-column card, 'top' lifts it into the
-    // stack above the search box (centred, card chrome dropped — the phone-launcher look).
-    // Only the clock rides up top by default — that slot wants a glanceable time + date line, not a
+    widgets: { wclock: true, wcal: false, wtodo: false, wmovie: true },
+    // Per-widget placement: 'left' keeps the widget as a left-column card, 'top' lifts it into
+    // the .top-stack just above the search bar (centred, card chrome dropped). The clock rides
+    // up top by default — that slot wants a glanceable time + date line, not a month grid.
+    // Calendar / to-do default to hidden (see `widgets` above); if the user re-enables them, they
+    // also pick a placement here. The movie widget is always the left hero regardless of pos.
     // month grid. Calendar, to-do and movie stay left-column cards; all can still be lifted from Settings.
     widgetPos: { wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left' }
   };
@@ -2967,9 +2969,10 @@
       const box = document.getElementById('f-w-' + id);
       if (box) box.checked = vis[id];
     }
-    // All three gone → drop the column entirely so .right (flex:1) reclaims the full width.
-    // A clock lifted above the search box no longer counts towards keeping the column alive.
-    const left = document.querySelector('.layout > .left');
+    // All left-column widgets gone → drop the left column entirely so the body-row collapses onto
+    // the grid alone. The clock lifted into the top-stack doesn't count towards keeping the
+    // left column alive.
+    const left = document.querySelector('.layout > .body-row > .left') || document.querySelector('.layout > .left');
     if (left) {
       left.hidden = !WIDGETS.some((id) =>
         vis[id] && document.querySelector('.widget.' + id)?.closest('.left'));
@@ -2997,20 +3000,36 @@
   function applyWidgetPos() {
     const pos = normalizeWidgetPos(state.settings && state.settings.widgetPos);
     state.settings.widgetPos = pos;
-    const left = document.querySelector('.layout > .left');
-    const right = document.querySelector('.layout > .right');
-    const search = document.getElementById('search');
-    // Walk WIDGETS in order and insert before #search each time, so the top stack ends up in the
-    // same clock -> calendar -> to-do order as the left column would have shown.
+    const left = document.querySelector('.layout > .body-row > .left') || document.querySelector('.layout > .left');
+    const topExtra = document.querySelector('.layout > .top-stack > .top-stack-extra');
+    const topStack = document.querySelector('.layout > .top-stack');
+    // Per-widget placement: 'top' lifts the widget above the search bar (centred, chrome dropped),
+    // 'left' parks it in the body-row's left column next to the grid. The clock is special — it's
+    // also the page header, so its default DOM seat is a direct child of .top-stack with no .w-top
+    // class. The new `.top-stack > .widget.wclock` rules only match that exact shape (direct child,
+    // no w-top); the old `.widget.wclock.w-top` rules score (0,4,0) equal but later and win on
+    // equal specificity, which produced a 66px light clock instead of the iTab big bold one. Keep
+    // wclock parked where the markup placed it and only re-parent it when the user flipped
+    // placement to 'left' from elsewhere (defensive — fresh boots always start in .top-stack).
     for (const id of WIDGETS) {
       const el = document.querySelector('.widget.' + id);
       if (!el) continue;
-      if (pos[id] === 'top' && right && search) {
-        right.insertBefore(el, search);
+      const isClock = (id === 'wclock');
+      if (pos[id] === 'top') {
+        if (isClock) {
+          // Keep wclock as a direct child of .top-stack; only move it when it's not there yet.
+          if (topStack && el.parentElement !== topStack) {
+            topStack.insertBefore(el, topExtra);
+          }
+        } else if (topExtra) {
+          topExtra.appendChild(el);
+        }
       } else if (pos[id] === 'left' && left) {
         left.appendChild(el);
       }
-      el.classList.toggle('w-top', pos[id] === 'top');
+      // w-top contract is reserved for the widgets the user promotes into the slot above the
+      // search bar; the clock's centred look is owned by .top-stack > .widget.wclock now.
+      el.classList.toggle('w-top', pos[id] === 'top' && !isClock);
       const sel = document.getElementById('f-pos-' + id);
       if (sel && sel.value !== pos[id]) sel.value = pos[id];
     }

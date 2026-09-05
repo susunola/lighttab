@@ -28,6 +28,22 @@
   const GRID_MAX_W = 640;
   const clampBlockW = (key, w) => (key === 'grid' ? Math.min(+w || 0, GRID_MAX_W) : w);
 
+  /* clampBlockW only fixes the grid's WIDTH. Its x stays wherever the flow pass left it — the
+   * body-row right column's left edge (396 at 1440px) — while #search centres itself in the
+   * viewport (400 at 1440px). Same 640 width, stacked vertically, 4px apart: that is the
+   * "two unaligned strips" the clamp exists to prevent, just at a scale small enough to miss.
+   * So re-anchor the grid on the search pill's centre line as well.
+   * Auto layouts only: once the user has dragged a block the arrangement is theirs. */
+  function alignGridToSearch(layout) {
+    if (!layout || layout.auto === false) return layout;
+    const g = layout.grid, s = layout.search;
+    if (!g || !s || typeof g.x !== 'number' || typeof s.x !== 'number' || !s.w) return layout;
+    const gw = clampBlockW('grid', g.w);
+    if (!gw) return layout;
+    g.x = Math.round(s.x + (s.w - gw) / 2);
+    return layout;
+  }
+
   function blockEls() {
     return BLOCK_DEFS.map(b => ({ ...b, el: document.querySelector(b.sel) })).filter(b => b.el);
   }
@@ -42,6 +58,8 @@
     const root = canvasRoot();
     const l = getLayout();
     if (!root || !l) return;
+    // Normalize on the way in too, so a layout frozen before these rules existed still lands aligned.
+    alignGridToSearch(l);
     root.classList.add('canvas');
     for (const b of blockEls()) {
       const c = l[b.key];
@@ -86,6 +104,7 @@
     // auto=true marks coordinates the app derived from the flow layout rather than the user dragging
     // blocks around. Only an auto layout may be silently re-derived (see recaptureBlocksFromFlow).
     layout.auto = true;
+    alignGridToSearch(layout);
     A().state.settings.layout = layout;
     A().Store.set(A().K.settings, A().state.settings);
     return layout;
@@ -519,6 +538,7 @@
     // otherwise old column indices scatter the icons across the new width.
     next.cards = captureCardLayout();
     next.auto = true;
+    alignGridToSearch(next);
     A().state.settings.layout = next;
     A().Store.set(A().K.settings, A().state.settings);
     applyCanvas();
