@@ -9,3 +9,6 @@ icons/.bak/
 
 # Playwright CLI test artifacts
 .playwright-cli/
+
+# Single-file preview build (scripts/build-singlefile.cjs)
+dist/
