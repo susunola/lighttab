@@ -33,6 +33,7 @@ unless you explicitly turn on an online feature (cloud sync, Bing daily wallpape
 - **Icon grid** — drag to reorder, groups, and a built-in brand-icon library so no favicon is ever fetched from a third party
 - **Free canvas layout** — on wide screens every widget and card can be dragged anywhere; cards snap to a grid and swap places with whatever is already there
 - **To-dos**, **6 curated gradient wallpapers**, custom image upload, and an optional Bing daily wallpaper library
+- **Weather widget** (opt-in, off by default) — current temperature, condition, today's high/low and humidity for a city you pick in Settings, powered by Open-Meteo (no API key, CORS-open). Cached for 30 minutes; shows the last reading with a "may be outdated" hint when the network fails
 - **JSON backup / restore** and one-click Chrome bookmark import (optional permission)
 - **Optional cloud sync** — sign in with an email to sync shortcuts, to-dos, settings, wallpaper and templates across devices over HTTPS. Off by default
 
@@ -40,9 +41,10 @@ unless you explicitly turn on an online feature (cloud sync, Bing daily wallpape
 
 - Single required permission: `storage` — everything lives in your own browser
 - No tracking, no analytics, no ads
-- Zero network requests in the default configuration. Only two **opt-in** features ever reach the network, both over HTTPS to the self-hosted backend at `lighttab.atomwangnus.com`:
-  - **Cloud sync** — email sign-up/login (only a password hash is stored server-side); whole-document last-write-wins sync keeps multiple devices consistent. Your token stays local and is never synced
-  - **Bing daily wallpaper library** — when you open it in settings, metadata and images are fetched via the backend proxy
+- Zero network requests in the default configuration. Only three **opt-in** features ever reach the network:
+  - **Cloud sync** — email sign-up/login (only a password hash is stored server-side); whole-document last-write-wins sync keeps multiple devices consistent. Your token stays local and is never synced. Over HTTPS to the self-hosted backend at `lighttab.atomwangnus.com`
+  - **Bing daily wallpaper library** — when you open it in settings, metadata and images are fetched via the backend proxy at `lighttab.atomwangnus.com`
+  - **Weather widget** — off by default; only after you enable it and set a city does the page fetch forecasts directly from `api.open-meteo.com` (and city geocoding from `geocoding-api.open-meteo.com`) over HTTPS. No account, no API key, no other data leaves the browser
 - The optional `bookmarks` permission is requested only at the moment you click "import from bookmarks"
 
 See [privacy.html](./privacy.html) for the full policy.

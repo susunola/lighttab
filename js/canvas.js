@@ -14,6 +14,7 @@
     { key: 'wcal',   sel: '.wcal' },
     { key: 'wtodo',  sel: '#todo-widget' },
     { key: 'wmovie', sel: '.wmovie' },
+    { key: 'wweather', sel: '.wweather' },
     { key: 'search', sel: '#search' },
     { key: 'grid',   sel: '#grid-wrap' }
   ];

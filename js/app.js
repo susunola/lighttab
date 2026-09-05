@@ -79,15 +79,19 @@
     // Left-column widgets the user kept. Removing one hides it in both the flow and canvas layouts;
     // removing all three collapses the whole left column so the icon grid spans the full width.
     // Lives inside settings on purpose — it then rides along with export / import / cloud sync for free.
-    widgets: { wclock: true, wcal: true, wtodo: true, wmovie: true },
+    widgets: { wclock: true, wcal: true, wtodo: true, wmovie: true, wweather: false },
     // Per-widget placement: 'left' keeps the widget as a left-column card, 'top' lifts it into the
     // stack above the search box (centred, card chrome dropped — the phone-launcher look).
     // Only the clock rides up top by default — that slot wants a glanceable time + date line, not a
     // month grid. Calendar, to-do and movie stay left-column cards; all can still be lifted from Settings.
-    widgetPos: { wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left' }
+    widgetPos: { wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left', wweather: 'left' },
+    // Weather widget (opt-in, Open-Meteo): null until the user picks a city in Settings → General,
+    // then { name, lat, lon, last: { temp, rh, code, hi, lo }, fetchedAt }. Lives inside settings so
+    // it rides along with export / import / cloud sync for free.
+    weather: null
   };
   // Left-column widget ids, in render order. Single source of truth for visibility + settings UI.
-  const WIDGETS = ['wclock', 'wcal', 'wtodo', 'wmovie'];
+  const WIDGETS = ['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather'];
 
   // Built-in prompt templates.
   //   name    display name
@@ -1567,6 +1571,8 @@
     const nameInput = document.getElementById('f-name');
     const engineSel = document.getElementById('f-engine');
     const langSel = document.getElementById('f-lang');
+    const weatherCityInput = document.getElementById('f-weather-city');
+    if (weatherCityInput) weatherCityInput.addEventListener('change', () => saveWeatherCity(weatherCityInput.value));
     engineSel.innerHTML = ENGINES.map(e => `<option value="${e.id}">${engName(e)}</option>`).join('');
     nameInput.addEventListener('change', async () => {
       state.settings.name = nameInput.value.trim();
@@ -1613,6 +1619,7 @@
       nameInput.value = state.settings.name || '';
       engineSel.value = state.settings.engine;
       if (langSel) langSel.value = state.settings.lang || 'zh';
+      if (weatherCityInput) weatherCityInput.value = (state.settings.weather && state.settings.weather.name) || '';
       applyTheme(); // keep the theme select in sync with state (covers remote sync changes)
       renderSwatches();
       renderWallLibGrid();
@@ -2113,6 +2120,181 @@
     if (window.LT_I18N && window.LT_I18N.applyStatic) window.LT_I18N.applyStatic();
   }
 
+  // ---------- Weather widget (opt-in, Open-Meteo) ----------
+  // Open-Meteo is free, key-less and CORS-open, so the extension page can fetch it directly with no
+  // extra manifest permissions. Zero-network rule: the widget ships OFF, and even when enabled it
+  // never touches the network until a city is configured (Settings → General).
+  const WEATHER_REFRESH_MS = 30 * 60 * 1000; // cache TTL; also the page-open refresh cadence
+  const WEATHER_TIMEOUT_MS = 5000;           // every fetch is capped by an AbortController
+  // WMO weather interpretation codes → localized condition word ([from, to, zh, en]).
+  // https://open-meteo.com/en/docs — WMO Weather interpretation codes.
+  const WMO_TEXT = [
+    [0, 0, '晴', 'Clear'],
+    [1, 2, '多云', 'Partly cloudy'],
+    [3, 3, '阴', 'Overcast'],
+    [45, 48, '雾', 'Fog'],
+    [51, 57, '毛毛雨', 'Drizzle'],
+    [61, 67, '雨', 'Rain'],
+    [71, 77, '雪', 'Snow'],
+    [80, 82, '阵雨', 'Showers'],
+    [95, 99, '雷暴', 'Thunderstorm']
+  ];
+  function weatherText(code) {
+    const row = WMO_TEXT.find((r) => code >= r[0] && code <= r[1]);
+    if (!row) return isEn() ? 'Unknown' : '未知';
+    return isEn() ? row[3] : row[2];
+  }
+  // Small inline SVG per condition group, drawn in the same stroke style as the rest of the UI.
+  const WEATHER_ICON_PATHS = {
+    sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 3v2.3M12 18.7V21M3 12h2.3M18.7 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/>',
+    cloud: '<path d="M6.8 18.5a4.3 4.3 0 0 1-.5-8.57 5.6 5.6 0 0 1 10.98 1.4 3.6 3.6 0 0 1 .22 7.17z"/>',
+    fog: '<path d="M6.8 14.5a4.3 4.3 0 0 1-.5-8.57 5.6 5.6 0 0 1 10.98 1.4 3.6 3.6 0 0 1 .22 7.17z"/><path d="M5 17.8h14M7.2 20.8h9.6"/>',
+    rain: '<path d="M6.8 14a4.3 4.3 0 0 1-.5-8.57A5.6 5.6 0 0 1 17.28 6.8a3.6 3.6 0 0 1 .22 7.2z"/><path d="m9.4 16.8-1 2.5M13.4 16.8l-1 2.5M17.4 16.8l-1 2.5"/>',
+    snow: '<path d="M6.8 14a4.3 4.3 0 0 1-.5-8.57A5.6 5.6 0 0 1 17.28 6.8a3.6 3.6 0 0 1 .22 7.2z"/><path d="M9.2 17.2v.1M13 18.4v.1M16.8 17.2v.1M11.1 20.6v.1M14.9 20.6v.1"/>',
+    thunder: '<path d="M6.8 13.6a4.3 4.3 0 0 1-.5-8.57A5.6 5.6 0 0 1 17.28 6.4a3.6 3.6 0 0 1 .22 7.2z"/><path d="m12.8 12.8-2.4 3.4h2.1l-1.5 3.6 3.6-4.6h-2.2l1.5-2.4z"/>'
+  };
+  function weatherIcon(code) {
+    let kind = 'cloud';
+    if (code === 0) kind = 'sun';
+    else if (code >= 45 && code <= 48) kind = 'fog';
+    else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) kind = 'rain';
+    else if (code >= 71 && code <= 77) kind = 'snow';
+    else if (code >= 95) kind = 'thunder';
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      WEATHER_ICON_PATHS[kind] + '</svg>';
+  }
+  async function weatherFetchJson(url) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), WEATHER_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, { signal: ctl.signal });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  // City name → coordinates via the Open-Meteo geocoding API (localized result names).
+  async function resolveWeatherCity(name) {
+    const url = 'https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(name) +
+      '&count=1&language=' + (isEn() ? 'en' : 'zh') + '&format=json';
+    const j = await weatherFetchJson(url);
+    const r = j && j.results && j.results[0];
+    if (!r || typeof r.latitude !== 'number' || typeof r.longitude !== 'number') return null;
+    return { name: r.name || name, lat: r.latitude, lon: r.longitude };
+  }
+  async function fetchWeatherNow(w) {
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + w.lat + '&longitude=' + w.lon +
+      '&current=temperature_2m,relative_humidity_2m,weather_code' +
+      '&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1';
+    const j = await weatherFetchJson(url);
+    const cur = j && j.current, day = j && j.daily;
+    if (!cur || typeof cur.temperature_2m !== 'number' ||
+        !day || !day.temperature_2m_max || !day.temperature_2m_min) throw new Error('bad payload');
+    return {
+      temp: Math.round(cur.temperature_2m),
+      rh: Math.round(cur.relative_humidity_2m),
+      code: cur.weather_code,
+      hi: Math.round(day.temperature_2m_max[0]),
+      lo: Math.round(day.temperature_2m_min[0])
+    };
+  }
+  function weatherConfigured() {
+    const w = state.settings.weather;
+    return !!(w && typeof w.lat === 'number' && typeof w.lon === 'number');
+  }
+  function renderWeather() {
+    const card = document.getElementById('weather-card');
+    if (!card) return;
+    const updated = document.getElementById('weather-updated');
+    const w = state.settings.weather;
+    if (!weatherConfigured()) {
+      // Guide state: a quiet prompt that opens Settings → General; zero network involved.
+      if (updated) updated.textContent = '';
+      card.innerHTML = '<button type="button" class="weather-setup" id="weather-setup">' +
+        weatherIcon(3) + '<span>' + escapeHtml(t('weather.set_city')) + '</span></button>';
+      const btn = card.querySelector('#weather-setup');
+      if (btn) btn.addEventListener('click', () => openSettingsTab('gen'));
+      return;
+    }
+    const last = w.last;
+    if (!last || typeof last.temp !== 'number') {
+      // Configured but nothing fetched yet (or every fetch failed): quiet unavailable state.
+      if (updated) updated.textContent = '';
+      card.innerHTML = '<div class="weather-empty">' + weatherIcon(3) +
+        '<span>' + escapeHtml(t('weather.unavailable')) + '</span></div>';
+      return;
+    }
+    const stale = !w.fetchedAt || (Date.now() - w.fetchedAt > WEATHER_REFRESH_MS);
+    if (updated) {
+      const d = new Date(w.fetchedAt);
+      updated.textContent = pad2(d.getHours()) + ':' + pad2(d.getMinutes()) +
+        (stale ? ' · ' + t('weather.stale') : '');
+      updated.classList.toggle('stale', stale);
+    }
+    card.innerHTML =
+      '<div class="weather-top">' +
+        '<div class="weather-icon">' + weatherIcon(last.code) + '</div>' +
+        '<div class="weather-body">' +
+          '<div class="weather-city">' + escapeHtml(w.name) + '</div>' +
+          '<div class="weather-temp">' + last.temp + '°</div>' +
+          '<div class="weather-desc">' + escapeHtml(weatherText(last.code)) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="weather-meta">' +
+        '<span>' + last.hi + '° / ' + last.lo + '°</span>' +
+        '<span>' + escapeHtml(t('weather.humidity')) + ' ' + last.rh + '%</span>' +
+      '</div>';
+  }
+  // Fetch only when the widget is visible AND a city is configured AND the cache is stale or missing
+  // (a city change drops the old cache, so it counts as stale too). Everything else renders from
+  // settings.weather.last without touching the network.
+  function maybeFetchWeather() {
+    if (!widgetVisible('wweather')) return;
+    if (!weatherConfigured()) return;
+    const w = state.settings.weather;
+    if (w.fetchedAt && Date.now() - w.fetchedAt < WEATHER_REFRESH_MS) return;
+    fetchWeather();
+  }
+  let weatherBusy = false;
+  async function fetchWeather() {
+    if (weatherBusy) return;
+    const w = state.settings.weather;
+    if (!w || typeof w.lat !== 'number') return;
+    weatherBusy = true;
+    try {
+      w.last = await fetchWeatherNow(w);
+      w.fetchedAt = Date.now();
+      await Store.set(K.settings, state.settings);
+    } catch {
+      // Keep the old cache on failure — renderWeather marks it as possibly outdated.
+    }
+    weatherBusy = false;
+    renderWeather();
+  }
+  // Settings → General: the city input resolves a name to coordinates once, on commit.
+  async function saveWeatherCity(rawName) {
+    const name = (rawName || '').trim();
+    if (!name) {
+      // Clearing the field removes the data source; the widget toggle itself is untouched.
+      state.settings.weather = null;
+      await Store.set(K.settings, state.settings);
+      renderWeather();
+      return;
+    }
+    try {
+      const geo = await resolveWeatherCity(name);
+      if (!geo) { showToast(t('weather.city_not_found')); return; }
+      state.settings.weather = { name: geo.name, lat: geo.lat, lon: geo.lon, last: null, fetchedAt: 0 };
+      await Store.set(K.settings, state.settings);
+      renderWeather();
+      maybeFetchWeather();
+      showToast(t('weather.city_saved', { name: geo.name }));
+    } catch {
+      showToast(t('weather.city_fail'));
+    }
+  }
+
   // ---------- Reset ----------
   async function resetAll() {
     if (!confirm(t('toast.reset_confirm'))) return;
@@ -2255,6 +2437,7 @@
     renderGrid();
     renderTodos();
     renderCalendar();
+    renderWeather(); // condition words / humidity label follow the language
     window.LT_PROMPTS.renderPromptManager();
     setEngine(state.settings.engine);
     startClock();
@@ -2478,12 +2661,15 @@
   }
 
   // ---------- Left-column widget visibility (#60) ----------
-  // Coerce whatever came off disk / an imported file into a full {wclock,wcal,wtodo} boolean map.
-  // Anything missing or non-boolean defaults to visible, so a corrupt file can never silently
-  // swallow a widget the user never chose to remove.
+  // Coerce whatever came off disk / an imported file into a full per-widget boolean map.
+  // Anything missing or non-boolean falls back to the shipped default (DEFAULT_SETTINGS.widgets),
+  // so a corrupt file can never silently swallow a widget the user never chose to remove — while
+  // opt-in widgets (wweather ships off) stay off until explicitly enabled.
   function normalizeWidgets(raw) {
     const out = {};
-    for (const id of WIDGETS) out[id] = !(raw && raw[id] === false);
+    for (const id of WIDGETS) {
+      out[id] = (raw && typeof raw[id] === 'boolean') ? raw[id] : DEFAULT_SETTINGS.widgets[id] !== false;
+    }
     return out;
   }
   function widgetVisible(id) {
@@ -2510,6 +2696,10 @@
     // leaves a hole where it was — and a revived widget may have no coords at all and park at the
     // origin. Force a re-measure even for hand-arranged layouts; this is an explicit structural edit.
     window.LT_CANVAS.recaptureBlocksFromFlow(true);
+    // The weather widget is opt-in and network-gated: (re)render on every visibility change and
+    // fetch only if it just became visible with a stale cache (maybeFetchWeather decides).
+    renderWeather();
+    maybeFetchWeather();
   }
   // Per-widget placement (#62). Coerce anything off disk / out of an imported file into a full
   // {wclock,wcal,wtodo} map of 'left' | 'top'; unknown values fall back to the shipped default so a
@@ -2628,6 +2818,9 @@
     renderCalendar();
     bindCalendar();
     renderMovie();
+    renderWeather();
+    maybeFetchWeather(); // boot-time refresh, only when the cache is stale (30 min TTL)
+    setInterval(maybeFetchWeather, WEATHER_REFRESH_MS); // page-open refresh cadence
     bindTodo();
 
     // Search

@@ -311,10 +311,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
  * of the way on hover — transform keeps layout untouched, so nothing reflows or jumps. */
 .wcal .w-head .cal-nav,
 .wtodo .w-head .w-count,
-.wmovie .w-head .movie-date { transition: transform 130ms ease; }
+.wmovie .w-head .movie-date,
+.wweather .w-head .weather-updated { transition: transform 130ms ease; }
 .wcal:hover .w-head .cal-nav,
 .wtodo:hover .w-head .w-count,
-.wmovie:hover .w-head .movie-date { transform: translateX(-26px); }
+.wmovie:hover .w-head .movie-date,
+.wweather:hover .w-head .weather-updated { transform: translateX(-26px); }
 /* Coarse pointers have no hover — keep the control reachable there. */
 @media (hover: none) {
   .widget .w-del { display: inline-flex; background: rgba(0, 0, 0, 0.25); }
@@ -355,6 +357,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   font-size: 12.5px;
   border-radius: 8px;
 }
+/* Weather city input: indented under the weather widget row. */
+.modal-body .wgt-city { margin: 2px 0 2px 26px; }
+.modal-body .wgt-city input { width: 100%; }
+.modal-body .wgt-city .data-tip { margin-top: 5px; }
 
 /* #61 clock lifted above the search box: drop the card chrome and centre it, phone-launcher style.
  * Same DOM as the left-column card, so the tick logic is untouched — only presentation changes.
@@ -398,6 +404,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .widget.wcal.w-top { --wtop-del: 168px; }   /* 320px month strip */
 .widget.wtodo.w-top { --wtop-del: 218px; }  /* 420px list */
 .widget.wmovie.w-top { --wtop-del: 176px; } /* 320px movie card */
+.widget.wweather.w-top { --wtop-del: 128px; } /* ~240px weather line */
 
 /* --- clock in the top stack: big time over one compact date line (launcher convention) --- */
 .widget.wclock.w-top { padding: clamp(4px, 1.4vh, 14px) 0 clamp(8px, 1.4vh, 16px); }
@@ -458,6 +465,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .widget.wmovie.w-top { padding: 2px 0 8px; }
 .widget.wmovie.w-top .w-head { justify-content: center; gap: 10px; }
 .widget.wmovie.w-top .movie-card { max-width: 320px; margin: 0 auto; text-align: left; }
+
+/* --- weather in the top stack: same treatment, one compact line --- */
+.widget.wweather.w-top { padding: 2px 0 8px; }
+.widget.wweather.w-top .w-head { justify-content: center; gap: 10px; }
+.widget.wweather.w-top .weather-card { max-width: 240px; margin: 0 auto; text-align: left; }
+.widget.wweather.w-top .weather-meta { justify-content: center; gap: 16px; }
 
 /* WorkBuddy desktop reachability dot in the engine dropdown (#61) */
 .eng-state {
@@ -766,6 +779,79 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .movie-link:hover,
 .movie-next:hover { background: var(--tint-3); color: var(--ink); }
 .movie-next { margin-left: auto; }
+
+/* Weather widget (opt-in, Open-Meteo) */
+.wweather .weather-updated {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+  font-family: var(--font-num);
+}
+.wweather .weather-updated.stale { opacity: 0.75; font-style: italic; }
+.weather-card { display: flex; flex-direction: column; }
+.weather-top {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.weather-icon {
+  flex: none;
+  width: 46px; height: 46px;
+  color: var(--accent);
+}
+.weather-icon svg { width: 100%; height: 100%; }
+.weather-body { flex: 1; min-width: 0; }
+.weather-city {
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.weather-temp {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 34px;
+  font-weight: 300;
+  color: var(--ink);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.weather-desc { font-size: 12.5px; color: var(--ink-2); }
+.weather-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-3);
+  font-family: var(--font-num);
+}
+/* Guide / unavailable states: quiet, dashed-outline prompt — same language as the add tile. */
+.weather-setup,
+.weather-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.weather-setup svg,
+.weather-empty svg { flex: none; width: 22px; height: 22px; color: var(--ink-3); }
+.weather-setup {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--tint-2);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.weather-setup:hover { background: var(--tint-3); color: var(--ink); }
+.weather-empty { padding: 6px 2px; color: var(--ink-3); font-size: 12.5px; }
 
 /* ====== Search ====== */
 .search {

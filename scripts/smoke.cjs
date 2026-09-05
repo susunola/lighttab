@@ -186,20 +186,23 @@ console.log('[4] 纯函数');
     const fsOf = (s) => Number(/font-size="([\d.]+)"/.exec(P.iconGlyphHtml({ tx: s, c: '#fff', f: '#000' }))[1]);
     assert(fsOf('O') > fsOf('文档') && fsOf('文档') > fsOf('小鹅通') && fsOf('小鹅通') > fsOf('51CTO'),
       'iconGlyphHtml 字标字号随字数递减');
-    // #60 normalizeWidgets：缺省/脏数据一律回落到"可见"，只有显式 false 才算移除
+    // #60 normalizeWidgets：缺省/脏数据一律回落到 DEFAULT_SETTINGS 的默认值——四个老组件默认可见，
+    // 天气组件（opt-in）默认关闭；只有显式布尔值才覆盖默认
     const NW = P.normalizeWidgets;
-    assert(JSON.stringify(NW(undefined)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true, wmovie: true }),
-      'normalizeWidgets(undefined) → 四个全可见');
-    assert(JSON.stringify(NW(null)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true, wmovie: true }),
-      'normalizeWidgets(null) → 四个全可见');
-    assert(NW({ wcal: false }).wcal === false && NW({ wcal: false }).wclock === true,
-      'normalizeWidgets 部分对象 → 缺的补 true');
-    assert(NW({ wclock: 0, wcal: '', wtodo: null }).wclock === true,
-      'normalizeWidgets 只认显式 false，其它假值仍可见');
+    assert(JSON.stringify(NW(undefined)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true, wmovie: true, wweather: false }),
+      'normalizeWidgets(undefined) → 四个默认可见，天气默认关闭');
+    assert(JSON.stringify(NW(null)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true, wmovie: true, wweather: false }),
+      'normalizeWidgets(null) → 四个默认可见，天气默认关闭');
+    assert(NW({ wcal: false }).wcal === false && NW({ wcal: false }).wclock === true && NW({ wcal: false }).wweather === false,
+      'normalizeWidgets 部分对象 → 缺的补默认值');
+    assert(NW({ wweather: true }).wweather === true && NW({ wweather: true }).wmovie === true,
+      'normalizeWidgets 显式 true 可打开默认关闭的天气');
+    assert(NW({ wclock: 0, wcal: '', wtodo: null, wweather: 1 }).wclock === true && NW({ wclock: 0, wcal: '', wtodo: null, wweather: 1 }).wweather === false,
+      'normalizeWidgets 非布尔脏值回落默认（老组件可见 / 天气仍关闭）');
     assert(NW({ bogus: false }).wclock === true && !('bogus' in NW({ bogus: false })),
       'normalizeWidgets 丢弃未知键');
-    assert(Object.values(NW({ wclock: false, wcal: false, wtodo: false, wmovie: false })).every((v) => v === false),
-      'normalizeWidgets 允许四个全移除（左栏整列收起）');
+    assert(Object.values(NW({ wclock: false, wcal: false, wtodo: false, wmovie: false, wweather: false })).every((v) => v === false),
+      'normalizeWidgets 允许全部移除（左栏整列收起）');
     // resolveTheme：'dark'/'light' 直接映射；'system' 在无 matchMedia 时回退深色，有 matchMedia 时跟随系统
     assert(P.resolveTheme('dark') === 'dark' && P.resolveTheme('light') === 'light', 'resolveTheme 固定 dark/light');
     assert(P.resolveTheme('bogus') === 'dark', 'resolveTheme 未知值回退 dark');
@@ -399,14 +402,15 @@ assert(/iconCropRect/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || '
 
 // ---------- 9) #60 左栏组件可删除 ----------
 console.log('[9] #60 左栏组件可删除');
-for (const id of ['wclock', 'wcal', 'wtodo', 'wmovie']) {
+for (const id of ['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather']) {
   assert(new RegExp(`class="w-del" data-widget="${id}"`).test(html), `${id} 组件挂了移除按钮`);
   assert(new RegExp(`id="f-w-${id}"`).test(html), `设置页含 #f-w-${id} 勾选框`);
 }
 assert(/data-i18n="gen\.widgets"/.test(html) && /data-i18n="gen\.widgets_tip"/.test(html), '设置页组件区词条钩子齐备');
 assert(/data-i18n-aria="widget\.remove"/.test(html), '移除按钮带无障碍词条');
 assert(/widgets:\s*\{\s*wclock:\s*true/.test(appSrc), 'DEFAULT_SETTINGS 含 widgets 默认全开');
-assert(/const WIDGETS = \['wclock', 'wcal', 'wtodo', 'wmovie'\]/.test(appSrc), 'app.js 定义 WIDGETS 单一真源');
+assert(/wweather: false/.test(appSrc), 'DEFAULT_SETTINGS 中天气组件默认关闭（opt-in）');
+assert(/const WIDGETS = \['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather'\]/.test(appSrc), 'app.js 定义 WIDGETS 单一真源');
 assert(/function normalizeWidgets/.test(appSrc), 'app.js 定义 normalizeWidgets()');
 assert(/function applyWidgets/.test(appSrc), 'app.js 定义 applyWidgets()');
 assert(/function removeWidget/.test(appSrc), 'app.js 定义 removeWidget()');
@@ -455,8 +459,8 @@ for (const k of ['wb.running', 'wb.not_running', 'wb.not_detected', 'wb.get']) {
   assert(i18nSrc.includes(`'${k}'`), `i18n 含 ${k}`);
 }
 // ---------- #62 每组件位置（时钟 / 日历 / 待办 可各自放到搜索框上方）----------
-assert(/widgetPos: \{ wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left' \}/.test(appSrc),
-  'DEFAULT_SETTINGS 的 widgetPos 默认只有时钟在顶，日历/待办/电影在左栏');
+assert(/widgetPos: \{ wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left', wweather: 'left' \}/.test(appSrc),
+  'DEFAULT_SETTINGS 的 widgetPos 默认只有时钟在顶，日历/待办/电影/天气在左栏');
 // 顶部槽位要的是一眼可读的「时间 + 一行日期」，不是完整日期+农历+干支那句话
 assert(/function compactDateLine/.test(appSrc), 'app.js 定义 compactDateLine()（顶部态紧凑日期行）');
 assert(/function clockIsTop/.test(appSrc), 'app.js 定义 clockIsTop()');
@@ -475,7 +479,7 @@ assert(/applyWidgetPos\(\);/.test(appSrc), 'applyWidgets 驱动 applyWidgetPos')
 assert(/normalizeWidgetPos/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''),
   'normalizeWidgetPos 已导出到 LT_PURE');
 assert(!/clockPos/.test(cssSrc) && !/wclock-top/.test(cssSrc), 'CSS 里旧的 wclock-top 已清除');
-for (const id of ['wclock', 'wcal', 'wtodo', 'wmovie']) {
+for (const id of ['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather']) {
   assert(new RegExp(`id="f-pos-${id}"`).test(html), `设置页含 #f-pos-${id} 位置下拉`);
 }
 assert(/data-i18n="wpos\.top"/.test(html) && /data-i18n="wpos\.left"/.test(html), '位置选项词条齐备');
@@ -684,6 +688,68 @@ assert(/\.widget\.wmovie\.w-top \{\s*--wtop-del:\s*176px/.test(cssSrc), '电影�
   I.setLang('en');
   assert(mvOk('en'), '电影词条 英文已译', mvKeys.map(k => I.t(k)).join(' | '));
   I.setLang('zh');
+}
+
+// ---------- 13b) 天气组件（opt-in，Open-Meteo 直连） ----------
+console.log('[13b] 天气组件');
+// 静态结构：左栏卡片 + 更新时间标签 + 渲染容器 + 设置页开关/位置下拉/城市输入
+assert(/<section class="widget wweather"/.test(html), 'newtab.html 含 .widget.wweather 卡片');
+assert(/id="weather-card"/.test(html), '卡片含 #weather-card 渲染容器');
+assert(/id="weather-updated"/.test(html), '头部含 #weather-updated 更新时间标签');
+assert(/data-i18n="widget\.weather"/.test(html), '卡片标题带 data-i18n="widget.weather"');
+assert(/id="f-weather-city"/.test(html), '设置页含 #f-weather-city 城市输入框');
+assert(/data-i18n-ph="weather\.city_ph"/.test(html), '城市输入框带占位词条');
+assert(/data-i18n="weather\.city_tip"/.test(html), '城市输入框带数据来源提示词条');
+assert(!/id="f-w-wweather" checked/.test(html), '设置页天气勾选框静态默认不勾（与 DEFAULT_SETTINGS 一致）');
+// 数据源与请求形状：预报 + 地理编码，均为 Open-Meteo（免 key、CORS 开放）
+assert(/https:\/\/api\.open-meteo\.com\/v1\/forecast/.test(appSrc), 'app.js 使用 Open-Meteo 预报端点');
+assert(/current=temperature_2m,relative_humidity_2m,weather_code/.test(appSrc), '预报请求含当前温度/湿度/天气码');
+assert(/daily=temperature_2m_max,temperature_2m_min/.test(appSrc), '预报请求含今日最高/最低温');
+assert(/https:\/\/geocoding-api\.open-meteo\.com\/v1\/search/.test(appSrc), 'app.js 使用 Open-Meteo 地理编码端点');
+// 超时与刷新策略：所有 fetch 带 AbortController 5s 上限；缓存 30 分钟 TTL；页面常驻每 30 分钟刷一次
+assert(/AbortController/.test(appSrc) && /WEATHER_TIMEOUT_MS = 5000/.test(appSrc), '天气请求带 AbortController 5 秒超时');
+assert(/WEATHER_REFRESH_MS = 30 \* 60 \* 1000/.test(appSrc), '天气缓存 TTL / 刷新周期为 30 分钟');
+assert(/setInterval\(maybeFetchWeather, WEATHER_REFRESH_MS\)/.test(appSrc), '页面开着时每 30 分钟自动刷新');
+// 零网络原则：组件不可见或未配置城市时绝不发请求
+const mfb = appSrc.match(/function maybeFetchWeather\(\) \{([\s\S]*?)\n  \}/);
+assert(!!mfb && mfb[1].includes("if (!widgetVisible('wweather')) return;") && mfb[1].includes('if (!weatherConfigured()) return;'),
+  'maybeFetchWeather 先查可见性与城市配置，否则绝不发请求');
+// WMO 码映射：覆盖晴/多云/阴/雾/毛毛雨/雨/雪/阵雨/雷暴，中英各一份
+assert(/const WMO_TEXT = \[/.test(appSrc), 'app.js 定义 WMO_TEXT 天气码映射');
+for (const pair of ["0, 0, '晴', 'Clear'", "1, 2, '多云', 'Partly cloudy'", "3, 3, '阴', 'Overcast'",
+  "45, 48, '雾', 'Fog'", "51, 57, '毛毛雨', 'Drizzle'", "61, 67, '雨', 'Rain'",
+  "71, 77, '雪', 'Snow'", "80, 82, '阵雨', 'Showers'", "95, 99, '雷暴', 'Thunderstorm'"]) {
+  assert(appSrc.includes('[' + pair + ']'), `WMO 映射覆盖 [${pair}]`);
+}
+assert(/function weatherText/.test(appSrc) && /function weatherIcon/.test(appSrc), 'app.js 定义 weatherText / weatherIcon');
+assert(/function renderWeather/.test(appSrc) && /function fetchWeatherNow/.test(appSrc), 'app.js 定义 renderWeather / fetchWeatherNow');
+assert(/function resolveWeatherCity/.test(appSrc) && /function saveWeatherCity/.test(appSrc), 'app.js 定义 resolveWeatherCity / saveWeatherCity');
+assert(/weather: null/.test(appSrc), 'DEFAULT_SETTINGS 含 weather: null（随 settings 同步/导出）');
+assert(/weather-setup/.test(appSrc), '未配置城市时渲染「设置城市」引导态');
+assert(/weather\.stale/.test(appSrc), '缓存过期时渲染「数据可能过期」弱化提示');
+assert(/openSettingsTab\('gen'\)/.test(appSrc), '引导态点击打开设置面板');
+// CSS：卡片布局 + 引导/不可用态 + 顶部态专属样式
+for (const sel of ['.weather-top', '.weather-icon', '.weather-temp', '.weather-desc', '.weather-meta', '.weather-setup', '.weather-empty', '.weather-updated']) {
+  assert(cssSrc.includes(sel), `CSS 定义 ${sel}`);
+}
+assert(/\.widget\.wweather\.w-top/.test(cssSrc), '天气顶部态有专属样式');
+assert(/\.widget\.wweather\.w-top \{\s*--wtop-del:/.test(cssSrc), '天气顶部态定义 --wtop-del');
+assert(/\.modal-body \.wgt-city/.test(cssSrc), '设置页城市输入行以 .modal-body 限定提权');
+// i18n：天气词条中英各一份且非空（不 echo key 回显）
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  const wKeys = ['widget.weather', 'weather.set_city', 'weather.unavailable', 'weather.stale',
+    'weather.humidity', 'weather.city_ph', 'weather.city_tip', 'weather.city_saved',
+    'weather.city_not_found', 'weather.city_fail'];
+  I.setLang('zh');
+  assert(wKeys.every(k => I.t(k) !== k && I.t(k).length > 0), '天气词条 中文已译', wKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('en');
+  assert(wKeys.every(k => I.t(k) !== k && I.t(k).length > 0), '天气词条 英文已译', wKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('zh');
+  assert(I.t('weather.city_saved', { name: '北京' }) === '天气城市已设为 北京', 'weather.city_saved 支持 {name} 插值');
 }
 
 // ---------- 14) #65 梅花（右下角）：换壁纸 + 励志名句 ----------

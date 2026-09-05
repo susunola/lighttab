@@ -47,6 +47,18 @@
     'widget.calendar': { zh: '日历', en: 'Calendar' },
     'widget.todo':     { zh: '待办', en: 'To-dos' },
     'widget.movie':    { zh: '每日电影', en: 'Movie of the day' },
+    'widget.weather':  { zh: '天气', en: 'Weather' },
+
+    // ---------- Weather widget (opt-in, Open-Meteo) ----------
+    'weather.set_city':    { zh: '设置城市，查看天气', en: 'Set a city to see the weather' },
+    'weather.unavailable': { zh: '天气暂不可用', en: 'Weather unavailable' },
+    'weather.stale':       { zh: '数据可能过期', en: 'may be outdated' },
+    'weather.humidity':    { zh: '湿度', en: 'Humidity' },
+    'weather.city_ph':     { zh: '天气城市（如 北京）', en: 'Weather city (e.g. Beijing)' },
+    'weather.city_tip':    { zh: '城市名经 Open-Meteo 解析为经纬度后存本地；天气数据直连 Open-Meteo，无需 API Key。', en: 'The city name is resolved to coordinates via Open-Meteo and stored locally; forecasts are fetched directly from Open-Meteo, no API key.' },
+    'weather.city_saved':  { zh: '天气城市已设为 {name}', en: 'Weather city set to {name}' },
+    'weather.city_not_found': { zh: '没有找到这个城市', en: 'City not found' },
+    'weather.city_fail':   { zh: '城市解析失败，请检查网络后重试', en: 'Could not resolve the city — check the network and retry' },
 
     // ---------- Movie-of-the-day ----------
     'movie.rating': { zh: '豆瓣评分', en: 'Rating' },

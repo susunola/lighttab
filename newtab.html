@@ -113,6 +113,20 @@
         </div>
         <div class="movie-card" id="movie-card"></div>
       </section>
+
+      <section class="widget wweather" data-i18n-aria="widget.weather" aria-label="Weather">
+        <button type="button" class="w-del" data-widget="wweather" data-i18n-aria="widget.remove" aria-label="Remove this widget">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+        </button>
+        <div class="w-head">
+          <span class="w-title">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2.3M12 18.7V21M3 12h2.3M18.7 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/></svg>
+            <span data-i18n="widget.weather">天气</span>
+          </span>
+          <span class="weather-updated" id="weather-updated" aria-hidden="true"></span>
+        </div>
+        <div class="weather-card" id="weather-card"></div>
+      </section>
     </aside>
 
     <!-- Right: search + icon grid -->
@@ -362,6 +376,18 @@
                   <option value="left" data-i18n="wpos.left">Left column</option>
                 </select>
               </label>
+              <label class="wgt-row">
+                <input type="checkbox" id="f-w-wweather">
+                <span class="wgt-name" data-i18n="widget.weather">天气</span>
+                <select id="f-pos-wweather" class="wgt-pos">
+                  <option value="top" data-i18n="wpos.top">Above search</option>
+                  <option value="left" data-i18n="wpos.left">Left column</option>
+                </select>
+              </label>
+              <div class="wgt-city">
+                <input id="f-weather-city" type="text" maxlength="40" data-i18n-ph="weather.city_ph" data-i18n-aria="weather.city_ph" placeholder="天气城市（如 北京）" aria-label="Weather city">
+                <p class="data-tip" data-i18n="weather.city_tip">城市名经 Open-Meteo 解析为经纬度后存本地；天气数据直连 Open-Meteo，无需 API Key。</p>
+              </div>
             </div>
             <p class="data-tip" data-i18n="gen.widgets_tip">Uncheck to remove a widget; the dropdown moves it between the top stack and the left column. With the left column emptied it collapses and the icon grid spans the full width.</p>
           </div>
