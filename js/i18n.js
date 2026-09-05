@@ -191,6 +191,8 @@
     'gen.name_ph':  { zh: '留空则不显示名字', en: 'Leave empty to hide the name' },
     'gen.avatar':   { zh: '头像', en: 'Avatar' },
     'gen.engine':   { zh: '默认搜索引擎', en: 'Default search engine' },
+    'gen.suggest':  { zh: '搜索建议', en: 'Search suggestions' },
+    'gen.suggest_tip': { zh: '联想词会直接发送给你选择的搜索引擎。', en: 'Suggestions are sent directly to your chosen search engine.' },
     'engm.title':   { zh: '搜索引擎管理', en: 'Search engines' },
     'engm.name_ph': { zh: '名称', en: 'Name' },
     'engm.url_ph':  { zh: '搜索 URL，用 {q} 代表关键词', en: 'Search URL, use {q} for the query' },

@@ -932,8 +932,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .engine-go:hover { color: var(--accent); background: rgba(125,211,252,0.08); }
 
-/* Shared overlay styling (engine dropdown / template palette / context menu) */
-.engine-list, .palette, .menu {
+/* Shared overlay styling (engine dropdown / suggestions / template palette / context menu) */
+.engine-list, .suggest-list, .palette, .menu {
   background: var(--panel-1);
   border: 1px solid var(--line-2);
   box-shadow: var(--shadow-2);
@@ -970,6 +970,40 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   font-family: var(--font-num);
 }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* Search suggestions: floats directly under the search pill, same material as the engine
+ * dropdown. Spans the full search-box width (it is a child of .search, so it can never
+ * overflow horizontally — on narrow screens the pill itself is the width limit). */
+.suggest-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  margin: 0; padding: 6px;
+  list-style: none;
+  border-radius: 14px;
+  /* Below modals (100) and the engine list (95), above page content. */
+  z-index: 90;
+  text-align: left;
+  animation: pop .14s ease;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--thumb) transparent;
+}
+.suggest-list li {
+  display: flex; align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background .12s ease, color .12s ease;
+}
+.suggest-list li:hover, .suggest-list li.active { background: var(--tint-3); color: var(--ink); }
 
 /* ====== Icon grid ====== */
 #grid-wrap { margin-top: clamp(22px, 3.5vh, 34px); }

@@ -20,7 +20,8 @@
 
 Live clock and greeting (with the Chinese lunar calendar), a local month view, one-box search,
 an AI prompt launcher, a grouped icon grid, to-dos and wallpapers — all of it stored in your own
-browser. The extension requests a single permission (`storage`) and makes no network requests
+browser. The extension requests a single permission (`storage`); besides search suggestions
+(sent straight to your chosen engine, switchable off) it makes no network requests
 unless you explicitly turn on an online feature (cloud sync, Bing daily wallpaper library).
 
 ## Features
@@ -28,7 +29,7 @@ unless you explicitly turn on an online feature (cloud sync, Bing daily wallpape
 - **Clock & greeting** — live time, date and a time-of-day greeting, plus the Chinese lunar calendar (sexagenary year, zodiac, leap months, 1900–2100, computed entirely on-device). The clock can sit in the left column or lifted above the search box as a large centred time line (phone-launcher style)
 - **Bilingual UI (English / 中文)** — switch the whole interface in *Settings → General → Language*. Greetings, dates, the lunar line, calendar, engine names, menus and messages all follow. Persisted locally, applied instantly, no reload
 - **Calendar widget** — local month view with lunar-day labels and month navigation (zero network)
-- **One-box search** — URL shortcuts (bare domains with paths work, e.g. `github.com/susunola`), 6 search engines, 2 AI chats (Doubao, ChatGPT) and a WorkBuddy deep link. When WorkBuddy Desktop is running it is shown live in the engine list via a local loopback probe (no extra permissions)
+- **One-box search** — URL shortcuts (bare domains with paths work, e.g. `github.com/susunola`), 6 search engines, 2 AI chats (Doubao, ChatGPT) and a WorkBuddy deep link. Live suggestions from Baidu / Google / Bing via JSONP (no extra permissions; switchable off in Settings). When WorkBuddy Desktop is running it is shown live in the engine list via a local loopback probe (no extra permissions)
 - **AI prompt launcher** (press `/`) — pick a template, type your content, and send the same prompt to several targets at once. The prompt text never travels in the URL (it goes through a nonce channel in extension mode); if the target page blocks auto-fill, the prompt is copied to your clipboard with an on-page notice
 - **Icon grid** — drag to reorder, groups, and a built-in brand-icon library so no favicon is ever fetched from a third party
 - **Free canvas layout** — on wide screens every widget and card can be dragged anywhere; cards snap to a grid and swap places with whatever is already there
@@ -41,7 +42,7 @@ unless you explicitly turn on an online feature (cloud sync, Bing daily wallpape
 
 - Single required permission: `storage` — everything lives in your own browser
 - No tracking, no analytics, no ads
-- Zero network requests in the default configuration. Only three **opt-in** features ever reach the network:
+- **Search suggestions** (on by default, switchable in *Settings → General*) — what you type is sent directly to your chosen search engine (Baidu / Google / Bing) to fetch suggestions; turning it off keeps keystrokes local until you press Enter. No other data ever leaves the browser by default. Only three **opt-in** features ever reach the network beyond that:
   - **Cloud sync** — email sign-up/login (only a password hash is stored server-side); whole-document last-write-wins sync keeps multiple devices consistent. Your token stays local and is never synced. Over HTTPS to the self-hosted backend at `lighttab.atomwangnus.com`
   - **Bing daily wallpaper library** — when you open it in settings, metadata and images are fetched via the backend proxy at `lighttab.atomwangnus.com`
   - **Weather widget** — off by default; only after you enable it and set a city does the page fetch forecasts directly from `api.open-meteo.com` (and city geocoding from `geocoding-api.open-meteo.com`) over HTTPS. No account, no API key, no other data leaves the browser

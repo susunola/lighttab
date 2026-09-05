@@ -837,6 +837,58 @@ assert(/\.quote \.quote-text \{[^}]*font-size: 13px/.test(cssSrc), 'quote body t
   I.setLang('zh');
 }
 
+// ---------- 15) search suggestions (JSONP dropdown) ----------
+console.log('[15] search suggestions');
+// Static structure: the dropdown lives inside #search; the settings toggle sits in the General pane
+assert(/<ul id="suggest-list" class="suggest-list" role="listbox" hidden><\/ul>/.test(html), 'newtab.html contains the #suggest-list dropdown');
+assert(/<input type="checkbox" id="f-suggest" checked>/.test(html), 'settings page contains the #f-suggest checkbox (statically on, matching DEFAULT_SETTINGS)');
+assert(/data-i18n="gen\.suggest"/.test(html), 'suggest label carries data-i18n="gen.suggest"');
+assert(/data-i18n="gen\.suggest_tip"/.test(html), 'suggest tip carries data-i18n="gen.suggest_tip"');
+// Defaults and the per-engine provider table
+assert(/suggest: true/.test(appSrc), 'DEFAULT_SETTINGS enables suggestions by default');
+assert(/const SUGGEST = \{/.test(appSrc), 'app.js defines the SUGGEST provider table');
+for (const id of ['baidu', 'google', 'bing']) {
+  assert(new RegExp(`\\n    ${id}: \\{`).test(appSrc), `SUGGEST covers ${id}`);
+}
+assert(/suggestion\.baidu\.com\/su\?wd=/.test(appSrc), 'baidu suggestion endpoint');
+assert(/suggestqueries\.google\.com\/complete\/search\?client=chrome/.test(appSrc), 'google suggestion endpoint');
+assert(/api\.bing\.com\/qsonhs\.aspx/.test(appSrc), 'bing suggestion endpoint (JSONP variant — osjson.aspx has no CORS headers)');
+// JSONP via <script> injection: no host_permissions needed
+assert(/function jsonp\(urlFn, timeoutMs = SUGGEST_TIMEOUT_MS\)/.test(appSrc), 'jsonp helper carries a timeout parameter');
+assert(/SUGGEST_TIMEOUT_MS = 5000/.test(appSrc), 'suggestion timeout is 5s');
+assert(/SUGGEST_DEBOUNCE_MS = 150/.test(appSrc), 'suggestion debounce is 150ms');
+assert(/SUGGEST_MAX = 8/.test(appSrc), 'suggestions are capped at 8 rows');
+assert(/delete window\[cb\]/.test(appSrc), 'jsonp deletes the window callback after use');
+assert(/script\.remove\(\)/.test(appSrc), 'jsonp removes the script tag after use');
+assert(!/host_permissions/.test(read('manifest.json')), 'manifest still carries no host_permissions (suggestions go through JSONP)');
+// Interaction: keyboard navigation, URL suppression, blur close, engine-switch reset, boot wiring
+assert(/e\.key === 'ArrowDown' \|\| e\.key === 'ArrowUp'/.test(appSrc), 'ArrowDown/ArrowUp move the highlight');
+assert(/e\.key === 'Enter' && suggestHl >= 0/.test(appSrc), 'Enter opens the highlighted row');
+assert(/e\.key === 'Escape'/.test(appSrc) && /closeSuggest\(\);/.test(appSrc), 'Escape closes the dropdown');
+assert(/if \(!q \|\| looksLikeUrl\(q\)\) \{ closeSuggest\(\); return; \}/.test(appSrc), 'empty input and URLs never trigger suggestions');
+assert(/setTimeout\(closeSuggest, 150\)/.test(appSrc), 'the dropdown closes 150ms after blur');
+assert(/function resetSuggest\(\)/.test(appSrc) && /suggestCache\.clear\(\)/.test(appSrc), 'engine switch closes the dropdown and clears the cache');
+assert(/resetSuggest\(\); \/\/ engine switch/.test(appSrc), 'setEngine calls resetSuggest');
+assert(/bindSuggest\(\);/.test(appSrc), 'boot wires bindSuggest');
+assert(/state\.settings\.suggest === false/.test(appSrc), 'the settings toggle gates suggestions (default on for older profiles)');
+// CSS: same glass material as the engine list, full-width under the search box
+assert(/\.engine-list, \.suggest-list, \.palette, \.menu/.test(cssSrc), 'suggest dropdown shares the glass overlay rule');
+assert(/\.suggest-list \{[^}]*z-index: 90/.test(cssSrc), 'suggest z-index sits below modals (100) and the engine list (95)');
+assert(/\.suggest-list li\.active/.test(cssSrc) || /\.suggest-list li:hover, \.suggest-list li\.active/.test(cssSrc), 'highlighted suggestion row is styled');
+// i18n: suggest entries exist in both languages and are non-empty (no key echo)
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  I.setLang('zh');
+  assert(I.t('gen.suggest') === '搜索建议' && I.t('gen.suggest_tip').length > 0, 'gen.suggest zh entries', I.t('gen.suggest'));
+  I.setLang('en');
+  assert(I.t('gen.suggest') === 'Search suggestions' && I.t('gen.suggest_tip') === 'Suggestions are sent directly to your chosen search engine.', 'gen.suggest en entries', I.t('gen.suggest'));
+  I.setLang('zh');
+}
+assert(/sent directly to your chosen search engine/.test(read('README.md')), 'README Privacy documents that suggestions go straight to the chosen engine');
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);

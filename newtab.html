@@ -148,6 +148,7 @@
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
         <ul id="engine-list" class="engine-list" role="listbox" hidden></ul>
+        <ul id="suggest-list" class="suggest-list" role="listbox" hidden></ul>
         <!-- AI template palette (opened with "/"): pick a template -> type content -> Enter launches to every target -->
         <div id="palette" class="palette" hidden>
           <div class="palette-head">
@@ -326,6 +327,11 @@
             <span data-i18n="gen.engine">Default search engine</span>
             <select id="f-engine"></select>
           </label>
+          <label class="check-row">
+            <input type="checkbox" id="f-suggest" checked>
+            <span data-i18n="gen.suggest">Search suggestions</span>
+          </label>
+          <p class="form-tip" data-i18n="gen.suggest_tip">Suggestions are sent directly to your chosen search engine.</p>
           <div class="engm-zone">
             <span class="field-label" data-i18n="engm.title">Search engines</span>
             <div class="engm-list" id="engm-list"></div>

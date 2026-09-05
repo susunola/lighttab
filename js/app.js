@@ -59,6 +59,9 @@
 
   const DEFAULT_SETTINGS = {
     engine: 'google',
+    // Search suggestions dropdown (JSONP, no host_permissions). On by default; turning it off
+    // stops the typed text from leaving the browser until Enter.
+    suggest: true,
     name: '',
     // Top-right profile avatar: a local raster dataURL (data:image/png|jpeg|webp|gif;base64,…).
     // Empty = show the name initial, or a default person glyph when no name is set.
@@ -769,6 +772,7 @@
     const engines = allEngines();
     const e = engines.find(x => x.id === id) || engines[0];
     currentEngine = e;
+    resetSuggest(); // engine switch: close the dropdown and drop the other engine's cached suggestions
     const btn = document.getElementById('engine-btn');
     btn.querySelector('.eng-name').textContent = engName(e);
     btn.querySelector('.eng-logo-wrap').innerHTML = engLogoHtml(e);
@@ -905,6 +909,180 @@
     });
     renderEngManager();
   }
+  // ---------- Search suggestions ----------
+  // JSONP via <script> injection: suggestions need no host_permissions, keeping the manifest's
+  // single-permission design intact. Every request gets a unique window callback which is always
+  // cleaned up (script tag removed + callback deleted) and carries a hard timeout.
+  const SUGGEST_DEBOUNCE_MS = 150;
+  const SUGGEST_TIMEOUT_MS = 5000;
+  const SUGGEST_MAX = 8;
+  let suggestSeq = 0; // unique JSONP callback suffix
+
+  // url receives the query and the generated callback name; parse normalises the payload to a
+  // plain string array. Engines without an entry (Sogou, GitHub, bilibili, the AI engines and
+  // user-added customs) simply never show suggestions.
+  const SUGGEST = {
+    baidu: {
+      url: (q, cb) => 'https://suggestion.baidu.com/su?wd=' + encodeURIComponent(q) + '&cb=' + cb,
+      parse: (d) => (d && Array.isArray(d.s) ? d.s : [])
+    },
+    google: {
+      url: (q, cb) => 'https://suggestqueries.google.com/complete/search?client=chrome&q=' + encodeURIComponent(q) + '&jsonp=' + cb,
+      parse: (d) => (Array.isArray(d) && Array.isArray(d[1]) ? d[1] : [])
+    },
+    bing: {
+      // osjson.aspx answers plain JSON but without CORS headers; qsonhs.aspx is the JSONP variant
+      // the Bing homepage itself uses.
+      url: (q, cb) => 'https://api.bing.com/qsonhs.aspx?type=cb&cb=' + cb + '&q=' + encodeURIComponent(q),
+      parse: (d) => {
+        const results = d && d.AS && Array.isArray(d.AS.Results) ? d.AS.Results : [];
+        return results.flatMap(r => (r && Array.isArray(r.Suggests) ? r.Suggests : []))
+          .map(s => s && s.Txt).filter(Boolean);
+      }
+    }
+  };
+
+  // urlFn(cb) builds the final URL from the generated callback name. Resolves with the raw
+  // payload, rejects on script error or timeout. Cleanup runs on every settle path.
+  function jsonp(urlFn, timeoutMs = SUGGEST_TIMEOUT_MS) {
+    return new Promise((resolve, reject) => {
+      const cb = '__ltSuggest_' + Date.now().toString(36) + '_' + (++suggestSeq);
+      const script = document.createElement('script');
+      let settled = false;
+      const cleanup = () => {
+        settled = true;
+        clearTimeout(timer);
+        script.remove();
+        try { delete window[cb]; } catch { window[cb] = undefined; }
+      };
+      const timer = setTimeout(() => { if (!settled) { cleanup(); reject(new Error('suggest timeout')); } }, timeoutMs);
+      window[cb] = (data) => { if (!settled) { cleanup(); resolve(data); } };
+      script.src = urlFn(cb);
+      script.onerror = () => { if (!settled) { cleanup(); reject(new Error('suggest failed')); } };
+      document.head.appendChild(script);
+    });
+  }
+
+  let suggestItems = [];      // current dropdown entries
+  let suggestHl = -1;         // highlighted row (-1 = the raw input)
+  let suggestTyped = '';      // the raw input text, restored when the highlight returns to -1
+  let suggestTimer = 0;       // debounce timer
+  let suggestBlurTimer = 0;   // delayed close on blur (so a row click lands first)
+  let suggestFetchSeq = 0;    // stale-response guard
+  const suggestCache = new Map(); // `${engineId}:${q}` -> string[] (cleared on engine switch)
+
+  function suggestProvider() {
+    // Suggestions stay on unless the user explicitly turned them off (older profiles lack the key).
+    if (state.settings.suggest === false) return null;
+    return SUGGEST[currentEngine.id] || null;
+  }
+  function suggestListEl() { return document.getElementById('suggest-list'); }
+  function closeSuggest() {
+    clearTimeout(suggestTimer);
+    suggestFetchSeq++; // drop any in-flight response
+    suggestItems = [];
+    suggestHl = -1;
+    const list = suggestListEl();
+    if (list) list.hidden = true;
+  }
+  // Engine switch: close the dropdown and drop the cache (stale entries would be from another engine).
+  function resetSuggest() {
+    closeSuggest();
+    suggestCache.clear();
+  }
+  function renderSuggest() {
+    const list = suggestListEl();
+    if (!list) return;
+    if (!suggestItems.length) { list.hidden = true; return; }
+    list.innerHTML = suggestItems.map((s, i) =>
+      `<li role="option" data-i="${i}" class="${i === suggestHl ? 'active' : ''}" aria-selected="${i === suggestHl}">${escapeHtml(s)}</li>`
+    ).join('');
+    list.hidden = false;
+  }
+  function setSuggestHl(i) {
+    const qEl = document.getElementById('q');
+    suggestHl = i;
+    // The highlight is written back into the input; -1 restores what the user actually typed.
+    if (qEl) qEl.value = i >= 0 && suggestItems[i] ? suggestItems[i] : suggestTyped;
+    renderSuggest();
+  }
+  async function fetchSuggest(q) {
+    const provider = suggestProvider();
+    if (!provider) return;
+    const key = currentEngine.id + ':' + q;
+    const cached = suggestCache.get(key);
+    if (cached) {
+      if (!cached.length) return;
+      suggestItems = cached.slice(0, SUGGEST_MAX);
+      suggestHl = -1;
+      renderSuggest();
+      return;
+    }
+    const seq = ++suggestFetchSeq;
+    try {
+      const raw = await jsonp((cb) => provider.url(q, cb));
+      // A newer keystroke (or a close) superseded this request — discard quietly.
+      if (seq !== suggestFetchSeq) return;
+      const items = provider.parse(raw).filter(s => typeof s === 'string' && s.trim()).slice(0, SUGGEST_MAX);
+      suggestCache.set(key, items);
+      if (document.getElementById('q').value.trim() !== q) return; // input moved on meanwhile
+      if (!items.length) { closeSuggest(); return; }
+      suggestItems = items;
+      suggestHl = -1;
+      renderSuggest();
+    } catch {
+      // Timeouts, blocked networks and engines that never call back all end here: just stay silent.
+    }
+  }
+  function bindSuggest() {
+    const qEl = document.getElementById('q');
+    const list = suggestListEl();
+    if (!qEl || !list) return;
+    qEl.addEventListener('input', () => {
+      clearTimeout(suggestTimer);
+      const q = qEl.value.trim();
+      suggestTyped = qEl.value;
+      suggestHl = -1;
+      // Never suggest for empty input or anything that looks like a URL.
+      if (!q || looksLikeUrl(q)) { closeSuggest(); return; }
+      suggestTimer = setTimeout(() => fetchSuggest(q), SUGGEST_DEBOUNCE_MS);
+    });
+    qEl.addEventListener('keydown', (e) => {
+      if (list.hidden) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const step = e.key === 'ArrowDown' ? 1 : -1;
+        // Range is -1..items-1: -1 is the raw input row.
+        const next = suggestHl + step;
+        setSuggestHl(next < -1 ? suggestItems.length - 1 : next >= suggestItems.length ? -1 : next);
+      } else if (e.key === 'Enter' && suggestHl >= 0 && suggestItems[suggestHl]) {
+        // A highlighted row wins over the plain search; the form submit never fires (preventDefault).
+        // Grab the row before closeSuggest() empties the list.
+        e.preventDefault();
+        const picked = suggestItems[suggestHl];
+        closeSuggest();
+        submitSearch(picked, e);
+      } else if (e.key === 'Escape') {
+        e.stopPropagation();
+        closeSuggest();
+      }
+    });
+    // Close shortly after blur: the delay lets a row mousedown land before the dropdown disappears.
+    qEl.addEventListener('blur', () => {
+      clearTimeout(suggestBlurTimer);
+      suggestBlurTimer = setTimeout(closeSuggest, 150);
+    });
+    qEl.addEventListener('focus', () => clearTimeout(suggestBlurTimer));
+    // mousedown (not click): it fires before the input blurs, so the row is still there to be hit.
+    list.addEventListener('mousedown', (e) => {
+      const li = e.target.closest('li[data-i]');
+      if (!li) return;
+      e.preventDefault();
+      const s = suggestItems[+li.dataset.i];
+      closeSuggest();
+      if (s) { qEl.value = s; submitSearch(s, e); }
+    });
+  }
   // Open the result page: navigate in the current tab by default (no stray blank tabs); hold Cmd/Ctrl for a new tab.
   function openResult(url, ev) {
     if (ev && (ev.metaKey || ev.ctrlKey)) {
@@ -914,6 +1092,7 @@
     }
   }
   function submitSearch(rawQuery, ev) {
+    closeSuggest();
     const q = (rawQuery || '').trim();
     // A template is active: the typed text launches to the template targets instead of running a plain search.
     if (activePrompt) {
@@ -1792,6 +1971,14 @@
       await Store.set(K.settings, state.settings);
       setEngine(state.settings.engine);
     });
+    // Search suggestions toggle (General). On by default; older profiles lack the key, so it
+    // reads as on unless explicitly set to false.
+    const suggestCb = document.getElementById('f-suggest');
+    if (suggestCb) suggestCb.addEventListener('change', async () => {
+      state.settings.suggest = !!suggestCb.checked;
+      await Store.set(K.settings, state.settings);
+      if (!suggestCb.checked) resetSuggest();
+    });
     if (langSel) langSel.addEventListener('change', async () => {
       state.settings.lang = langSel.value === 'en' ? 'en' : 'zh';
       await Store.set(K.settings, state.settings);
@@ -1832,6 +2019,8 @@
       renderWallLibGrid();
       const wallRotCb = document.getElementById('f-wall-rotate');
       if (wallRotCb) wallRotCb.checked = !!state.settings.wallRotate;
+      const suggestCb = document.getElementById('f-suggest');
+      if (suggestCb) suggestCb.checked = state.settings.suggest !== false;
       const wallSrcSel = document.getElementById('f-wall-src');
       if (wallSrcSel) wallSrcSel.value = wallLibSource;
       if (tab === 'wall' && wallLibImages === null) fetchWallLib(); // warm the pool (cached fallback when offline)
@@ -3046,6 +3235,7 @@
     const qEl = document.getElementById('q');
     form.addEventListener('submit', e => { e.preventDefault(); submitSearch(qEl.value, e); });
     document.getElementById('search-go').addEventListener('click', e => submitSearch(qEl.value, e));
+    bindSuggest();
     // Esc while a template is active: drop the template and go back to plain search.
     qEl.addEventListener('keydown', e => {
       if (e.key === 'Escape' && activePrompt) { e.stopPropagation(); window.LT_PROMPTS.clearActiveTemplate(); qEl.focus(); }
