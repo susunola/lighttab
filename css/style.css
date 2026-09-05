@@ -1034,8 +1034,11 @@ svg.logo-tx text { font-family: inherit; }
 /* Plum-blossom button, bottom right (rotate wallpaper + inspirational quote) */
 .plum-float {
   position: fixed;
-  right: 84px; bottom: 22px;
-  width: 56px; height: 56px;
+  /* Tucked into the very corner, and the SVG is mirrored so the branch's root sits at the
+   * viewport corner — it reads as a plum branch growing in from the edge of the page,
+   * not a floating icon. */
+  right: 10px; bottom: 8px;
+  width: 72px; height: 72px;
   display: flex; align-items: center; justify-content: center;
   /* No circular button chrome — a bare plum branch sitting on the wallpaper. */
   background: none;
@@ -1044,12 +1047,20 @@ svg.logo-tx text { font-family: inherit; }
   cursor: pointer;
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
   z-index: 50;
+  transform-origin: 88% 88%;
   transition: transform .18s ease, filter .18s ease;
 }
-.plum-float:hover { transform: scale(1.08) rotate(5deg); filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5)) brightness(1.1); }
+.plum-float svg { transform: scaleX(-1); }
+.plum-float:hover { transform: scale(1.06) rotate(3deg); filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5)) brightness(1.1); }
 .plum-float:active { transform: scale(0.95); }
-.plum-float.spin { animation: plum-spin .5s ease; }
-@keyframes plum-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.plum-float.spin { animation: plum-spin .55s ease; }
+/* A wind-sway around the root, not a full turn — the branch stays planted in the corner. */
+@keyframes plum-spin {
+  0% { transform: rotate(0deg); }
+  30% { transform: rotate(-9deg); }
+  65% { transform: rotate(5deg); }
+  100% { transform: rotate(0deg); }
+}
 
 /* ====== Menus ====== */
 .menu {
