@@ -799,11 +799,22 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   transition: color .15s ease, background .15s ease;
 }
 .engine-btn:hover { color: var(--ink); background: var(--tint-2); }
-.eng-dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: linear-gradient(135deg, #38bdf8, #818cf8);
-  box-shadow: 0 0 0 2px rgba(56,189,248,0.18);
+.eng-logo {
+  width: 16px; height: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none;
+  color: var(--ink); /* currentColor fallback for near-black brand marks (GitHub) */
 }
+.eng-logo svg { width: 100%; height: 100%; display: block; }
+/* Engines without a brand-icon entry (Bing, Sogou, WorkBuddy) get a letter tile,
+ * same language as the icon grid's fallback. */
+.eng-letter {
+  border-radius: 4.5px;
+  color: #fff;
+  font-size: 10px; font-weight: 700;
+  line-height: 1;
+}
+.engine-btn .eng-logo { width: 17px; height: 17px; }
 #search-form { flex: 1; height: 100%; min-width: 0; }
 #q {
   width: 100%; height: 100%;

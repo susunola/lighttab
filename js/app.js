@@ -668,19 +668,23 @@
     currentEngine = e;
     const btn = document.getElementById('engine-btn');
     btn.querySelector('.eng-name').textContent = engName(e);
-    btn.querySelector('.eng-dot').style.background = `linear-gradient(135deg, ${e.color}, ${shade(e.color, 30)})`;
+    btn.querySelector('.eng-logo-wrap').innerHTML = engLogoHtml(e);
     document.getElementById('q').placeholder = t('search.placeholder_engine', { engine: engName(e) });
   }
-  function shade(hex, percent) {
-    const c = hex.replace('#', '');
-    const num = parseInt(c, 16);
-    let r = (num >> 16) + percent;
-    let g = ((num >> 8) & 0x00ff) + percent;
-    let b = (num & 0x0000ff) + percent;
-    r = Math.max(0, Math.min(255, r));
-    g = Math.max(0, Math.min(255, g));
-    b = Math.max(0, Math.min(255, b));
-    return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+  // Engine logos: reuse the brand-icon library where an entry exists (Baidu, Google, GitHub,
+  // bilibili, Doubao, ChatGPT); engines without one (Bing, Sogou, WorkBuddy) get a
+  // brand-coloured letter tile — the same fallback language as the icon grid.
+  const ENG_ICON_HOST = {
+    baidu: 'baidu.com', google: 'google.com', github: 'github.com',
+    bilibili: 'bilibili.com', doubao: 'doubao.com', openai: 'openai.com'
+  };
+  function engLogoHtml(e) {
+    const host = ENG_ICON_HOST[e.id];
+    const icon = host ? iconFor('https://' + host) : null;
+    // No brand tile behind these glyphs (unlike the card grid), so single-colour marks
+    // take the brand colour itself when it is bright enough, otherwise the menu's text colour.
+    if (icon) return `<span class="eng-logo">${iconGlyphHtml(icon, menuGlyphColor(icon.c) || 'currentColor')}</span>`;
+    return `<span class="eng-logo eng-letter" style="background:${e.color}">${escapeHtml(engName(e).trim().charAt(0))}</span>`;
   }
   function renderEngineList() {
     const ul = document.getElementById('engine-list');
@@ -695,7 +699,7 @@
       }
       return `
       <li data-id="${e.id}" class="${e.id === currentEngine.id ? 'active' : ''}">
-        <span class="eng-dot" style="background:${e.color}"></span>
+        ${engLogoHtml(e)}
         <span>${engName(e)}</span>${badge}
         <span class="eng-key">${i + 1}</span>
       </li>
@@ -960,7 +964,7 @@
   //   3. { tx, c, f }        wordmark tile — some brands (51CTO, 小鹅通, 艾威教育…) *are* set type;
   //                          drawing them as text is more faithful than a hand-traced silhouette
   // ICONDB is static, authored data — never user input — so the markup below is not sanitised.
-  function iconGlyphHtml(icon) {
+  function iconGlyphHtml(icon, glyphColor) {
     if (icon.p) {
       const paths = icon.p.map((s) => `<path fill="${s.f}" d="${s.d}"/>`).join('');
       return `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
@@ -971,7 +975,15 @@
       const size = n <= 1 ? 14 : n === 2 ? 11 : n === 3 ? 7.6 : n <= 5 ? 5.8 : 4.6;
       return `<svg class="logo logo-tx" viewBox="0 0 24 24" aria-hidden="true"><text x="12" y="12.6" fill="${icon.f || inkOn(icon.c)}" font-size="${size}" font-weight="700" text-anchor="middle" dominant-baseline="middle">${escapeHtml(icon.tx)}</text></svg>`;
     }
-    return `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="${inkOn(icon.c)}" d="${icon.d}"/></svg>`;
+    return `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="${glyphColor || inkOn(icon.c)}" d="${icon.d}"/></svg>`;
+  }
+  // A brand colour only works as a bare glyph when it is bright enough for the (dark) menu panel;
+  // near-black marks (GitHub) fall back to currentColor so they follow the theme's text colour.
+  function menuGlyphColor(hex) {
+    const n = parseInt(String(hex || '').replace('#', ''), 16);
+    if (Number.isNaN(n)) return null;
+    const L = 0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
+    return L >= 60 ? hex : null;
   }
   function cardHtml(it) {
     const host = hostnameOf(it.url) || it.title;

@@ -445,6 +445,11 @@ assert(/if \(dlN\) verifyWorkBuddyLaunch\(\)/.test(appSrc), '深链发射后异�
 assert(/window\.open\(deepLinkUrl/.test(appSrc), '深链仍在用户手势内同步 window.open');
 assert(/window\.LT_PROBE_WB = probeWorkBuddy/.test(appSrc), '探测函数导出供离线校验驱动');
 assert(/eng-state/.test(appSrc) && /\.eng-state\.on/.test(cssSrc), '引擎下拉有状态点样式');
+// 引擎小 logo：有品牌图标的复用 icon 库（baidu/google/github/bilibili/doubao/openai），没有的用字母瓷贴
+assert(/function engLogoHtml/.test(appSrc), 'app.js 定义 engLogoHtml()');
+assert(/ENG_ICON_HOST = \{[^}]*baidu: 'baidu\.com'/.test(appSrc) && /openai: 'openai\.com'/.test(appSrc), '引擎→图标库主机映射齐备');
+assert(!/eng-dot/.test(appSrc) && !/eng-dot/.test(cssSrc) && !/eng-dot/.test(html), '旧的 eng-dot 色点已清除');
+assert(/\.eng-logo \{/.test(cssSrc) && /\.eng-letter \{/.test(cssSrc), 'CSS 定义 .eng-logo / .eng-letter');
 assert(!/host_permissions/.test(read('manifest.json')), '不申请 host_permissions（靠对方 CORS 放行）');
 for (const k of ['wb.running', 'wb.not_running', 'wb.not_detected', 'wb.get']) {
   assert(i18nSrc.includes(`'${k}'`), `i18n 含 ${k}`);
