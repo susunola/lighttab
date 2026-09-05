@@ -1235,7 +1235,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 /* ====== Icon grid ====== */
-#grid-wrap { margin-top: clamp(14px, 2.2vh, 24px); }
+/* Clamp the grid to the same 640-wide column the search box and the top-stack widgets share, so
+ * the whole right column reads as one centred group instead of the grid ballooning past the search
+ * pill's right edge (left-aligned but extending ~360px further right). 640 = search max-width. */
+#grid-wrap { margin-top: clamp(14px, 2.2vh, 24px); max-width: 640px; }
 .group-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
   margin-bottom: 14px;
@@ -2173,6 +2176,10 @@ svg.logo-tx text { font-family: inherit; }
   margin: 0;
   max-width: none;
 }
+/* Override the generic max-width: none for the grid block specifically — see #grid-wrap rule
+ * above; the right column reads as one centred group only if the grid stays inside the 640-wide
+ * column the search box defines. */
+.layout.canvas #grid-wrap { max-width: 640px; }
 /* Drag handle: appears on block hover, floating at the top centre of the block. */
 .drag-handle {
   position: absolute;

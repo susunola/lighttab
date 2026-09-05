@@ -768,6 +768,12 @@ assert(!/@media \(max-height: 780px\) \{[\s\S]{0,600}?movie-tile-quote[^}]*displ
 assert(/\.layout \{[\s\S]*?padding: clamp\(12px, 2vh, 22px\) 40px 90px/.test(cssSrc), '.layout 顶部内边距收紧为 clamp(12px, 2vh, 22px)');
 assert(/\.widget\.wclock\.w-top \{ padding: clamp\(2px, 0\.8vh, 10px\) 0 clamp\(4px, 0\.9vh, 12px\)/.test(cssSrc), '顶部时钟上下留白收紧');
 assert(/#grid-wrap \{ margin-top: clamp\(14px, 2\.2vh, 24px\)/.test(cssSrc), '搜索框到网格的间距收紧为 clamp(14px, 2.2vh, 24px)');
+// 网格宽度钳到与搜索框同列（640），否则卡片会一路右移到布局右缘，把整个右列撕成两段不对齐的竖条
+assert(/#grid-wrap \{[\s\S]{0,200}max-width:\s*640px/.test(cssSrc), '网格区收窄到 640px（与搜索/顶部时钟同列）');
+assert(/\.layout\.canvas #grid-wrap \{[\s\S]{0,80}max-width:\s*640px/.test(cssSrc), '画布态覆盖 max-width:none，把网格宽度强制在 640 内');
+assert(/const GRID_MAX_W = 640/.test(canvasSrc), 'canvas.js 定义 GRID_MAX_W 常量');
+assert(/clampBlockW\(b\.key, c\.w\)/.test(canvasSrc), 'canvas.js 应用网格宽度时走钳位函数');
+assert(/clampBlockW\(b\.key, Math\.round\(r\.width\)\)/.test(canvasSrc), 'canvas.js 重新捕获时同样钳位网格宽度');
 // 画布高度：90px 拖拽余量不得单独制造滚动条
 assert(/const DROP_ROOM = 90/.test(canvasSrc), 'canvas.js 保留 90px 拖拽余量常量');
 assert(/if \(maxBottom <= avail && h > avail\) h = avail;/.test(canvasSrc), '内容已在首屏内时，画布高度封顶到视口（不出滚动条）');

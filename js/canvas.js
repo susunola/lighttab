@@ -20,6 +20,13 @@
   const CANVAS_MIN_W = 1024;
   const DRAG_THRESHOLD = 6;
   const DRAG_INTERACTIVE = 'input,button,a,select,textarea,.card,.gchip,.todo-item,.cal-nav-btn,.cal-cell,.engine-list,.menu,.palette,[data-act]';
+  /* The grid block must stay inside the same 640-wide column the search box and top-stack widgets
+   * share; otherwise its cards balloon past the search pill's right edge and the right column reads
+   * as two unaligned strips instead of one centred group. Clamp at capture AND at apply time so a
+   * stale layout (captured before this rule existed) doesn't reintroduce the wide block on next
+   * load. */
+  const GRID_MAX_W = 640;
+  const clampBlockW = (key, w) => (key === 'grid' ? Math.min(+w || 0, GRID_MAX_W) : w);
 
   function blockEls() {
     return BLOCK_DEFS.map(b => ({ ...b, el: document.querySelector(b.sel) })).filter(b => b.el);
@@ -41,7 +48,8 @@
       if (!c || typeof c.x !== 'number' || typeof c.y !== 'number') continue;
       b.el.style.left = c.x + 'px';
       b.el.style.top = c.y + 'px';
-      b.el.style.width = c.w ? c.w + 'px' : '';
+      const cw = clampBlockW(b.key, c.w);
+      b.el.style.width = cw ? cw + 'px' : '';
     }
     applyCardCanvas();
     refreshCanvasHeight();
@@ -504,7 +512,7 @@
     for (const b of blockEls()) {
       const r = b.el.getBoundingClientRect();
       if (!r.width && !r.height) continue; // a removed widget contributes no coordinates
-      next[b.key] = { x: Math.round(r.left - rr.left), y: Math.round(r.top - rr.top), w: Math.round(r.width) };
+      next[b.key] = { x: Math.round(r.left - rr.left), y: Math.round(r.top - rr.top), w: clampBlockW(b.key, Math.round(r.width)) };
     }
     // Card coordinates are (col, row) against the grid's track width. A collapsed left column makes
     // the grid wider, which changes the track count — so the card map has to be re-derived too,
