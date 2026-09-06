@@ -279,7 +279,7 @@
   // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
   // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
   const SCHEMA_VERSION = 5;
-  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history' };
+  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup' };
   // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
   // to the content script across tabs without ever putting it in the URL.
   const PENDING_PREFIX = 'lt.pending.';
@@ -2832,6 +2832,28 @@
       prompts: state.prompts
     };
   }
+  // Backup reminders live in their own local key (lt.backup) — never in lt.settings, so they stay
+  // off the cloud-sync / export payloads (they are this device's local nudge, not user data).
+  const BACKUP_DEFAULT_DAYS = 14;
+  async function backupPrefs() {
+    const r = await localRawGet(K.backup);
+    const p = (r && typeof r === 'object') ? r : { remind: false, days: BACKUP_DEFAULT_DAYS, last: 0 };
+    p.remind = !!p.remind;
+    p.days = Number.isFinite(Number(p.days)) && Number(p.days) >= 1 ? Math.min(90, Math.round(Number(p.days))) : BACKUP_DEFAULT_DAYS;
+    p.last = Number.isFinite(Number(p.last)) ? Number(p.last) : 0;
+    return p;
+  }
+  async function saveBackupPrefs(p) { await localRawSet(K.backup, p); }
+  function markBackupNow() { backupPrefs().then(p => { p.last = Date.now(); return saveBackupPrefs(p); }).catch(() => {}); }
+  function maybeRemindBackup() {
+    backupPrefs().then(p => {
+      if (!p.remind) return;
+      const days = p.days || BACKUP_DEFAULT_DAYS;
+      if (p.last && Date.now() - p.last < days * 86400000) return;
+      markBackupNow(); // one toast per interval; the action button still exports now
+      showToast(t('toast.backup_remind', { n: days }), t('gen.export'), () => { doExport(); markBackupNow(); }, 15000);
+    }).catch(() => {});
+  }
   function doExport() {
     try {
       const blob = new Blob([JSON.stringify(exportPayload(), null, 2)], { type: 'application/json' });
@@ -2846,6 +2868,7 @@
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
       showToast(t('toast.export_ok'));
+      markBackupNow(); // a successful manual export satisfies the reminder interval
     } catch (err) {
       console.warn('[LightTab] export failed', err);
       showToast(t('toast.export_fail'));
@@ -2965,6 +2988,44 @@
     window.LT_CANVAS.reinitCanvas(); // an import may bring in or clear layout coordinates, so resync the canvas
     renderStorageUse(); // the import changed the data size
   }
+  // Which action the shared file input performs next: false = overwrite import (doImport),
+  // true = merge shortcuts only (doImportMerge). Reset after every use.
+  let mergeImportMode = false;
+  async function doImportMerge(file) {
+    let data;
+    try { data = JSON.parse(await file.text()); } catch { return showToast(t('toast.import_not_json')); }
+    if (!data || typeof data !== 'object') return showToast(t('toast.import_bad'));
+    const items = Array.isArray(data.items) ? data.items : [];
+    if (!items.length) return showToast(t('toast.import_merge_empty'));
+    const gids = new Set(state.settings.groups.map(g => g.id));
+    const seen = new Set();
+    const addSeen = (it) => { if (it && it.url) { const u = normalizeUrl(it.url); if (u) seen.add(u); } };
+    for (const it of (state.items || [])) { if (isFolder(it)) (it.children || []).forEach(addSeen); else addSeen(it); }
+    let added = 0, dup = 0;
+    for (const it of items) {
+      if (!it || typeof it !== 'object' || it.type === 'folder' || typeof it.url !== 'string') continue;
+      const url = normalizeUrl(it.url);
+      if (!url) continue;
+      if (seen.has(url)) { dup++; continue; }
+      seen.add(url);
+      state.items.push({
+        id: nid(),
+        title: String(it.title || '').trim().slice(0, 32) || batchHostTitle(url),
+        url,
+        group: gids.has(it.group) ? it.group : '',
+        icon: sanitizeIconDataUrl(it.icon) || undefined
+      });
+      added++;
+    }
+    if (!added) {
+      return showToast(dup ? t('toast.import_merge_dup_only', { n: dup }) : t('toast.import_merge_empty'));
+    }
+    await Store.set(K.items, state.items);
+    syncUI();
+    renderStorageUse();
+    showToast(t('toast.import_merge_done', { n: added }) + (dup ? ' · ' + t('toast.import_merge_dup', { n: dup }) : ''));
+  }
+
   // Add current tab (shortcut dialog, extension mode only): prefill name + URL from the browser's
   // active tab. The "tabs" permission is optional and requested on demand, inside this user gesture
   // — same pattern as the bookmarks import below. Without it chrome.tabs.query returns the active
@@ -3071,13 +3132,31 @@
     // Data management: export JSON / import JSON / import from bookmarks (optional permission, requested on click).
     document.getElementById('btn-export').addEventListener('click', doExport);
     const fImport = document.getElementById('f-import');
-    document.getElementById('btn-import').addEventListener('click', () => fImport.click());
+    document.getElementById('btn-import').addEventListener('click', () => { mergeImportMode = false; fImport.click(); });
+    const mergeBtn = document.getElementById('btn-import-merge');
+    if (mergeBtn) mergeBtn.addEventListener('click', () => { mergeImportMode = true; fImport.click(); });
     fImport.addEventListener('change', e => {
       const f = e.target.files && e.target.files[0];
-      if (f) doImport(f);
+      if (f) { if (mergeImportMode) doImportMerge(f); else doImport(f); }
+      mergeImportMode = false;
       e.target.value = '';
     });
     document.getElementById('btn-import-bookmarks').addEventListener('click', importBookmarks);
+    // Backup reminder (local-only preference, lt.backup — never synced).
+    const backupCb = document.getElementById('f-backup-remind');
+    const backupDays = document.getElementById('f-backup-days');
+    if (backupCb) backupCb.addEventListener('change', async () => {
+      const p = await backupPrefs();
+      p.remind = backupCb.checked;
+      if (p.remind && !p.last) { p.last = Date.now(); } // the interval starts when enabled
+      await saveBackupPrefs(p);
+    });
+    if (backupDays) backupDays.addEventListener('change', async () => {
+      const p = await backupPrefs();
+      p.days = Math.max(1, Math.min(90, Math.round(Number(backupDays.value) || BACKUP_DEFAULT_DAYS)));
+      backupDays.value = String(p.days);
+      await saveBackupPrefs(p);
+    });
 
     // General
     const nameInput = document.getElementById('f-name');
@@ -3208,6 +3287,12 @@
       applyTheme(); // keep the theme select in sync with state (covers remote sync changes)
       renderAccentPicks(); // ... and the accent swatches / colour input
       renderStorageUse(); // data-usage line is live in this pane
+      backupPrefs().then(p => {
+        const bc = document.getElementById('f-backup-remind');
+        const bd = document.getElementById('f-backup-days');
+        if (bc) bc.checked = !!p.remind;
+        if (bd) bd.value = String(p.days || BACKUP_DEFAULT_DAYS);
+      }).catch(() => {});
       renderSwatches();
       renderWallLibGrid();
       const wallRotCb = document.getElementById('f-wall-rotate');
@@ -5047,6 +5132,35 @@
     await Store.set(K.settings, state.settings);
   }
 
+  // ---------- Keyboard shortcut help (press "?") ----------
+  const SHORTCUT_HELP = [
+    ['/', 'help.slash'],
+    ['1-9', 'help.digits'],
+    ['Tab / Shift+Tab', 'help.tabcycle'],
+    ['↑ / ↓ / Enter', 'help.arrows'],
+    ['e / Delete', 'help.gridkeys'],
+    ['t', 'help.todo'],
+    ['?', 'help.help'],
+    ['Esc', 'help.esc']
+  ];
+  function helpEl() { return document.getElementById('shortcut-help'); }
+  function renderShortcutHelp() {
+    const el = helpEl();
+    if (!el) return;
+    const kbdHtml = (label) => label.split(' / ').map(p => `<kbd>${escapeHtml(p)}</kbd>`).join('');
+    el.innerHTML = '<div class="sh-title">' + escapeHtml(t('help.title')) + '</div><div class="sh-rows">' +
+      SHORTCUT_HELP.map(([keys, key]) =>
+        '<div class="sh-row"><span class="sh-keys">' + kbdHtml(keys) + '</span><span class="sh-desc">' + escapeHtml(t(key)) + '</span></div>'
+      ).join('') + '</div>';
+  }
+  function toggleShortcutHelp(force) {
+    const el = helpEl();
+    if (!el) return;
+    const show = (force !== undefined) ? !!force : el.hidden;
+    if (show) renderShortcutHelp();
+    el.hidden = !show;
+  }
+
   // ---------- Boot ----------
   async function boot() {
     const { raw, data } = await loadDataIntoState();
@@ -5141,6 +5255,7 @@
         openModals.forEach(m => hideModal(m));
         document.getElementById('engine-list').hidden = true;
         window.LT_PROMPTS.closePalette(false);
+        toggleShortcutHelp(false);
         dismissOnboarding();
         if (activePrompt && isTypingTarget(document.activeElement)) {
           const qq = document.getElementById('q');
@@ -5159,6 +5274,20 @@
           if (pal.hidden) window.LT_PROMPTS.openPalette(); else window.LT_PROMPTS.closePalette();
         }
       }
+      // "?" opens / closes the shortcut help; "t" focuses the to-do input (when the widget is on).
+      if (e.key === '?' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        toggleShortcutHelp();
+        return;
+      }
+      if ((e.key === 't' || e.key === 'T') && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const todo = document.getElementById('todo-input');
+        if (todo && widgetVisible('wtodo')) {
+          e.preventDefault();
+          todo.focus({ preventScroll: true });
+          try { todo.scrollIntoView({ block: 'nearest' }); } catch (_) {}
+        }
+      }
       if (/^[1-9]$/.test(e.key) && !typing) {
         const idx = +e.key - 1;
         const engines = allEngines();
@@ -5170,6 +5299,10 @@
         }
       }
     });
+    document.addEventListener('click', e => {
+      const h = helpEl();
+      if (h && !h.hidden && !h.contains(e.target)) toggleShortcutHelp(false);
+    });
 
     bindSiteForm();
     window.LT_PROMPTS.bindPalette();
@@ -5178,6 +5311,7 @@
     renderAvatar(); // profile avatar is rendered once events are bound and sync state is reachable
     sweepPending(); // sweep expired / corrupted pending leftovers on boot
     renderStorageUse(); // data-management usage line (boot)
+    maybeRemindBackup(); // interval backup nudge (opt-in, local-only)
 
     // Cloud sync init, last: the migration write-back has landed and every event is bound.
     if (window.LT_SYNC) {

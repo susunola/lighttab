@@ -1945,8 +1945,14 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   for (const k of ['site.batch', 'site.batch_tip', 'site.batch_ph', 'site.batch_back', 'site.batch_go',
     'site.batch_count', 'site.batch_preview', 'site.batch_dup_only', 'toast.batch_done']) {
     assert(i18nSrc.includes(`'${k}'`), `bulk-add i18n key ${k} exists`);
-  }
-}
+    assert(/id="btn-import-merge"/.test(html) && /function doImportMerge/.test(appSrc) && /let mergeImportMode = false;/.test(appSrc),
+    'merge-import (shortcuts only) exists');
+  assert(/id="f-backup-remind"/.test(html) && /id="f-backup-days"/.test(html) && /function maybeRemindBackup/.test(appSrc)
+    && /backup: 'lt\.backup'/.test(appSrc), 'local backup reminder exists (lt.backup, not synced)');
+  assert(/id="shortcut-help"/.test(html) && /function toggleShortcutHelp/.test(appSrc) && /e\.key === '\?'/.test(appSrc),
+    'keyboard help overlay + ? / t commands exist');
+  for (const k of ['help.title', 'help.slash', 'help.todo', 'help.esc']) assert(i18nSrc.includes(`'${k}'`), `help i18n ${k}`);
+}}
 
 console.log('');
 if (failures) {

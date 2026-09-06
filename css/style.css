@@ -2892,3 +2892,55 @@ input[type="file"]:focus-visible {
   color: var(--ink-3);
 }
 .modal-head .batch-btn { margin-left: auto; margin-right: 8px; }
+
+/* Keyboard shortcut help overlay (press ?). */
+.shortcut-help {
+  position: fixed;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 130;
+  min-width: 320px;
+  max-width: min(92vw, 520px);
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--line-2);
+  background-color: var(--glass);
+  background-image: var(--frost-sheen);
+  background-repeat: no-repeat;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-2);
+  color: var(--ink);
+  animation: pop .14s ease;
+}
+.shortcut-help .sh-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.shortcut-help .sh-rows { display: flex; flex-direction: column; gap: 7px; }
+.shortcut-help .sh-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 14px; font-size: 12.5px;
+}
+.shortcut-help .sh-desc { color: var(--ink-2); text-align: right; }
+.shortcut-help kbd {
+  font: 11px/1 var(--font-num, ui-monospace, monospace);
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  border-bottom-width: 2px;
+  background: var(--tint-3);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.backup-row input[type="number"] {
+  width: 64px;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--tint-2);
+  color: var(--ink);
+  font-size: 12px;
+}

@@ -527,10 +527,17 @@
             <div class="data-actions">
               <button type="button" class="btn ghost sm" id="btn-export" data-i18n="gen.export">Export data</button>
               <button type="button" class="btn ghost sm" id="btn-import" data-i18n="gen.import">Import data</button>
+              <button type="button" class="btn ghost sm" id="btn-import-merge" data-i18n="gen.import_merge">Merge shortcuts</button>
               <button type="button" class="btn ghost sm" id="btn-import-bookmarks" data-i18n="gen.import_bookmarks">Import from bookmarks</button>
               <input id="f-import" type="file" accept=".json,application/json" hidden>
             </div>
             <p class="data-tip" data-i18n="gen.data_tip">Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.</p>
+            <p class="data-tip" data-i18n="gen.import_merge_tip">Merge import only adds shortcuts that are not already saved (matched by URL); nothing else is overwritten.</p>
+            <label class="check-row backup-row">
+              <input type="checkbox" id="f-backup-remind">
+              <span data-i18n="gen.backup_remind">Remind me to export a backup</span>
+              <input type="number" id="f-backup-days" min="1" max="90" step="1" value="14" data-i18n-title="gen.backup_days" title="Every N days">
+            </label>
             <p class="storage-use" id="storage-use" data-i18n-aria="store.used" hidden></p>
           </div>
           <div class="modal-actions">
@@ -556,6 +563,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Keyboard shortcut help (press ?) -->
+  <div id="shortcut-help" class="shortcut-help" role="dialog" aria-label="Keyboard shortcuts" hidden></div>
 
   <script src="js/icondb.js"></script>
   <script src="js/lunar.js"></script>
