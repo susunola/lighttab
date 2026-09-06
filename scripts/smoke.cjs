@@ -245,8 +245,30 @@ console.log('[4] pure functions');
     const qi = P.pickQuoteIndex(5, 2);
     assert(qi >= 0 && qi < 5 && qi !== 2, 'pickQuoteIndex skips the previous one (2 of 5)');
     assert(P.pickQuoteIndex(5, -1) >= 0 && P.pickQuoteIndex(5, -1) < 5, 'pickQuoteIndex picks a random one without a previous');
+    // Search-history dedupe: case-insensitive (casing varies between sessions), trims blanks,
+    // keeps the first original spelling, cleans legacy case-duplicates, caps the list length
+    assert(JSON.stringify(P.updateHistory(['GitHub', 'github', 'git  '], '', 10)) === JSON.stringify(['GitHub', 'git']),
+      'updateHistory dedupes case-insensitively and trims blanks');
+    assert(JSON.stringify(P.updateHistory(['a b', 'AB', 'a b'], 'ab', 10)) === JSON.stringify(['ab', 'a b']),
+      'updateHistory new query wins casing, existing entries dedupe against it');
+    assert(P.updateHistory(['1', '2', '3'], '', 2).length === 2, 'updateHistory respects the cap');
+    assert(JSON.stringify(P.updateHistory(['x'], 'x', 10)) === JSON.stringify(['x']), 'updateHistory drops an exact re-search');
   }
   void elStub;
+}
+
+// Reliability hardening (offline guards): the engine-name escaping gap, the calc-vs-template
+// Enter precedence, and the wallpaper-upload input reset live in app.js; assert their shapes here.
+{
+  assert(/function maybeCopyCalc\(\) \{\s*if \(activePrompt\) return false;/.test(appSrc),
+    'calc row never steals Enter while an AI template is active');
+  assert(/<span>\$\{escapeHtml\(engName\(e\)\)\}<\/span>/.test(appSrc),
+    'engine dropdown escapes engine names (custom/imported names are user input)');
+  assert(/async function onUpload\(e\) \{[\s\S]{0,260}e\.target\.value = '';/.test(appSrc),
+    'wallpaper upload clears the file input so the same file can be re-picked');
+  assert(/function updateHistory\(list, q, cap\) \{[\s\S]{0,140}const seen = new Set\(\);/.test(appSrc),
+    'updateHistory uses a seen-set (case-insensitive dedupe)');
+  assert(/const key = clean\.toLowerCase\(\)/.test(appSrc), 'updateHistory lowercases for dedupe');
 }
 
 // 4b-2) icondb.js: data integrity of the real icon library (since #59 the library mixes mono/multi-color/wordmark shapes)
@@ -895,7 +917,7 @@ assert(/function parseJsonpText\(text\)/.test(appSrc), 'app.js defines parseJson
 assert(/host_permissions/.test(read('manifest.json')), 'manifest declares host_permissions so suggestions can fetch() past missing CORS headers');
 // Interaction: keyboard navigation, URL suppression, blur close, engine-switch reset, boot wiring
 assert(/e\.key === 'ArrowDown' \|\| e\.key === 'ArrowUp'/.test(appSrc), 'ArrowDown/ArrowUp move the highlight');
-assert(/e\.key === 'Enter'\) \{\s*if \(suggestHl >= 0/.test(appSrc), 'Enter opens the highlighted row');
+assert(/e\.key === 'Enter'\) \{\s*const row = suggestNav\[suggestHl\];\s*if \(suggestHl >= 0 && row\)/.test(appSrc), 'Enter opens the highlighted row');
 assert(/e\.key === 'Escape'/.test(appSrc) && /closeSuggest\(\);/.test(appSrc), 'Escape closes the dropdown');
 assert(/if \(!q\) \{ suggestItems = \[\]; renderSuggest\(\); return; \}/.test(appSrc) && /if \(looksLikeUrl\(q\)\) \{ closeSuggest\(\); return; \}/.test(appSrc),
   'empty input shows history instead of suggestions, and URLs never trigger suggestions');

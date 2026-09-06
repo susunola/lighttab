@@ -834,6 +834,11 @@
         // Runs on boot (lastDay starts empty) and again on every midnight rollover, so a tab left open
         // across days still rotates the wallpaper. Guarded internally by settings + the today marker.
         maybeAutoRotate();
+        // The same midnight rollover must reach the calendar (today highlight + next-holiday line)
+        // and the movie-of-the-day (a manual browse returns to the deterministic daily pick).
+        maybeRollMovieToToday();
+        renderCalendar();
+        renderMovie();
       }
     }
     tick();
@@ -896,7 +901,7 @@
       return `
       <li data-id="${e.id}" class="${e.id === currentEngine.id ? 'active' : ''}">
         ${engLogoHtml(e)}
-        <span>${engName(e)}</span>${badge}
+        <span>${escapeHtml(engName(e))}</span>${badge}
         <span class="eng-key">${i + 1}</span>
       </li>
     `;
@@ -1061,14 +1066,50 @@
   let searchHistory = [];
   function updateHistory(list, q, cap) {
     const s = String(q || '').trim();
-    const out = s ? [s] : [];
-    for (const h of list) if (typeof h === 'string' && h.trim() && h !== s) out.push(h);
+    const out = [];
+    const seen = new Set();
+    const add = (item) => {
+      const clean = String(item).trim();
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); out.push(clean); }
+    };
+    if (s) add(s);
+    // Case-insensitive dedupe (search casing varies between sessions) while keeping the first
+    // entry's original spelling; also cleans up duplicates / stray whitespace an older version
+    // may have left behind. Non-strings (corrupt storage) never join the list.
+    for (const h of list) if (typeof h === 'string') add(h);
     return out.slice(0, cap);
   }
   function histMatches(list, q, cap) {
     const s = String(q || '').trim().toLowerCase();
     if (!s) return list.slice(0, cap);
     return list.filter(h => h.toLowerCase().includes(s)).slice(0, cap);
+  }
+  // ---------- Local shortcut/bookmark rows (the search box doubles as a launcher) ----------
+  // Every shortcut the user added or imported from bookmarks (folder children included) is matched
+  // by title / URL against the typed query — fully local, no engine, no network. Rows render above
+  // history and network suggestions and open on Enter / click, exactly like typing a URL.
+  const SITE_MATCH_MAX = 3;
+  function siteMatchRows(q) {
+    const s = String(q || '').trim().toLowerCase();
+    if (!s) return [];
+    const seen = new Set();
+    const out = [];
+    const consider = (it) => {
+      if (out.length >= SITE_MATCH_MAX || !it || !it.url) return;
+      const title = String(it.title || '');
+      const url = String(it.url || '');
+      if (!(title.toLowerCase().includes(s) || url.toLowerCase().includes(s))) return;
+      if (seen.has(url)) return;
+      seen.add(url);
+      out.push({ title, url });
+    };
+    for (const it of (state.items || [])) {
+      if (isFolder(it)) (it.children || []).forEach(consider);
+      else consider(it);
+    }
+    return out;
   }
   async function loadHistory() {
     const raw = await localRawGet(K.history);
@@ -1155,8 +1196,9 @@
     }
   }
 
-  let suggestItems = [];      // current dropdown entries
-  let suggestHl = -1;         // highlighted row (-1 = the raw input)
+  let suggestItems = [];      // current network-suggestion entries
+  let suggestNav = [];        // keyboard-selectable union: {kind:'site'} rows + {kind:'net'} rows
+  let suggestHl = -1;         // highlighted index into suggestNav (-1 = the raw input)
   let suggestTyped = '';      // the raw input text, restored when the highlight returns to -1
   let suggestTimer = 0;       // debounce timer
   let suggestBlurTimer = 0;   // delayed close on blur (so a row click lands first)
@@ -1173,6 +1215,7 @@
     clearTimeout(suggestTimer);
     suggestFetchSeq++; // drop any in-flight response
     suggestItems = [];
+    suggestNav = [];
     suggestHl = -1;
     const list = suggestListEl();
     if (list) list.hidden = true;
@@ -1196,23 +1239,52 @@
   }
   // Enter (or a click) on a calc row copies the result instead of searching. The whitelist
   // guarantees there is no real query to lose: a calc expression is never also a search phrase.
+  // A live AI template changes that contract: its content slot is a prompt, so Enter must fire the
+  // template even when the typed content happens to look like an arithmetic expression.
   function maybeCopyCalc() {
+    if (activePrompt) return false;
     const calc = currentCalc();
     if (!calc) return false;
     copyText(calc.result);
     showToast(t('toast.copied'));
     return true;
   }
+  // Rebuild the keyboard-selectable union on every render: local shortcut/bookmark rows first,
+  // then network rows. Returns the site rows (history rows stay click-only, as before).
+  function buildSuggestNav() {
+    const qEl = document.getElementById('q');
+    const sites = siteMatchRows(qEl ? qEl.value : '');
+    suggestNav = sites
+      .map(r => ({ kind: 'site', ...r }))
+      .concat(suggestItems.map(text => ({ kind: 'net', text })));
+    return sites;
+  }
+  function siteRowHtml(site, idx, hl) {
+    const p = cardIconParts(site);
+    const host = hostnameOf(site.url) || '';
+    const active = idx === hl;
+    return `<li role="option" class="sg-site${active ? ' active' : ''}" data-n="${idx}"${active ? ' aria-selected="true"' : ''}>
+      <span class="sg-site-ico" style="background:${p.bg};color:${p.ink}">${p.ico}</span>
+      <span class="sg-site-title">${escapeHtml(site.title)}</span>
+      <span class="sg-site-host">${escapeHtml(host)}</span>
+    </li>`;
+  }
   function renderSuggest() {
     const list = suggestListEl();
     if (!list) return;
     const calc = currentCalc();
     const hist = currentHistRows();
-    if (!calc && !hist.length && !suggestItems.length) { list.hidden = true; return; }
+    const sites = buildSuggestNav();
+    if (!calc && !hist.length && !sites.length && !suggestItems.length) { list.hidden = true; return; }
+    if (suggestHl > suggestNav.length - 1) suggestHl = suggestNav.length - 1;
     let html = '';
     // Top row: the inline calculator result (local rows always sit above network suggestions).
     if (calc) {
       html += `<li role="option" class="sg-calc"><span class="sg-calc-expr">${escapeHtml(calc.display)}</span><span class="sg-calc-hint">${escapeHtml(t('calc.enter_copy'))}</span></li>`;
+    }
+    // Local shortcut/bookmark matches: instant launch targets, above history and network rows.
+    if (sites.length) {
+      html += sites.map((r, i) => siteRowHtml(r, i, suggestHl)).join('');
     }
     if (hist.length) {
       html += `<li class="sg-head" role="presentation"><span>${escapeHtml(t('hist.recent'))}</span><button type="button" class="sg-clear" title="${escapeHtml(t('hist.clear'))}">${escapeHtml(t('hist.clear'))}</button></li>`;
@@ -1220,9 +1292,10 @@
         `<li role="option" class="sg-hist" data-h="${i}"><span class="sg-hist-text">${escapeHtml(h)}</span><span class="sg-hist-del" data-del="${i}" title="${escapeHtml(t('hist.del'))}" aria-label="${escapeHtml(t('hist.del'))}">×</span></li>`
       ).join('');
     }
-    html += suggestItems.map((s, i) =>
-      `<li role="option" data-i="${i}" class="${i === suggestHl ? 'active' : ''}" aria-selected="${i === suggestHl}">${escapeHtml(s)}</li>`
-    ).join('');
+    html += suggestItems.map((s, i) => {
+      const ni = sites.length + i;
+      return `<li role="option" data-n="${ni}" class="${ni === suggestHl ? 'active' : ''}" aria-selected="${ni === suggestHl}">${escapeHtml(s)}</li>`;
+    }).join('');
     list.innerHTML = html;
     list.hidden = false;
   }
@@ -1230,7 +1303,12 @@
     const qEl = document.getElementById('q');
     suggestHl = i;
     // The highlight is written back into the input; -1 restores what the user actually typed.
-    if (qEl) qEl.value = i >= 0 && suggestItems[i] ? suggestItems[i] : suggestTyped;
+    if (qEl) {
+      const row = suggestNav[i];
+      qEl.value = row
+        ? (row.kind === 'site' ? row.url : row.text)
+        : suggestTyped;
+    }
     renderSuggest();
   }
   async function fetchSuggest(q) {
@@ -1307,16 +1385,19 @@
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         const step = e.key === 'ArrowDown' ? 1 : -1;
-        // Range is -1..items-1: -1 is the raw input row.
+        // Range is -1..nav-1: -1 is the raw input row.
         const next = suggestHl + step;
-        setSuggestHl(next < -1 ? suggestItems.length - 1 : next >= suggestItems.length ? -1 : next);
+        setSuggestHl(next < -1 ? suggestNav.length - 1 : next >= suggestNav.length ? -1 : next);
       } else if (e.key === 'Enter') {
-        if (suggestHl >= 0 && suggestItems[suggestHl]) {
+        const row = suggestNav[suggestHl];
+        if (suggestHl >= 0 && row) {
           // A highlighted row wins over the plain search; the form submit never fires (preventDefault).
           // Grab the row before closeSuggest() empties the list.
           e.preventDefault();
-          const picked = suggestItems[suggestHl];
           closeSuggest();
+          // A shortcut/bookmark row opens like a typed URL — or feeds its title to a live template.
+          const picked = row.kind === 'site' ? (activePrompt ? row.title : row.url) : row.text;
+          qEl.value = picked;
           submitSearch(picked, e);
         } else if (maybeCopyCalc()) {
           e.preventDefault(); // a calc row is showing: Enter copies the result instead of searching
@@ -1362,12 +1443,16 @@
         if (h) { qEl.value = h; closeSuggest(); submitSearch(h, e); }
         return;
       }
-      const li = e.target.closest('li[data-i]');
+      const li = e.target.closest('li[data-n]');
       if (!li) return;
       e.preventDefault();
-      const s = suggestItems[+li.dataset.i];
+      const row = suggestNav[+li.dataset.n];
       closeSuggest();
-      if (s) { qEl.value = s; submitSearch(s, e); }
+      if (row) {
+        const picked = row.kind === 'site' ? (activePrompt ? row.title : row.url) : row.text;
+        qEl.value = picked;
+        submitSearch(picked, e);
+      }
     });
     // The input is auto-focused on boot (no focus event fires): show the history view right away.
     if (document.activeElement === qEl && !qEl.value.trim()) renderSuggest();
@@ -2511,7 +2596,12 @@
       : [];
     state.wallpaper = pickWallpaperFromData(migrated.wallpaper);
     state.todos = Array.isArray(migrated.todos)
-      ? migrated.todos.filter(it => it && typeof it.text === 'string').map(it => ({ id: it.id || nid(), text: it.text, done: !!it.done }))
+      ? migrated.todos.filter(it => it && typeof it.text === 'string').map(it => ({
+          id: it.id || nid(),
+          text: it.text,
+          done: !!it.done,
+          due: (typeof it.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(it.due)) ? it.due : undefined
+        }))
       : [];
     // Templates: validate one by one (tmpl must be a string; targets keep only known engines) and drop bad entries.
     const validTarget = id => allEngines().some(x => x.id === id);
@@ -2938,6 +3028,9 @@
   async function onUpload(e) {
     const f = e.target.files?.[0];
     if (!f) return;
+    // Clear the input immediately (success or failure alike): picking the same file again later
+    // must re-fire the change event.
+    e.target.value = '';
     if (f.size > 4 * 1024 * 1024) return showToast(t('toast.image_too_big'));
     let dataUrl, light;
     try {
@@ -3140,6 +3233,21 @@
   }
 
   // ---------- To-do widget ----------
+  // Optional due-date chip: shows M/D (M月D日 in zh) beside the text, turns red once the date has
+  // passed while the item is still open, and clicking it clears the deadline (no separate editor).
+  function dueDateLabel(due) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(due || '');
+    if (!m) return '';
+    const mm = +m[2], dd = +m[3];
+    return isEn() ? `${mm}/${dd}` : `${mm}月${dd}日`;
+  }
+  function dueChipHtml(it) {
+    const due = /^\d{4}-\d{2}-\d{2}$/.test(it && it.due) ? it.due : '';
+    if (!due) return '';
+    const overdue = !it.done && due < todayStr();
+    const tip = overdue ? t('todo.overdue') : t('todo.due_clear');
+    return `<span class="t-due${overdue ? ' over' : ''}" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">${escapeHtml(dueDateLabel(due))}</span>`;
+  }
   function renderTodos() {
     const list = document.getElementById('todo-list');
     const countEl = document.getElementById('todo-count');
@@ -3154,6 +3262,7 @@
       <li class="todo-item ${it.done ? 'done' : ''}" data-id="${escapeHtml(it.id)}">
         <span class="t-check"></span>
         <span class="t-text">${escapeHtml(it.text)}</span>
+        ${dueChipHtml(it)}
         <span class="t-del" title="${delLabel}">×</span>
       </li>
     `).join('');
@@ -3164,14 +3273,18 @@
   function bindTodo() {
     const form = document.getElementById('todo-form');
     const input = document.getElementById('todo-input');
+    const dueInput = document.getElementById('todo-due');
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const text = input.value.trim();
       if (!text) return;
-      state.todos.unshift({ id: nid(), text, done: false });
+      const due = dueInput && /^\d{4}-\d{2}-\d{2}$/.test(dueInput.value) ? dueInput.value : '';
+      state.todos.unshift({ id: nid(), text, done: false, ...(due ? { due } : {}) });
       input.value = '';
+      if (dueInput) dueInput.value = '';
       await saveTodos();
       renderTodos();
+      renderCalendar(); // the calendar's due dots must follow a newly dated task
     });
     document.getElementById('todo-list').addEventListener('click', async e => {
       const item = e.target.closest('.todo-item');
@@ -3180,11 +3293,14 @@
       if (!todo) return;
       if (e.target.closest('.t-del')) {
         state.todos = state.todos.filter(it => it.id !== todo.id);
+      } else if (e.target.closest('.t-due')) {
+        delete todo.due; // clicking the due chip drops the deadline
       } else {
         todo.done = !todo.done;
       }
       await saveTodos();
       renderTodos();
+      renderCalendar(); // completion / deletion also moves the calendar's due dots
     });
     renderTodos();
   }
@@ -3218,6 +3334,11 @@
     const startDow = new Date(y, m - 1, 1).getDay(); // 0 = Sunday
     const daysInMonth = new Date(y, m, 0).getDate();
     const isThisMonth = y === now.getFullYear() && m === now.getMonth() + 1;
+    // Open to-dos with a deadline mark their calendar day with a small dot (any month in view).
+    const dueSet = new Set();
+    for (const td of state.todos) {
+      if (td && !td.done && /^\d{4}-\d{2}-\d{2}$/.test(td.due || '')) dueSet.add(td.due);
+    }
     const cells = [];
     for (let i = 0; i < startDow; i++) cells.push('<span class="cal-cell empty"></span>');
     for (let d = 1; d <= daysInMonth; d++) {
@@ -3227,13 +3348,16 @@
         if (lu) lday = isEn() ? window.LT_LUNAR.dayNameEn(lu.day) : window.LT_LUNAR.dayName(lu.day);
       }
       const isToday = isThisMonth && d === now.getDate();
+      const key = `${y}-${pad2(m)}-${pad2(d)}`;
       // Statutory-holiday markers (js/holidays.js): a corner badge — 休/Off for holidays,
       // 班/Work for 调休 make-up workdays. The today highlight always wins visually.
-      const hol = window.LT_HOLIDAYS && window.LT_HOLIDAYS.table[`${y}-${pad2(m)}-${pad2(d)}`];
+      const hol = window.LT_HOLIDAYS && window.LT_HOLIDAYS.table[key];
       const badge = !hol ? '' : hol.work
         ? `<em class="cal-badge work">${escapeHtml(t('cal.badge_work'))}</em>`
         : `<em class="cal-badge hol">${escapeHtml(t('cal.badge_rest'))}</em>`;
-      const cls = 'cal-cell' + (isToday ? ' today' : '') + (hol ? (hol.work ? ' workday' : ' holiday') : '');
+      const cls = 'cal-cell' + (isToday ? ' today' : '')
+        + (hol ? (hol.work ? ' workday' : ' holiday') : '')
+        + (dueSet.has(key) ? ' due' : '');
       cells.push(`<span class="${cls}"><b>${d}</b><i>${lday}</i>${badge}</span>`);
     }
     grid.innerHTML = cells.join('');
@@ -3309,11 +3433,23 @@
   ];
   // Local cursor: -1 = follow the deterministic daily pick; otherwise a manual index into the pool.
   let movieCursor = -1;
+  // Last calendar day the midnight-rollover hook ran on (see maybeRollMovieToToday).
+  let movieDayMarker = '';
   function movieIndexForToday() {
     const now = new Date();
     const start = new Date(now.getFullYear(), 0, 0);
     const doy = Math.floor((now - start) / 86400000);
     return ((doy % DOUBAN_ANNUAL_BEST.length) + DOUBAN_ANNUAL_BEST.length) % DOUBAN_ANNUAL_BEST.length;
+  }
+  // A manual "换一部" browse is session-only: at the next calendar day the widget returns to the
+  // deterministic daily pick (the README promise). Boot never counts as a rollover — only a real
+  // day change with the page left open does. Rendering is left to the caller's own renderMovie().
+  function maybeRollMovieToToday() {
+    const today = todayStr();
+    if (movieCursor >= 0 && movieDayMarker !== '' && movieDayMarker !== today) {
+      movieCursor = -1;
+    }
+    movieDayMarker = today;
   }
   function renderMovie() {
     const card = document.getElementById('movie-card');
@@ -3996,6 +4132,7 @@
     renderGrid();
     renderTodos();
     renderCalendar();
+    renderMovie(); // the movie card carries a localized date line / label — follow the language
     renderWeather(); // condition words / humidity label follow the language
     renderCountdown(); // off-work labels / day rows follow the language
     renderPomodoro(); // phase / button labels follow the language

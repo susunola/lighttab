@@ -121,6 +121,9 @@
     'todo.add':         { zh: '添加', en: 'Add' },
     'todo.empty':       { zh: '今天要做点什么？', en: 'What needs doing today?' },
     'todo.del':         { zh: '删除', en: 'Delete' },
+    'todo.due':         { zh: '截止日期（可选）', en: 'Due date (optional)' },
+    'todo.due_clear':   { zh: '点击移除截止日期', en: 'Click to clear the due date' },
+    'todo.overdue':     { zh: '已逾期', en: 'Overdue' },
 
     // ---------- Calendar ----------
     'cal.prev': { zh: '上月', en: 'Previous month' },
