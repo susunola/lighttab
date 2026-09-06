@@ -72,6 +72,24 @@ See [privacy.html](./privacy.html) for the full policy.
 - i18n is a flat local dictionary plus `[data-i18n]` DOM hooks — no runtime library
 - Offline smoke checks: `node scripts/smoke.cjs` (syntax / manifest / version consistency / pure-function assertions)
 
+### Testing
+
+Two layers, both kept out of the runtime (no runtime dependencies):
+
+1. **Offline smoke** — `node scripts/smoke.cjs`: JS syntax, manifest/version consistency,
+   pure-function assertions and static DOM/CSS guards. Runs in CI on every push.
+2. **Browser E2E (local)** — Playwright drives the page in `file://` preview mode against a
+   fresh profile (boot, grid keyboard, modal, to-dos…):
+
+   ```bash
+   npm i -D @playwright/test   # first time only
+   npx playwright install chromium
+   npx playwright test -c tests/e2e/playwright.config.js
+   ```
+
+   These need a real browser, so they are not part of CI — run them before publishing
+   a release. Tests live in `tests/e2e/`.
+
 ## Structure
 
 ```
@@ -90,6 +108,8 @@ lighttab/
 │   └── inject-ai.js       # content script that auto-fills and sends on Doubao / Dola / ChatGPT
 ├── scripts/
 │   └── smoke.cjs          # offline smoke checks (node scripts/smoke.cjs)
+├── tests/
+│   └── e2e/               # local Playwright tests (see “Testing” above)
 ├── assets/                # logo + social preview (and the script that renders them)
 └── icons/                 # 16 / 48 / 128
 ```

@@ -1954,6 +1954,14 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   for (const k of ['help.title', 'help.slash', 'help.todo', 'help.esc']) assert(i18nSrc.includes(`'${k}'`), `help i18n ${k}`);
 }}
 
+// ---------- 30) touch long-press reorder ----------
+{
+  assert(/const TOUCH_HOLD_MS = 400;/.test(appSrc) && /function bindTouchReorder/.test(appSrc)
+    && /function reorderVisibleItems/.test(appSrc) && /bindTouchReorder\(\);/.test(appSrc),
+    'touch/pen long-press reorder is wired (flow layout)');
+  assert(/\.card\.t-dragging/.test(cssSrc), 'dragged card has a distinct visual state');
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);

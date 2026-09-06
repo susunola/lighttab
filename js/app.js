@@ -2347,27 +2347,125 @@
           }
           // Folders cannot nest into a new folder: fall through to a plain reorder.
         }
-        const dragId = gridDragId;
-        // Reordering only happens between cards visible in the current view, so reorder the visible subset first.
-        const scope = state.items.filter(inView);
-        const fromIdx = scope.findIndex(x => x.id === dragId);
-        const toIdx0 = scope.findIndex(x => x.id === a.dataset.id);
-        if (fromIdx < 0 || toIdx0 < 0) return;
-        const [moved] = scope.splice(fromIdx, 1);
-        let toIdx = scope.findIndex(x => x.id === a.dataset.id);
-        if (!before) toIdx += 1;
-        scope.splice(toIdx, 0, moved);
-        if (state.view === VIEW_ALL) {
-          // "All" view: the visible subset is the whole set, so write it straight back.
-          state.items = scope;
-        } else {
-          // Group / ungrouped view: rewrite the visible slots in the new order and leave hidden items anchored in place.
-          let k = 0;
-          state.items = state.items.map(it => inView(it) ? scope[k++] : it);
-        }
-        await Store.set(K.items, state.items);
-        syncUI();
+        return reorderVisibleItems(gridDragId, a.dataset.id, before);
       });
+    });
+  }
+
+  // Move a card within the visible scope of the current view (shortcuts & folders alike). Shared
+  // by the HTML5 drop path above and the touch long-press reorder below, so both stay in sync.
+  async function reorderVisibleItems(dragId, tgtId, before) {
+    const scope = state.items.filter(inView);
+    const fromIdx = scope.findIndex(x => x.id === dragId);
+    const toIdx0 = scope.findIndex(x => x.id === tgtId);
+    if (fromIdx < 0 || toIdx0 < 0) return;
+    const [moved] = scope.splice(fromIdx, 1);
+    let toIdx = scope.findIndex(x => x.id === tgtId);
+    if (!before) toIdx += 1;
+    scope.splice(toIdx, 0, moved);
+    if (state.view === VIEW_ALL) {
+      // "All" view: the visible subset is the whole set, so write it straight back.
+      state.items = scope;
+    } else {
+      // Group / ungrouped view: rewrite the visible slots in the new order and leave hidden items anchored in place.
+      let k = 0;
+      state.items = state.items.map(it => inView(it) ? scope[k++] : it);
+    }
+    await Store.set(K.items, state.items);
+    syncUI();
+  }
+
+  // ---------- Touch / pen long-press reorder (flow layout) ----------
+  // HTML5 drag needs a mouse, so pointer devices get a long-press gesture instead: hold still for
+  // 400ms to pick a card up, drag it, release over a gap to reorder (same reorder as the mouse
+  // drop). A movement before the timer fires is treated as a normal scroll and cancels the press.
+  const TOUCH_HOLD_MS = 400;
+  const TOUCH_MOVE_CANCEL = 10;
+  let touchDrag = null;
+  function isFlowGrid() {
+    const root = document.querySelector('.layout');
+    return !(root && root.classList.contains('canvas'));
+  }
+  function bindTouchReorder() {
+    const grid = document.getElementById('grid');
+    if (!grid) return;
+    const setGridTouchAction = (none) => { grid.style.touchAction = none ? 'none' : ''; };
+    const cancel = () => {
+      if (!touchDrag) return;
+      if (touchDrag.timer) clearTimeout(touchDrag.timer);
+      if (touchDrag.card) { touchDrag.card.classList.remove('t-dragging'); touchDrag.card.style.transform = ''; touchDrag.card.style.zIndex = ''; }
+      setGridTouchAction(false);
+      touchDrag = null;
+    };
+    grid.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+      if (!isFlowGrid()) return; // canvas mode already pointer-drags cards
+      if (e.target.closest('.card-actions')) return;
+      const card = e.target.closest('.card:not(.card-add)');
+      if (!card || !card.dataset.id) return;
+      cancel();
+      const start = { x: e.clientX, y: e.clientY };
+      const cand = {
+        id: card.dataset.id, card, pointerId: e.pointerId, start,
+        px: start.x, py: start.y, armed: false, live: true, timer: 0
+      };
+      cand.timer = setTimeout(() => {
+        if (!cand.live) return;
+        // Still holding (no scroll started): pick the card up.
+        cand.armed = true;
+        cand.card.classList.add('t-dragging');
+        cand.card.style.zIndex = '50';
+        setGridTouchAction(true);
+        try { cand.card.setPointerCapture(e.pointerId); } catch (_) {}
+      }, TOUCH_HOLD_MS);
+      touchDrag = cand;
+    });
+    grid.addEventListener('pointermove', (e) => {
+      const d = touchDrag;
+      if (!d || d.pointerId !== e.pointerId || !d.live) return;
+      const dx = e.clientX - d.start.x;
+      const dy = e.clientY - d.start.y;
+      if (!d.armed) {
+        if (Math.hypot(dx, dy) > TOUCH_MOVE_CANCEL) cancel(); // user meant to scroll
+        return;
+      }
+      e.preventDefault();
+      d.px = e.clientX; d.py = e.clientY;
+      d.card.style.transform = `translate(${dx}px, ${dy}px) scale(1.04)`;
+    });
+    const finish = async (e) => {
+      const d = touchDrag;
+      if (!d || d.pointerId !== e.pointerId) return;
+      const armed = d.armed && d.live;
+      cancel();
+      if (!armed) return;
+      // Where did we let go? Prefer the card under the pointer, else the closest visible card.
+      let target = null;
+      try { target = document.elementFromPoint(e.clientX, e.clientY); } catch (_) {}
+      const tCard = target ? target.closest('.card:not(.card-add)') : null;
+      const visible = visibleGridCards().filter(c => c.dataset.id !== d.id);
+      let pick = tCard && tCard.dataset.id ? tCard : null;
+      if (!pick && visible.length) {
+        pick = visible.reduce((best, c) => {
+          const r = c.getBoundingClientRect();
+          const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+          const bd = Math.hypot(cx - e.clientX, cy - e.clientY) - (best ? best.d : Infinity);
+          return bd < 0 ? { el: c, d: Math.hypot(cx - e.clientX, cy - e.clientY) } : best;
+        }, null);
+        pick = pick && pick.el ? pick.el : null;
+      }
+      if (!pick || pick.dataset.id === d.id) return;
+      const pr = pick.getBoundingClientRect();
+      // Same visual row → horizontal half decides before/after; otherwise vertical.
+      const sameRow = Math.abs((pr.top + pr.height / 2) - e.clientY) <= pr.height * 0.6;
+      const before = sameRow ? e.clientX < pr.left + pr.width / 2 : e.clientY < pr.top + pr.height / 2;
+      await reorderVisibleItems(d.id, pick.dataset.id, before);
+    };
+    grid.addEventListener('pointerup', finish);
+    grid.addEventListener('pointercancel', finish);
+    // A long hold on touch can also fire a context menu — suppress it while dragging.
+    grid.addEventListener('contextmenu', (e) => {
+      if (touchDrag && touchDrag.armed) e.preventDefault();
     });
   }
 
@@ -5191,6 +5289,7 @@
     bindFolderGlobal();
     bindGridKeys();
     bindModalTrap();
+    bindTouchReorder();
     applyWidgets();
     applySearchVis(); // hide-search preference (the clock side is folded into applyWidgets)
     applyIconSizing(); // --icon-size / --icon-radius on :root

@@ -2944,3 +2944,11 @@ input[type="file"]:focus-visible {
   color: var(--ink);
   font-size: 12px;
 }
+
+/* Touch long-press drag state (flow layout). */
+.card.t-dragging {
+  opacity: .94;
+  transition: none;
+  will-change: transform;
+  cursor: grabbing;
+}
