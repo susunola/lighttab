@@ -1,3 +1,18 @@
+# AI assistant update draft
+
+打开新标签页，展开右侧 AI 助手，输入一次内容，再选择一个或多个目标。模板可用于翻译、润色、总结、解释代码和周报；支持完整预览、额外字段、收藏与导入导出。
+
+- ChatGPT、豆包：扩展尝试填入，可关闭自动发送。实际支持受登录状态、地区和目标网页变化影响。
+- DeepSeek：打开网站后手动粘贴；不宣称自动发送。
+- WorkBuddy：调用已安装的桌面应用。
+- 每个目标单独显示处理状态；未打开的目标可单独重试。
+- 最近任务默认不保存，不自动展开；启用后仅保存在本机。
+- 网页选中文字后通过右键菜单带入 AI 草稿，用户确认后发射。
+
+权限说明：contextMenus 用于选中文字右键入口；storage 用于本机设置、模板及短期发射记录。不会因选中文字自动向 AI 发送内容。
+
+以下是原有商店介绍，发布前合并确认：
+
 # Chrome Web Store description — ready to paste
 
 > Paste the "Full description" block below into the store editor (HTML is supported).

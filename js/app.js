@@ -33,7 +33,7 @@
   const WALLPAPERS = [
     // The factory default is a bundled render (procedurally generated, zero licensing surface);
     // entries with `img` are bundled files, entries with `css` are gradients.
-    { id: 'blue-hour-plum', name: '暮蓝梅花', img: 'assets/wallpaper-blue-hour-plum.jpg' },
+    { id: 'blue-hour-plum', name: '暮蓝映梅', img: 'assets/wallpaper-blue-hour-plum.jpg' },
     { id: 'dusk',     name: 'Dusk Mountain', img: 'assets/wallpaper-dusk.jpg' },
     // Store builds bundle only self-generated art; the online library serves curated wallpapers.
     { id: 'midnight', name: 'Dusk Blue',    css: 'linear-gradient(135deg,#0b1426 0%,#152a4f 45%,#1c3d6e 100%)' },
@@ -1693,8 +1693,55 @@
   }
 
   let launcherTargets = ['doubao'];
+  try { const saved=JSON.parse(localStorage.getItem('lt.ai.targets')); if(Array.isArray(saved))launcherTargets=saved.filter(id=>ENGINES.some(e=>e.ai&&e.id===id)); } catch (_) {}
+  let launcherAutoSend = true;
+  try { launcherAutoSend = localStorage.getItem('lt.ai.autoSend') !== 'false'; } catch (_) {}
+  let launchBusy = false, lastLaunchAt = 0;
+  let deliveryListener=null;
+  let rememberTasks=false,recentTasks=[];
+  try{rememberTasks=localStorage.getItem('lt.ai.remember')==='true';const saved=JSON.parse(localStorage.getItem('lt.ai.recent'));if(rememberTasks&&Array.isArray(saved))recentTasks=saved.filter(x=>typeof x==='string').slice(0,10);}catch(_){}
   let launcherTemplate = null;
   let launcherDraft = '';
+  function applyAiButtonPosition() {
+    const button=document.getElementById('ai-side-toggle'),pos=state.settings.aiButtonPosition;
+    if(!button||button.hidden||!pos||!Number.isFinite(pos.x)||!Number.isFinite(pos.y))return;
+    button.style.left=Math.max(8,Math.min(pos.x,innerWidth-button.offsetWidth-8))+'px';
+    button.style.top=Math.max(8,Math.min(pos.y,innerHeight-button.offsetHeight-8))+'px';
+    button.style.right='auto';
+  }
+  function bindAiButtonDrag() {
+    const button=document.getElementById('ai-side-toggle');
+    if(!button||button.dataset.dragBound)return;
+    button.dataset.dragBound='true';
+    let gesture=null,suppressClick=false;
+    button.addEventListener('click',e=>{
+      if(suppressClick&&e.detail!==0){suppressClick=false;e.preventDefault();e.stopImmediatePropagation();}
+    },true);
+    button.addEventListener('pointerdown',e=>{
+      if(e.button!==0||!e.isPrimary)return;
+      suppressClick=false;
+      const rect=button.getBoundingClientRect();
+      gesture={id:e.pointerId,x:e.clientX,y:e.clientY,left:rect.left,top:rect.top,moved:false};
+      button.setPointerCapture(e.pointerId);
+    });
+    button.addEventListener('pointermove',e=>{
+      if(!gesture||e.pointerId!==gesture.id)return;
+      const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
+      if(!gesture.moved&&Math.hypot(dx,dy)<5)return;
+      gesture.moved=true;button.classList.add('dragging');
+      button.style.left=Math.max(8,Math.min(gesture.left+dx,innerWidth-button.offsetWidth-8))+'px';
+      button.style.top=Math.max(8,Math.min(gesture.top+dy,innerHeight-button.offsetHeight-8))+'px';
+      button.style.right='auto';
+    });
+    const finish=e=>{
+      if(!gesture||e.pointerId!==gesture.id)return;
+      const moved=gesture.moved;gesture=null;button.classList.remove('dragging');
+      if(button.hasPointerCapture(e.pointerId))button.releasePointerCapture(e.pointerId);
+      if(moved){suppressClick=true;const rect=button.getBoundingClientRect();state.settings.aiButtonPosition={x:rect.left,y:rect.top};Store.set(K.settings,state.settings);}
+    };
+    button.addEventListener('pointerup',finish);
+    button.addEventListener('pointercancel',finish);
+  }
   function applyAiPosition() {
     const panel=document.getElementById('ai-launcher');
     const pos=state.settings.aiPanelPosition;
@@ -1727,34 +1774,60 @@
     if(!root)return;
     const enabled=state.settings.aiEnabled !== false;
     document.getElementById('ai-side-toggle').hidden=!enabled;
+    bindAiButtonDrag();applyAiButtonPosition();
     if(!enabled)root.hidden=true;
+    const previousResults=root.querySelector('#ai-launch-results');
     const en=isEn();
     const names={'Translate to English':'翻译成英文','Translate to Chinese':'翻译成中文','Polish writing':'润色','Explain code':'解释代码','Weekly report':'周报','Summarize':'总结'};
     root.innerHTML=`<div class="launch-heading"><strong>${en?'AI assistant':'AI 助手'}</strong><button data-close-ai aria-label="${en?'Close':'关闭'}">×</button></div>
       <textarea id="ai-draft" aria-label="${en?'Task':'任务内容'}" placeholder="${en?'Ask a question or paste content…':'输入问题或粘贴内容…'}"></textarea>
+      <div class="launch-presets"><button data-preset="writing">${en?'Writing':'写作'}</button><button data-preset="coding">${en?'Coding':'编程'}</button><button data-preset="research">${en?'Research':'研究'}</button></div>
       <div class="launch-options">${ENGINES.filter(e=>e.ai).map(e=>`<button data-target="${e.id}" aria-pressed="${launcherTargets.includes(e.id)}">${escapeHtml(engName(e))}<small>${e.copyOnly?(en?'Manual paste':'手动粘贴'):e.deeplink?(en?'Desktop':'桌面启动'):(en?'Extension auto-send':'扩展内自动发送')}</small></button>`).join('')}</div>
-      <label class="launch-template-label">${en?'Template':'模板'}<select id="ai-template"><option value="">${en?'Direct question':'直接提问'}</option>${state.prompts.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(en?p.name:names[p.name]||p.name)}</option>`).join('')}</select></label>
+      <label class="launch-template-label">${en?'Template':'模板'}<select id="ai-template"><option value="">${en?'Direct question':'直接提问'}</option>${state.prompts.slice().sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(en?p.name:names[p.name]||p.name)}</option>`).join('')}</select></label>
+      <label class="launch-hint"><input type="checkbox" id="ai-auto-send" ${launcherAutoSend?'checked':''}> ${en?'Send automatically (supported targets)':'自动发送（支持的目标）'}</label>
+      <details class="launch-history"><summary>${en?'Recent tasks':'最近任务'}</summary><label><input id="ai-remember" type="checkbox" ${rememberTasks?'checked':''}> ${en?'Save on this device':'仅在本机保存'}</label><div id="ai-recent-list"></div><button id="ai-clear-recent">${en?'Clear':'清空'}</button></details>
+      <details class="launch-preview"><summary>${en?'Preview prompt':'预览完整提示词'}</summary><pre id="ai-prompt-preview"></pre></details>
       <button id="ai-send">${en?'Launch':'发射'} ↗</button><p class="launch-hint">${en?'Multiple targets · Ctrl / ⌘ + Enter to launch':'支持多选目标 · Ctrl / ⌘ + Enter 发射'}</p>`;
+    if(previousResults)root.append(previousResults);
     bindAiDrag(root);
     applyAiPosition();
-    const input=root.querySelector('#ai-draft');input.value=launcherDraft;input.oninput=()=>launcherDraft=input.value;
-    const select=root.querySelector('#ai-template');select.value=launcherTemplate?.id||'';select.onchange=()=>launcherTemplate=state.prompts.find(p=>p.id===select.value)||null;
-    let lastSendAt = 0;
-    function send(e){if(Date.now()-lastSendAt<1200)return;const text=input.value.trim();if(!launcherTargets.length)return showToast(en?'Choose an AI':'请先选择 AI');if(!text&&(!launcherTemplate||launcherTemplate.tmpl.includes('{q}')))return showToast(en?'Enter content':'请先输入内容');lastSendAt=Date.now();launchPrompt({...launcherTemplate,tmpl:launcherTemplate?.tmpl||'{q}',targets:launcherTargets},text,e);}
+    const input=root.querySelector('#ai-draft');input.value=launcherDraft;
+    function updatePreview(){root.querySelector('#ai-prompt-preview').textContent=(launcherTemplate?.tmpl||'{q}').replace(/\{q\}/g,()=>input.value);}
+    input.oninput=()=>{launcherDraft=input.value;updatePreview();};
+    root.querySelector('#ai-auto-send').onchange=e=>{launcherAutoSend=e.target.checked;try{localStorage.setItem('lt.ai.autoSend',String(launcherAutoSend));}catch(_){}};
+    const recentList=root.querySelector('#ai-recent-list');
+    for(const text of recentTasks){const b=document.createElement('button');b.textContent=text.slice(0,50);b.onclick=()=>{launcherDraft=text;input.value=text;updatePreview();input.focus();};recentList.append(b);}
+    root.querySelector('#ai-remember').onchange=e=>{rememberTasks=e.target.checked;if(!rememberTasks)recentTasks=[];try{localStorage.setItem('lt.ai.remember',String(rememberTasks));if(!rememberTasks)localStorage.removeItem('lt.ai.recent');}catch(_){}renderLauncher();};
+    root.querySelector('#ai-clear-recent').onclick=()=>{recentTasks=[];try{localStorage.removeItem('lt.ai.recent');}catch(_){}renderLauncher();};
+    updatePreview();
+    const select=root.querySelector('#ai-template');select.value=launcherTemplate?.id||'';select.onchange=()=>{launcherTemplate=state.prompts.find(p=>p.id===select.value)||null;updatePreview();};
+    function send(e){if(launchBusy || Date.now()-lastLaunchAt<1200)return;const text=input.value.trim();if(!launcherTargets.length)return showToast(en?'Choose an AI':'请先选择 AI');if(!text&&(!launcherTemplate||launcherTemplate.tmpl.includes('{q}')))return showToast(en?'Enter content':'请先输入内容');launchPrompt({...launcherTemplate,tmpl:launcherTemplate?.tmpl||'{q}',targets:launcherTargets,autoSend:launcherAutoSend},text,e);}
     input.onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();send(e);}};
-    root.onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.hasAttribute('data-close-ai')){root.hidden=true;document.getElementById('ai-side-toggle').setAttribute('aria-expanded','false');document.getElementById('ai-side-toggle').focus();return;}if(b.dataset.target){const id=b.dataset.target;launcherTargets=launcherTargets.includes(id)?launcherTargets.filter(x=>x!==id):[...launcherTargets,id];renderLauncher();return;}if(b.id==='ai-send')send(e);};
+    root.onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.hasAttribute('data-close-ai')){root.hidden=true;document.getElementById('ai-side-toggle').setAttribute('aria-expanded','false');document.getElementById('ai-side-toggle').focus();return;}if(b.dataset.preset){launcherTargets=({writing:['doubao','openai'],coding:['openai','deepseek'],research:['doubao','openai','deepseek']})[b.dataset.preset];try{localStorage.setItem('lt.ai.targets',JSON.stringify(launcherTargets));}catch(_){}renderLauncher();return;}if(b.dataset.target){const id=b.dataset.target;launcherTargets=launcherTargets.includes(id)?launcherTargets.filter(x=>x!==id):[...launcherTargets,id];try{localStorage.setItem('lt.ai.targets',JSON.stringify(launcherTargets));}catch(_){}renderLauncher();return;}if(b.id==='ai-send')send(e);};
     const toggle=document.getElementById('ai-side-toggle');toggle.onclick=()=>{root.hidden=!root.hidden;toggle.setAttribute('aria-expanded',String(!root.hidden));if(!root.hidden){renderLauncher();root.querySelector('textarea').focus();}};
     root.onkeydown=e=>{if(e.key==='Escape'){root.hidden=true;toggle.setAttribute('aria-expanded','false');toggle.focus();}};
   }
 
-  function submitSearch(rawQuery, ev) {
+  function templateKeys(pattern){return [...new Set([...String(pattern||'').matchAll(/\{([\p{L}\p{N}_-]{1,24})\}/gu)].map(x=>x[1]).filter(x=>x!=='q'))];}
+  function withTemplateFields(template,done,content){
+    const keys=templateKeys(template?.tmpl);if(!keys.length)return done(template);
+    const dialog=document.createElement('dialog');dialog.className='manual-copy-dialog';
+    const form=document.createElement('form');const title=document.createElement('h3');title.textContent=isEn()?'Complete template fields':'补充模板内容';form.append(title);
+    const fields=[];for(const key of keys){const label=document.createElement('label');label.style.display='block';label.textContent=key;const input=document.createElement('input');input.required=true;input.maxLength=4000;input.style.cssText='display:block;width:100%;box-sizing:border-box;margin:8px 0 16px';label.append(input);form.append(label);fields.push(input);}
+    const preview=document.createElement('pre');preview.style.cssText='white-space:pre-wrap;overflow:auto;max-height:160px';const update=()=>{const values=Object.fromEntries(keys.map((k,i)=>[k,fields[i].value]));preview.textContent=template.tmpl.replace(/\{([\p{L}\p{N}_-]{1,24})\}/gu,(all,key)=>key==='q'?(content||''):(values[key]??all));};fields.forEach(input=>input.oninput=update);update();form.append(preview);
+    const cancel=document.createElement('button');cancel.type='button';cancel.textContent=isEn()?'Cancel':'取消';cancel.onclick=()=>dialog.close();
+    const submit=document.createElement('button');submit.textContent=isEn()?'Continue':'继续';form.append(cancel,submit);dialog.append(form);document.body.append(dialog);
+    form.onsubmit=e=>{e.preventDefault();const values=Object.fromEntries(keys.map((k,i)=>[k,fields[i].value]));dialog.close();done({...template,fieldValues:values});};dialog.onclose=()=>dialog.remove();dialog.showModal();fields[0].focus();
+  }
+  function submitSearch(rawQuery, ev, resolvedTemplate) {
     closeSuggest();
     let q = (rawQuery || '').trim();
-    const template = activePrompt;
+    const template = resolvedTemplate || activePrompt;
+    if(!resolvedTemplate&&templateKeys(template?.tmpl).length)return withTemplateFields(template,p=>submitSearch(rawQuery,ev,p),rawQuery);
     if (template) {
       const pattern = String(template.tmpl || '');
       if (pattern.includes('{q}') && !q) { showToast(t('ai.enter')); document.getElementById('q').focus(); return; }
-      q = pattern.includes('{q}') ? pattern.replace(/\{q\}/g, () => q) : pattern;
+      q = pattern.replace(/\{([\p{L}\p{N}_-]{1,24})\}/gu,(all,key)=>key==='q'?q:(template.fieldValues?.[key]??all));
     }
     if (!q) return;
     // Launcher behaviour on a web engine: an exact, unique site name opens the site directly
@@ -1783,8 +1856,7 @@
         const u = currentEngine.url.replace('{q}', encodeURIComponent(q));
         if (u && u !== currentEngine.url) openResult(u, ev);
       }
-      copyText(q);
-      showToast(t('ai.copied'), null, null, 3200);
+      copyToClipboard(q);
       return;
     }
 
@@ -1827,6 +1899,7 @@
     if (hasChromeStorage) {
       chrome.storage.local.get(null).then(all => {
         const pairs = Object.entries(all).filter(([k]) => k.startsWith(PENDING_PREFIX));
+        for(const [k,v] of Object.entries(all)){if((k.startsWith('lt.delivery.')||k.startsWith('lt.selection.'))&&(!v?.t||now-v.t>PENDING_TTL))drop.push(k);}
         collect(pairs);
         if (drop.length) chrome.storage.local.remove(drop);
       }).catch(() => {});
@@ -1840,17 +1913,17 @@
       drop.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
     }
   }
-  async function putPending(promptText) {
+  async function putPending(promptText, autoSend = true, targets = []) {
     const nonce = 'n_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
     try {
       if (hasChromeStorage) await chrome.storage.local.set({
-        [PENDING_PREFIX + nonce]: { p: promptText, t: Date.now() },
-        [POINTER_KEY]: { k: nonce, t: Date.now() } // redirect fallback, one-shot
+        [PENDING_PREFIX + nonce]: { p: promptText, t: Date.now(), autoSend, targets },
+        ...(targets.includes('doubao')?{[POINTER_KEY]: { k: nonce, t: Date.now() }}:{}) // redirect fallback, one-shot
       });
-      else localStorage.setItem(PENDING_PREFIX + nonce, JSON.stringify({ p: promptText, t: Date.now() }));
+      else localStorage.setItem(PENDING_PREFIX + nonce, JSON.stringify({ p: promptText, t: Date.now(), autoSend }));
       return nonce;
     } catch (err) {
-      console.warn('[LightTab] failed to write pending, falling back to a plaintext URL', err);
+      console.warn('[LightTab] pending storage unavailable; manual paste required');
       return null;
     }
   }
@@ -1862,7 +1935,7 @@
   }
   // WorkBuddy deep link: pre-filled prompt + optional extra params (expertId/model/mode/cwd). The official protocol caps prompt length.
   function deepLinkUrl(e, text, wb) {
-    const cap = String(text || '').slice(0, 7500);
+    const cap = Array.from(String(text || '')).slice(0,7500).join('');
     let u = (e.url || '').replace('{q}', encodeURIComponent(cap));
     if (wb && typeof wb === 'object') {
       const p = [];
@@ -1880,10 +1953,11 @@
     let text;
     if (tpl) {
       const tmpl = typeof tpl.tmpl === 'string' ? tpl.tmpl : '';
-      text = tmpl.indexOf('{q}') !== -1 ? tmpl.replace(/\{q\}/g, () => content || '') : tmpl;
+      text = tmpl.replace(/\{([\p{L}\p{N}_-]{1,24})\}/gu,(all,key)=>key==='q'?(content||''):(tpl.fieldValues?.[key]??all));
     } else {
       text = content || '';
     }
+    if(tpl&&!tpl.fieldsResolved&&templateKeys(tpl.tmpl).length)return withTemplateFields(tpl,p=>launchPrompt({...p,fieldsResolved:true},content,ev),content);
     if (!text.trim()) return showToast(t('ai.empty'), null, null, 2600);
     let targetIds = tpl ? (tpl.targets || []) : [currentEngine.id];
     // Only AI engines can receive a prompt (injected chat or deep link); a plain search engine
@@ -1895,36 +1969,52 @@
       if (tpl && !(tpl.targets || []).length && currentEngine.ai) targetIds = [currentEngine.id];
       if (!targetIds.length) return showToast(t('ai.no_target'));
     }
+    if (launchBusy || Date.now()-lastLaunchAt<1200) return;
+    launchBusy=true; lastLaunchAt=Date.now();
+    if(rememberTasks){recentTasks=[text,...recentTasks.filter(x=>x!==text)].slice(0,10);try{localStorage.setItem('lt.ai.recent',JSON.stringify(recentTasks));}catch(_){}}
+    try {
     launchFeedback();
     const engs = targetIds.map(id => allEngines().find(x => x.id === id)).filter(Boolean);
     const deeplinks = engs.filter(x => x.deeplink);
     const webs = engs.filter(x => !x.deeplink);
-    if (!hasChromeStorage || webs.some(x=>x.copyOnly)) copyText(text);
+    const desktopTruncated=deeplinks.length&&Array.from(text).length>7500;
+    if(desktopTruncated)copyToClipboard(text);
+    if (!hasChromeStorage || webs.some(x=>x.copyOnly)) copyToClipboard(text);
     let dlN = 0, webN = 0, blocked = false;
+    const failedTargets=[];
     for (const e of deeplinks) { try { window.open(deepLinkUrl(e, text, tpl && tpl.wb), '_blank'); dlN++; } catch (_) {} }
     // Preview windows must be reserved during the click, before any storage await.
     const useTabs = !!(hasChromeStorage && window.chrome?.tabs?.create);
     const reserved = !useTabs ? webs.map(() => {
       try { const w=window.open('about:blank','_blank'); if(w)w.opener=null; return w; } catch (_) { return null; }
     }) : [];
-    const nonce = hasChromeStorage && webs.some(x=>x.injected) ? await putPending(text) : null;
-    if (hasChromeStorage && webs.some(x=>x.injected) && !nonce) copyText(text);
+    const nonce = hasChromeStorage && webs.some(x=>x.injected) ? await putPending(text, tpl?.autoSend !== false, targetIds) : null;
+    if (hasChromeStorage && webs.some(x=>x.injected) && !nonce) copyToClipboard(text);
     let results = document.getElementById('ai-launch-results');
     if (!results) { results=document.createElement('div'); results.id='ai-launch-results'; document.getElementById('ai-launcher').appendChild(results); }
+    if(deliveryListener&&window.chrome?.storage?.onChanged){chrome.storage.onChanged.removeListener(deliveryListener);deliveryListener=null;}
     results.replaceChildren();
+    for(const engine of deeplinks){const row=document.createElement('div');row.textContent=engName(engine)+(isEn()?' · Desktop launch requested; confirm in the app':' · 已请求桌面启动，请在应用中确认');if(desktopTruncated)row.append(document.createTextNode(isEn()?' · First 7,500 characters only; copy full prompt below':' · 仅带入前 7500 字符，可用下方按钮复制全文'));results.append(row);}
+    const copy=document.createElement('button'); copy.textContent=isEn()?'Copy full prompt':'复制完整提示词';
+    copy.onclick=()=>copyToClipboard(text); results.append(copy);
+
     for (let i=0;i<webs.length;i++) {
       const e=webs[i];
       const u=e.injected && nonce ? injectedUrl(e,text,nonce) : e.url;
       let opened=false;
       if(useTabs){try{await chrome.tabs.create({url:u,active:false});opened=true;}catch(_){}}
       else if(reserved[i]){try{reserved[i].location.replace(u);opened=true;}catch(_){}}
-      if(opened)webN++;else blocked=true;
+      if(opened)webN++;else {blocked=true;failedTargets.push(e.id);}
       const row=document.createElement('div');
       const link=document.createElement('a');link.href=u;link.target='_blank';link.rel='noopener';link.textContent=engName(e)+' ↗';
       row.append(link,document.createTextNode(opened?(isEn()?' · Opened':' · 已打开'):(isEn()?' · Blocked — click to open':' · 未打开，点击重试')));
-      if(e.copyOnly||!hasChromeStorage||(e.injected&&!nonce))row.append(document.createTextNode(isEn()?' · Paste the copied prompt':' · 请粘贴已复制内容'));
+      if(e.copyOnly||!hasChromeStorage||(e.injected&&!nonce))row.append(document.createTextNode(isEn()?' · Manual paste required':' · 需手动粘贴提示词'));
+      const status=document.createElement('span');row.append(status);row.dataset.targetId=e.id;
+      if(nonce&&e.injected){status.dataset.deliveryKey='lt.delivery.'+nonce+'.'+e.id;status.textContent=isEn()?' · Waiting for target':' · 等待目标页面处理';}
       results.append(row);
     }
+    if(failedTargets.length){const retry=document.createElement('button');retry.textContent=isEn()?'Retry unopened targets':'重试未打开的目标';retry.onclick=ev=>launchPrompt({...tpl,tmpl:'{q}',targets:failedTargets},text,ev);results.append(retry);}
+    if(nonce&&window.chrome?.storage?.onChanged){deliveryListener=(changes)=>{for(const el of results.querySelectorAll('[data-delivery-key]')){const rec=changes[el.dataset.deliveryKey]?.newValue;if(!rec)continue;const labels=isEn()?{filled:'Filled',sent:'Input submitted',manual:'Manual action required'}:{filled:'已填入',sent:'输入已提交',manual:'需手动处理'};el.textContent=' · '+(labels[rec.status]||'');}};chrome.storage.onChanged.addListener(deliveryListener);}
     const panel=document.getElementById('ai-launcher');
     if(blocked && panel){panel.hidden=false;document.getElementById('ai-side-toggle')?.setAttribute('aria-expanded','true');}
     if (!webN && !dlN) return showToast(t('ai.fail'));
@@ -1932,8 +2022,7 @@
     if (webN && !hasChromeStorage) {
       // Preview mode (file:// / single-file dist): no content script exists out there, so the
       // target page would open with nothing to fill it. Copy the prompt and say so instead.
-      copyText(text);
-      showToast(t('ai.preview_copied', { names }), null, null, 4200);
+      showToast(isEn()?'Targets opened; paste the prompt manually':'已打开目标网站，请手动粘贴提示词',null,null,4200);
     }
     else if (webN && dlN) showToast(t('ai.wb_multi', { n: webN }));
     else if (dlN) showToast(t('ai.wb_launched'), null, null, 3600);
@@ -1943,9 +2032,10 @@
     // round-trip). Confirm out-of-band: if the probe still cannot see WorkBuddy a moment later the
     // link most likely went nowhere - say so instead of leaving a false "launched".
     if (dlN) verifyWorkBuddyLaunch();
-    if (tpl) { tpl.lastUsedAt = Date.now(); window.LT_PROMPTS.savePrompts(); }
+    if (tpl) { const saved=state.prompts.find(p=>p.id===tpl.id);if(saved)saved.lastUsedAt=Date.now();window.LT_PROMPTS.savePrompts(); }
     sweepPending();
     window.LT_PROMPTS.clearActiveTemplate();
+    } finally { launchBusy=false; }
   }
 
   // Prompt template UI lives in js/prompts.js (window.LT_PROMPTS; loaded before this file).
@@ -3052,6 +3142,8 @@
       if (!url) return showToast(t('toast.url_invalid'));
       const group = document.getElementById('f-group').value || '';
       const editId = form.dataset.editId;
+      const same=state.items.find(x=>x.id!==editId&&x.url===url);
+      if(same&&!confirm(isEn()?'This URL already exists. Keep another shortcut?':'这个网址已有快捷方式，仍然保留另一个吗？'))return;
       const icon = sanitizeIconDataUrl(pendingIcon) || undefined;
       if (editId) {
         const it = state.items.find(x => x.id === editId);
@@ -3160,7 +3252,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.21.0',
+      version: '1.22.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -3197,7 +3289,9 @@
   const DIAG_MAX = 100;
   function diagPush(msg) {
     if (!(state.settings && state.settings.diag)) return;
-    const line = String(msg || '').slice(0, 500);
+    const raw=String(msg||'');
+    const kind=raw.match(/\b(TypeError|ReferenceError|SyntaxError|RangeError|SecurityError|QuotaExceededError|NetworkError|AbortError)\b/);
+    const line=kind?kind[0]:(/fetch|network|offline/i.test(raw)?'Network failure':'Application error');
     if (!line) return;
     localRawGet(K.diag).then((r) => {
       const arr = Array.isArray(r) ? r : [];
@@ -3209,7 +3303,7 @@
   async function exportDiagLog() {
     const r = await localRawGet(K.diag).catch(() => null);
     const arr = Array.isArray(r) ? r : [];
-    const text = (arr.length ? arr.map((x) => new Date(x.t).toISOString() + '  ' + x.m).join('\n') : '(no diagnostics recorded)');
+    const text = (arr.length ? arr.map((x) => new Date(x.t).toISOString() + '  ' + (/^(TypeError|ReferenceError|SyntaxError|RangeError|SecurityError|QuotaExceededError|NetworkError|AbortError|Network failure|Application error)$/.test(x.m)?x.m:'Application error')).join('\n') : '(no diagnostics recorded)');
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -3329,7 +3423,8 @@
             id: p.id || nid(),
             name: String(p.name || '').slice(0, 24) || t('toast.unnamed_tpl'),
             tmpl: p.tmpl.slice(0, 4000),
-            hint: typeof p.hint === 'string' ? p.hint.slice(0, 60) : '',
+            favorite: p.favorite === true,
+        hint: typeof p.hint === 'string' ? p.hint.slice(0, 60) : '',
             targets: Array.isArray(p.targets) ? p.targets.filter(validTarget).slice(0, 4) : [],
             wb: p.wb && typeof p.wb === 'object' ? p.wb : null
           }))
@@ -4137,24 +4232,22 @@
     const ms = ttl || (actionLabel ? 6000 : 2600);
     toastTimer = setTimeout(() => { box.hidden = true; toastTimer = 0; }, ms);
   }
-  function copyText(text) {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
-    } else {
-      fallbackCopy(text);
-    }
+  async function copyText(text) {
+    try { if(navigator.clipboard){await navigator.clipboard.writeText(text);return true;} } catch (_) {}
+    return fallbackCopy(text);
   }
   function fallbackCopy(text) {
-    const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta);
-    ta.style.cssText = 'position:fixed;opacity:0';
-    ta.select();
-    try { document.execCommand('copy'); } catch {}
-    ta.remove();
+    const ta=document.createElement('textarea');ta.value=text;
+    ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();
+    let ok=false;try{ok=document.execCommand('copy');}catch(_){}ta.remove();return ok;
   }
-  function copyToClipboard(text) {
-    copyText(text);
-    showToast(t('toast.copied'));
+  async function copyToClipboard(text) {
+    if(await copyText(text)){showToast(t('toast.copied'));return;}
+    const box=document.createElement('dialog');box.className='manual-copy-dialog';
+    const title=document.createElement('p');title.textContent=isEn()?'Copy unavailable. Select and copy manually.':'无法自动复制，请选中下方内容手动复制。';
+    const area=document.createElement('textarea');area.value=text;area.readOnly=true;area.rows=8;
+    const close=document.createElement('button');close.textContent=isEn()?'Close':'关闭';close.onclick=()=>box.close();
+    box.append(title,area,close);document.body.append(box);box.onclose=()=>box.remove();box.showModal();area.focus();area.select();
   }
 
   // ---------- To-do widget ----------
@@ -4399,7 +4492,9 @@
   try { hotCache = JSON.parse(localStorage.getItem(HOT_MOVIE_KEY)); } catch (_) {}
   let hotMovies = normalizeHotMovies(hotCache?.data);
   if (!hotMovies.length) hotMovies = normalizeHotMovies(window.LT_MOVIE_HOT);
-  function moviePool() { return hotMovies.length ? hotMovies : DOUBAN_ANNUAL_BEST; }
+  let hiddenMovies=[];
+  try{const saved=JSON.parse(localStorage.getItem('lt.movie.hidden'));if(Array.isArray(saved))hiddenMovies=saved.filter(x=>typeof x==='string').slice(-200);}catch(_){}
+  function moviePool() { const pool=hotMovies.length?hotMovies:DOUBAN_ANNUAL_BEST;const filtered=pool.filter(m=>!hiddenMovies.includes(m.source||m.zh));return filtered.length?filtered:DOUBAN_ANNUAL_BEST; }
   async function refreshHotMovies() {
     if (!normalizeWidgets(state.settings?.widgets).wmovie) return;
     if (hotCache?.at && Date.now()-hotCache.at < 86400000) return;
@@ -4461,6 +4556,11 @@
       <section class="movie-details-synopsis"><h3>${isEn() ? "Synopsis (Chinese)" : "剧情简介"}</h3><p>${e(movie.synopsis)}</p></section>
       <a class="movie-details-source" href="${e(url)}" target="_blank" rel="noopener">${isEn() ? 'View film on Douban ↗' : '查看豆瓣电影资料 ↗'}</a>
     </div><figure class="movie-details-poster"><img referrerpolicy="no-referrer" src="${movie.poster}" alt="${e(title)} 海报"><figcaption>${e(title)} · ${movie.y}</figcaption></figure></div>`;
+    const sourceInfo=document.createElement('p');sourceInfo.className='movie-details-subtitle';
+    sourceInfo.textContent=movie.hot?((isEn()?'List updated: ':'片单更新：')+(hotCache?.at?new Date(hotCache.at).toLocaleDateString():'2026/9/6')):(isEn()?'Offline curated collection':'离线精选片库');
+    const hide=document.createElement('button');hide.textContent=isEn()?'Not interested':'不感兴趣';hide.className='btn ghost';
+    hide.onclick=()=>{const key=movie.source||movie.zh;hiddenMovies=[...new Set([...hiddenMovies,key])].slice(-200);try{localStorage.setItem('lt.movie.hidden',JSON.stringify(hiddenMovies));}catch(_){}dialog.close();movieCursor=-1;renderMovie();showToast(isEn()?'Movie hidden':'已隐藏这部电影',isEn()?'Undo':'撤销',()=>{hiddenMovies=hiddenMovies.filter(x=>x!==key);try{localStorage.setItem('lt.movie.hidden',JSON.stringify(hiddenMovies));}catch(_){}renderMovie();});};
+    dialog.querySelector('.movie-details-copy').append(sourceInfo,hide);
     dialog.querySelector('.movie-details-close').addEventListener('click', () => dialog.close());
     dialog.showModal();
   }
@@ -4505,7 +4605,7 @@
     card.prepend(detail);
     card.querySelector('.movie-poster-full').addEventListener('error', () => {
       const fallback = DOUBAN_ANNUAL_BEST[i % DOUBAN_ANNUAL_BEST.length];
-      if (m.hot) { hotMovies[i] = fallback; renderMovie(); }
+      if (m.hot) { const original=hotMovies.indexOf(m);if(original>=0)hotMovies[original]=fallback;renderMovie(); }
     }, {once:true});
     const len = moviePool().length;
     const next = card.querySelector('#movie-next');
@@ -5112,6 +5212,7 @@
         id: (typeof p.id === 'string' && p.id) ? p.id : nid(),
         name: String(p.name || '').slice(0, 24) || t('toast.unnamed_tpl'),
         tmpl: p.tmpl.slice(0, 4000),
+        favorite: p.favorite === true,
         hint: typeof p.hint === 'string' ? p.hint.slice(0, 60) : '',
         targets: Array.isArray(p.targets) ? p.targets.filter(validTarget).slice(0, 4) : [],
         wb: p.wb && typeof p.wb === 'object' ? p.wb : null
@@ -5836,6 +5937,7 @@
     bindSuggest();
     renderLauncher();
     window.addEventListener('resize',applyAiPosition);
+    window.addEventListener('resize',applyAiButtonPosition);
     // Esc while a template is active: drop the template and go back to plain search.
     qEl.addEventListener('keydown', e => {
       if (e.key === 'Escape' && activePrompt) { e.stopPropagation(); window.LT_PROMPTS.clearActiveTemplate(); qEl.focus(); }
@@ -5868,6 +5970,7 @@
 
     // Keyboard shortcuts (never steal keys while focus is in a text-entry element).
     document.addEventListener('keydown', e => {
+      if(e.altKey&&e.shiftKey&&e.code==='KeyA'&&state.settings.aiEnabled!==false){e.preventDefault();const panel=document.getElementById('ai-launcher');panel.hidden=false;document.getElementById('ai-side-toggle').setAttribute('aria-expanded','true');renderLauncher();document.getElementById('ai-draft').focus();return;}
       if (e.key === 'Escape') {
         const openModals = [...document.querySelectorAll('.modal')].filter(m => !m.hidden);
         openModals.forEach(m => hideModal(m));
@@ -6021,6 +6124,16 @@
   async function bootGuarded() {
     try {
       await boot();
+      const params=new URLSearchParams(location.search),selection=params.get('selection');
+      if(selection&&selection.startsWith('lt.selection.')&&hasChromeStorage){
+        const result=await chrome.storage.local.get(selection),rec=result[selection];
+        await chrome.storage.local.remove(selection);
+        if(rec&&typeof rec.text==='string'&&Date.now()-rec.t<300000)launcherDraft=rec.text;
+      }
+      if((selection||params.get('ai')==='1')&&state.settings.aiEnabled!==false){
+        const panel=document.getElementById('ai-launcher');panel.hidden=false;renderLauncher();document.getElementById('ai-side-toggle').setAttribute('aria-expanded','true');document.getElementById('ai-draft').focus();
+        history.replaceState(null,'',location.pathname);
+      }
     } catch (err) {
       console.error('[LightTab] boot failed', err);
       try {

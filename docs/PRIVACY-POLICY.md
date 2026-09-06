@@ -61,3 +61,6 @@ children.
 ## 7. Changes & contact
 
 Changes will be noted in the extension's changelog. Questions: `<support@example.com>`.
+
+
+AI 最近任务默认关闭，仅在启用后保存在本机（最多 10 条，可清空）。选中文字右键入口仅将内容保存为本地草稿，用户发射后才交给选定服务。发射状态记录不包含提示词，过期后在新标签页启动时清理。诊断导出仅保留错误类别和时间，不包含原始错误文本。

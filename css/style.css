@@ -3403,3 +3403,13 @@ html[data-theme="light"] #grid .card-add .ico {border-style:dashed}
 html[data-theme="light"] .top-actions .icon-btn:hover,
 html[data-theme="light"] #grid .card-add:hover .ico {background:rgba(20,30,48,.36)}
 html[data-theme="light"] .layout.movie-grid .group-bar .gchip {color:#fff;text-shadow:0 1px 2px #0006}
+.launch-preview{margin:12px 0;font-size:12px}
+.launch-preview pre{max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:10px;background:#7f7f7f14;border-radius:8px;font:inherit;user-select:text}
+
+.manual-copy-dialog{max-width:560px;width:85vw;border-radius:16px;padding:24px}.manual-copy-dialog textarea{width:100%;box-sizing:border-box;margin-bottom:16px}
+
+.launch-presets{display:flex;gap:8px;margin:8px 0}.launch-presets button{border:0;border-radius:8px;padding:5px 10px;color:inherit;background:rgba(128,128,128,.15);cursor:pointer}
+
+.launch-history{font-size:12px;margin:8px 0}.launch-history summary{cursor:pointer}.launch-history label{display:block;margin:8px 0}#ai-recent-list button{display:block;width:100%;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+#ai-side-toggle{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}#ai-side-toggle.dragging{cursor:grabbing;transition:none}

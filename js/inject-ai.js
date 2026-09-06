@@ -18,7 +18,7 @@
  *    Input picking is now tiered (contenteditable outranks textarea) and the picked element must
  *    survive a ~700ms settle window before it is trusted.
  *  - Sending is verified: if the click does not clear the input, Enter is tried, the input is
- *    re-resolved (the composer can re-mount) and the whole round repeats up to 3 times.
+ *    re-resolved (the composer can re-mount) and uncertain delivery falls back to manual handling.
  * v3 changes:
  *  - Adds the lt_k nonce channel. Concurrent targets share one nonce, so the content script only reads
  *    and never deletes; replay protection is URL cleanup after send + TTL orphan sweeping on newtab boot.
@@ -29,7 +29,7 @@
  *  - Input detection now prefers visibility + largest area (ChatGPT puts a new chat's input mid-page).
  *  - Send-button detection adds a visibility filter and a priority order (data-testid=send-button -> aria-label -> class name).
  *  - Three fallbacks for filling text: execCommand insertText -> a synthetic clipboard paste event -> direct assignment.
- *  - After sending, polls until the input clears to confirm success; logs each stage to the console for debugging.
+ *  - After sending, polls until the input clears to confirm success; logs stages without prompt content for debugging.
  */
 (() => {
   'use strict';
@@ -40,6 +40,10 @@
   const armed = qs.get('lt_auto') === '1';
   const q = (qs.get('q') || '').trim();
   const ltK = qs.get('lt_k') || '';
+  let activeNonce=ltK;
+  const targetId=location.hostname==='chatgpt.com'?'openai':'doubao';
+  function report(status){try{if(activeNonce)chrome.storage.local.set({['lt.delivery.'+activeNonce+'.'+targetId]:{status,t:Date.now()}});}catch(_){}}
+  let autoSend = true;
   log('url state: lt_auto =', armed, ', q =', q.length, ', lt_k =', ltK ? 'yes' : 'no');
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -69,6 +73,9 @@
             try {
               if (chrome.runtime && chrome.runtime.lastError) return finish(null);
               const rec = r && r[PENDING_PREFIX + nonce];
+              if(!rec || !Number.isFinite(rec.t) || Date.now()-rec.t>1800000)return finish(null);
+              if(Array.isArray(rec.targets)&&!rec.targets.includes(targetId))return finish(null);
+              if(rec)autoSend=rec.autoSend!==false;
               finish(rec && typeof rec.p === 'string' ? rec.p : null);
             } catch (_) { finish(null); }
           });
@@ -86,6 +93,7 @@
    * page. It is cleared when an armed run finishes (clearPointer) or by the 90s TTL sweep.
    */
   function readPointer() {
+    if(location.hostname!=='www.dola.com')return Promise.resolve(null);
     return new Promise((resolve) => {
       try {
         if (!(window.chrome && chrome.storage && chrome.storage.local)) return resolve(null);
@@ -102,7 +110,7 @@
 
   function clearPointer() {
     try {
-      if (window.chrome && chrome.storage && chrome.storage.local) chrome.storage.local.remove(POINTER_KEY);
+      if (targetId==='doubao' && window.chrome && chrome.storage && chrome.storage.local) chrome.storage.local.get(POINTER_KEY,r=>{if(r?.[POINTER_KEY]?.k===activeNonce)chrome.storage.local.remove(POINTER_KEY);});
     } catch (_) { /* ignore */ }
   }
 
@@ -243,7 +251,7 @@
   async function waitCleared(input, ms) {
     for (let t = 0; t < ms; t += 200) {
       await sleep(200);
-      if (!document.contains(input)) return true; // a re-mounted composer means the send went through
+      if (!document.contains(input)) {const fresh=pickInput();if(!fresh)return false;input=fresh;}
       if (!currentValue(input).trim()) { log('input cleared, send confirmed'); return true; }
     }
     return false;
@@ -254,27 +262,12 @@
    * Enter; re-resolve the composer between rounds (it can re-mount after a failed attempt).
    */
   async function sendWithVerify(input, text) {
-    for (let round = 1; round <= 3; round++) {
-      if (!document.contains(input)) {
-        const fresh = pickInput();
-        if (fresh) { input = fresh; log('composer re-mounted, re-picked input'); }
-      }
-      if (!currentValue(input).trim()) {
-        log('input empty at round', round, ', re-filling');
-        await fillInput(input, text);
-      }
-      const btn = await waitSendBtn(6000);
-      if (btn) {
-        try { btn.click(); log('clicked send button (round ' + round + ')'); } catch (_) {}
-        if (await waitCleared(input, 2500)) return true;
-        log('click did not send (round ' + round + '), trying Enter');
-      } else {
-        log('no enabled send button (round ' + round + '), trying Enter');
-      }
-      pressEnter(input);
-      if (await waitCleared(input, 2000)) return true;
-    }
-    return false;
+    // Dispatch once: a slow site must never receive duplicate prompts from automatic retries.
+    const btn=await waitSendBtn(6000);
+    if(!document.contains(input)||currentValue(input).trim()!==text.trim())return false;
+    if(btn){try{btn.click();}catch(_){return false;}}
+    else pressEnter(input);
+    return waitCleared(input,8000);
   }
 
   async function main(text) {
@@ -298,7 +291,10 @@
     let filled = currentValue(input).trim();
     if (!filled) {
       filled = await fillInput(input, text);
-      log('fill result:', filled ? 'ok' : 'FAILED', '| now =', (currentValue(input) || '').slice(0, 30));
+      log('fill result:', filled ? 'ok' : 'FAILED');
+    } else if (filled !== text.trim()) {
+      fallbackCopyAndNotify('输入框已有其他草稿，已保留，请手动处理', 'Existing draft preserved; please paste manually', text);
+      clearParams(); return;
     } else {
       log('site pre-filled already, skip manual fill');
     }
@@ -308,9 +304,12 @@
       setTimeout(clearParams, 800);
       return;
     }
+    report('filled');
+    if (!autoSend) { clearParams(); return; }
     const sent = await sendWithVerify(input, text);
+    if(sent)report('sent');
     if (!sent) {
-      log('could not confirm send after 3 rounds');
+      log('could not confirm input submission');
       fallbackCopyAndNotify('已填入但未能自动发送，请手动点击发送', 'prompt filled but auto-send failed — please press send manually', text);
     }
     setTimeout(clearParams, 800);
@@ -353,6 +352,7 @@
   // bilingual and picks a language from the browser locale.
   const isZh = () => String(navigator.language || 'zh').toLowerCase().startsWith('zh');
   async function fallbackCopyAndNotify(reasonZh, reasonEn, text) {
+    report('manual');
     const ok = await copyPrompt(text);
     const reason = isZh() ? reasonZh : reasonEn;
     notify(ok
@@ -377,6 +377,7 @@
     } else {
       return; // not armed at all — a normal visit
     }
+    activeNonce=key;
     if (key) {
       const fromStorage = await readPending(key);
       if (fromStorage) { text = fromStorage; log('prompt from storage nonce, len =', text.length); }

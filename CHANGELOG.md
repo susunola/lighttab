@@ -1,3 +1,17 @@
+# 1.22.0 — AI workflow reliability
+
+- Make the AI entry button draggable with position persistence and viewport bounds.
+- Name the default wallpaper 暮蓝映梅 / Plum at Blue Hour and add subtle stars.
+
+- Add fill-only mode, remembered targets, task presets, full prompt preview and optional local recent tasks.
+- Add template fields, favorites, duplicate, import and export; keep Google template support.
+- Preserve existing target drafts and dispatch at most once; scope redirect handoff to the selected target.
+- Show individual delivery states, retry unopened targets, and expose manual copy fallback.
+- Add selected-text context menu and configurable extension command.
+- Add movie source date and reversible not-interested control.
+- Add duplicate shortcut warning, sanitized opt-in diagnostics and a release packaging command.
+- Live provider coverage remains partial: DeepSeek requires sign-in; Doubao is region-blocked in the current environment; WorkBuddy not-running/not-installed conditions are not yet physically tested.
+
 # Changelog
 
 ## 1.21.0 — 2026-09-07

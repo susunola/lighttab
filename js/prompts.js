@@ -53,7 +53,7 @@
     const src = A().state.prompts.filter(p => p && typeof p.tmpl === 'string');
     if (!kw) {
       // No query: recently used float to the top (lastUsedAt desc; the sort is stable so unused ones keep their original order).
-      return src.slice().sort((a, b) => (b.lastUsedAt || 0) - (a.lastUsedAt || 0));
+      return src.slice().sort((a, b) => Number(!!b.favorite)-Number(!!a.favorite) || (b.lastUsedAt || 0) - (a.lastUsedAt || 0));
     }
     return src.filter(p =>
       (p.name || '').toLowerCase().includes(kw) ||
@@ -137,6 +137,8 @@
             return e ? `<span class="ptag" style="--pc:${e.color};background:${e.color}20;color:${e.color}">${A().escapeHtml(A().engName(e))}</span>` : '';
           }).join('') || `<span class="ptag dim">${A().t('tpl.no_target')}</span>`}</span>
           <span class="pr-acts">
+            <button class="btn ghost sm" data-act="favorite" aria-label="收藏模板" aria-pressed="${!!p.favorite}">${p.favorite?'★':'☆'}</button>
+            <button class="btn ghost sm" data-act="clone">${document.documentElement.lang.startsWith('en')?'Duplicate':'复制'}</button>
             <button class="btn ghost sm" data-act="edit">${A().t('prompt.edit')}</button>
             <button class="btn ghost sm danger" data-act="del">${A().t('prompt.del')}</button>
           </span>
@@ -147,9 +149,21 @@
       ? rows
       : `<div class="pr-empty">${A().t('prompt.empty')}</div>`)
       + (promptEditingId === 'new' ? promptEditorHtml(null) : '');
+    const tools=document.createElement('div');tools.className='pr-acts';
+    const en=document.documentElement.lang.startsWith('en');
+    const exportButton=document.createElement('button');exportButton.className='btn ghost sm';exportButton.textContent=en?'Export templates':'导出模板';
+    exportButton.onclick=()=>{const blob=new Blob([JSON.stringify({format:'lighttab-prompts',prompts:A().state.prompts},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='lighttab-prompts.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+    const importButton=document.createElement('button');importButton.className='btn ghost sm';importButton.textContent=en?'Import templates':'导入模板';
+    importButton.onclick=()=>{const input=document.createElement('input');input.type='file';input.accept='.json,application/json';input.onchange=async()=>{try{const file=input.files[0];if(!file)return;if(file.size>1000000)throw Error();const data=JSON.parse(await file.text());if(data.format!=='lighttab-prompts'||!Array.isArray(data.prompts))throw Error();const items=window.LT_PURE.sanitizePrompts(data.prompts);if(!items||!items.length)throw Error();if(items.length+A().state.prompts.length>30)return A().showToast(A().t('toast.prompt_limit'));A().state.prompts.push(...items.map(p=>({...p,id:A().nid()})));await savePrompts();renderPromptManager();A().showToast(en?'Templates imported':'模板已导入');}catch(_){A().showToast(en?'Invalid template file':'模板文件无效');}};input.click();};
+    tools.append(importButton,exportButton);box.prepend(tools);
     box.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
       const row = b.closest('.prompt-row');
       const id = row ? row.dataset.id : null;
+      if (b.dataset.act === 'favorite') {const p=A().state.prompts.find(x=>x.id===id);if(p){p.favorite=!p.favorite;savePrompts();renderPromptManager();}}
+      if (b.dataset.act === 'clone') {
+        if(A().state.prompts.length>=30)return A().showToast(A().t('toast.prompt_limit'));
+        const p=A().state.prompts.find(x=>x.id===id);if(p){const copy=JSON.parse(JSON.stringify(p));copy.id=A().nid();copy.name=(copy.name+' 副本').slice(0,24);A().state.prompts.push(copy);savePrompts();renderPromptManager();}
+      }
       if (b.dataset.act === 'edit') { promptEditingId = promptEditingId === id ? null : id; renderPromptManager(); }
       if (b.dataset.act === 'del') {
         const p = A().state.prompts.find(x => x.id === id);
@@ -169,6 +183,7 @@
     const tg = pv.targets || [];
     const wb = pv.wb || {};
     return `
+      <p class="form-tip">${document.documentElement.lang.startsWith('en')?'Use {q} for the main input; add fields such as {language} or {style}.':'用 {q} 表示输入内容，也可添加 {语言}、{风格} 等字段。'}</p>
       <div class="prompt-editor" data-edit-id="${promptEditingId}">
         <label class="pe-field"><span class="pe-lbl">${A().t('prompt.name')}</span>
           <input class="pe-name" type="text" maxlength="24" placeholder="${A().escapeHtml(A().t('prompt.name_ph'))}" value="${A().escapeHtml(pv.name || '')}"></label>

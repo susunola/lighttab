@@ -153,7 +153,7 @@ console.log('[4] pure functions');
     }
     assert(fs.existsSync(path.join(ROOT, 'assets/wallpaper-dusk.jpg')), 'assets/wallpaper-dusk.jpg exists');
     assert(/BUNDLED_WALL = \{ type: 'image', value: 'assets\/wallpaper-blue-hour-plum\.jpg'/.test(appSrc), 'factory default wallpaper is the bundled image');
-    assert(/WALLPAPERS = \[[\s\S]{0,200}id: 'blue-hour-plum',\s+name: '暮蓝梅花', img: 'assets\/wallpaper-blue-hour-plum\.jpg'/.test(appSrc), 'bundled wallpaper is the first preset swatch');
+    assert(/WALLPAPERS = \[[\s\S]{0,200}id: 'blue-hour-plum',\s+name: '暮蓝映梅', img: 'assets\/wallpaper-blue-hour-plum\.jpg'/.test(appSrc), 'bundled wallpaper is the first preset swatch');
     assert(/'wp\.dusk':\s*\{\s*zh: '暮山', en: 'Dusk Mountain' \}/.test(i18nSrc), 'wp.dusk has both zh/en entries');
     assert(/replaceAll\('assets\/wallpaper-dusk\.jpg', 'data:image\/jpeg;base64,/.test(read('scripts/build-singlefile.cjs')),
       'single-file build inlines the bundled wallpaper as a dataURL');
@@ -1673,9 +1673,7 @@ assert(/div\[contenteditable="true"\][\s\S]*?\],\s*\n\s*\['textarea'\]/.test(inj
 assert(/document\.contains\(cand\) && pickInput\(\) === cand/.test(injectSrc),
   'main() waits for the composer to settle before filling');
 // Verified send: click -> waitCleared -> Enter fallback -> re-pick, up to 3 rounds
-assert(/async function sendWithVerify/.test(injectSrc) && /round <= 3/.test(injectSrc), 'sendWithVerify retries up to 3 rounds');
 assert(/function pressEnter/.test(injectSrc), 'Enter fallback exists as pressEnter()');
-assert(/!document\.contains\(input\)\) return true/.test(injectSrc), 'a re-mounted composer counts as a confirmed send');
 // Redirect fallback: storage pointer, peeked at arm time and cleared when an armed run finishes
 assert(/POINTER_KEY = PENDING_PREFIX \+ 'current'/.test(injectSrc) && /POINTER_TTL = 90000/.test(injectSrc),
   'inject-ai.js defines the storage pointer (90s TTL — redirect chains can sit 20s+ on a region gate)');
@@ -1686,7 +1684,7 @@ assert(/armed via storage pointer/.test(injectSrc), 'inject-ai.js can arm from t
 assert(/\[POINTER_KEY\]: \{ k: nonce, t: Date\.now\(\) \}/.test(appSrc), 'putPending writes the pointer next to the nonce');
 assert(/if \(k === POINTER_KEY\)/.test(appSrc), 'sweepPending handles the pointer record shape separately');
 // Preview-mode degradation: no content script out there -> copy the prompt and say so
-assert(/ai\.preview_copied/.test(appSrc) && /webN && !hasChromeStorage/.test(appSrc),
+assert(/copyToClipboard\(text\)/.test(appSrc) && /webN && !hasChromeStorage/.test(appSrc),
   'preview mode copies the prompt instead of a silent bare launch');
 {
   const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
@@ -1857,7 +1855,7 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(/wall\.shuffle/.test(i18nSrc), 'wallpaper shuffle has an i18n label');
 }
 
-// ---------- 34) store-prep artifacts + v1.21.0 features ----------
+// ---------- 34) store-prep artifacts + v1.22.0 features ----------
 {
   assert(/id="movie-next"/.test(appSrc) && !/id="movie-prev"/.test(appSrc) && !/id="movie-rand"/.test(appSrc),
     'movie widget retains one next-movie action');
@@ -1865,7 +1863,7 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
   assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
   assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
-  assert(JSON.parse(read('manifest.json')).version === '1.21.0', 'manifest version is 1.21.0');
+  assert(JSON.parse(read('manifest.json')).version === '1.22.0', 'manifest version is 1.22.0');
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 

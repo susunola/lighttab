@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.21.0",
+  "version": "1.22.0",
   "name": "LightTab - Minimal New Tab",
   "short_name": "LightTab",
   "description": "Minimal new tab: clock, lunar calendar, search, AI prompts, shortcuts, to-dos, Bing wallpapers. Local-first, optional cloud sync.",
@@ -8,7 +8,8 @@
     "newtab": "newtab.html"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "contextMenus"
   ],
   "optional_permissions": [
     "bookmarks",
@@ -40,5 +41,13 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "js/background.js"
+  },
+  "commands": {
+    "open-ai": {
+      "description": "Open LightTab AI assistant"
+    }
   }
 }
