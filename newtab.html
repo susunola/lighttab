@@ -545,6 +545,12 @@
               <span data-i18n="gen.backup_remind">Remind me to export a backup</span>
               <input type="number" id="f-backup-days" min="1" max="90" step="1" value="14" data-i18n-title="gen.backup_days" title="Every N days">
             </label>
+            <label class="check-row diag-row">
+              <input type="checkbox" id="f-diag">
+              <span data-i18n="gen.diag">Record errors locally (off by default)</span>
+            </label>
+            <p class="form-tip" data-i18n="gen.diag_tip">When on, error messages are stored on this device only (no URLs, no stacks, no network).</p>
+            <button type="button" class="btn ghost sm" id="btn-diag-export" data-i18n="gen.diag_export" hidden>Export diagnostics</button>
             <p class="storage-use" id="storage-use" data-i18n-aria="store.used" hidden></p>
           </div>
           <div class="modal-actions">

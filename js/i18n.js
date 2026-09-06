@@ -129,6 +129,7 @@
     'todo.due':         { zh: '截止日期（可选）', en: 'Due date (optional)' },
     'todo.due_clear':   { zh: '点击移除截止日期', en: 'Click to clear the due date' },
     'todo.overdue':     { zh: '已逾期', en: 'Overdue' },
+    'todo.overdue_count': { zh: '{n} 项逾期', en: '{n} overdue' },
 
     // ---------- Calendar ----------
     'cal.prev': { zh: '上月', en: 'Previous month' },
@@ -331,6 +332,9 @@
     'gen.import_merge_tip': { zh: '合并导入只会按网址去重、追加快捷方式，其它数据不会被覆盖。', en: 'Merge import only adds shortcuts that are not already saved (matched by URL); nothing else is overwritten.' },
     'gen.backup_remind':    { zh: '定期提醒我导出备份', en: 'Remind me to export a backup' },
     'gen.backup_days':      { zh: '每隔 N 天提醒一次(默认 14)', en: 'Remind every N days (default 14)' },
+    'gen.diag':      { zh: '本地记录错误(默认关,不联网)', en: 'Record errors locally (off by default)' },
+    'gen.diag_tip':  { zh: '开启后仅在本机记录错误消息（不含网址/堆栈/网络请求）。', en: 'When on, error messages are stored on this device only (no URLs, no stacks, no network).' },
+    'gen.diag_export':{ zh: '导出诊断记录', en: 'Export diagnostics' },
     'toast.import_merge_empty':   { zh: '文件里没有可合并的快捷方式', en: 'No shortcuts in the file to merge' },
     'toast.import_merge_dup_only':{ zh: '{n} 个快捷方式都已存在，没有新增', en: 'All {n} shortcuts already exist — nothing added' },
     'toast.import_merge_done':    { zh: '已合并添加 {n} 个快捷方式', en: 'Merged {n} shortcuts' },

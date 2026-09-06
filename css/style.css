@@ -2986,3 +2986,6 @@ input[type="file"]:focus-visible {
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 }
+
+/* To-do widget head: overdue count turns the counter red. */
+.w-count.has-overdue { color: #f87171; }

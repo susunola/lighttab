@@ -2018,6 +2018,19 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   for (const k of ['gen.tz2', 'gen.tz2_ph', 'toast.tz2_invalid']) assert(i18nSrc.includes(`'${k}'`), `tz i18n ${k}`);
 }
 
+// ---------- 36) store docs, overdue badge, local diagnostics ----------
+{
+  for (const f of ['docs/STORE-DESCRIPTION.md', 'docs/PRIVACY-POLICY.md']) {
+    assert(fs.existsSync(path.join(ROOT, f)), `${f} exists`);
+  }
+  assert(/has-overdue/.test(appSrc) && /\.has-overdue/.test(cssSrc) && /todo\.overdue_count/.test(i18nSrc),
+    'overdue to-do badge (count colour) exists');
+  assert(/diag: false,/.test(appSrc) && /function diagPush/.test(appSrc) && /function exportDiagLog/.test(appSrc)
+    && /DIAG_MAX = 100/.test(appSrc) && /addEventListener\('error'/.test(appSrc)
+    && /id="f-diag"/.test(html) && /id="btn-diag-export"/.test(html), 'local diagnostics (opt-in) are wired');
+  for (const k of ['gen.diag', 'gen.diag_tip', 'gen.diag_export']) assert(i18nSrc.includes(`'${k}'`), `diag i18n ${k}`);
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);

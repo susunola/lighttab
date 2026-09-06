@@ -80,6 +80,8 @@
     clockFont: 'modern',
     // Optional second timezone (IANA name, e.g. "Asia/Tokyo"); '' = off. Rendered under the clock.
     clockTz2: '',
+    // Local error capture (off by default): records error messages only, never leaves the device.
+    diag: false,
     // Minimalism toggles: true removes the search bar / clock card from the layout entirely
     // (display:none, not just opacity — the icon grid simply rides up when both are hidden).
     hideSearch: false,
@@ -282,7 +284,7 @@
   // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
   // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
   const SCHEMA_VERSION = 5;
-  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup' };
+  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup', diag: 'lt.diag' };
   // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
   // to the content script across tabs without ever putting it in the URL.
   const PENDING_PREFIX = 'lt.pending.';
@@ -3002,6 +3004,34 @@
       showToast(t('toast.backup_remind', { n: days }), t('gen.export'), () => { doExport(); markBackupNow(); }, 15000);
     }).catch(() => {});
   }
+  // Optional local error capture (Settings → Data): stores only timestamped error messages on
+  // this device (no URLs/stacks, never sent anywhere). Off by default — see settings.diag.
+  const DIAG_MAX = 100;
+  function diagPush(msg) {
+    if (!(state.settings && state.settings.diag)) return;
+    const line = String(msg || '').slice(0, 500);
+    if (!line) return;
+    localRawGet(K.diag).then((r) => {
+      const arr = Array.isArray(r) ? r : [];
+      arr.push({ t: Date.now(), m: line });
+      if (arr.length > DIAG_MAX) arr.splice(0, arr.length - DIAG_MAX);
+      return localRawSet(K.diag, arr);
+    }).catch(() => {});
+  }
+  async function exportDiagLog() {
+    const r = await localRawGet(K.diag).catch(() => null);
+    const arr = Array.isArray(r) ? r : [];
+    const text = (arr.length ? arr.map((x) => new Date(x.t).toISOString() + '  ' + x.m).join('\n') : '(no diagnostics recorded)');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'LightTab-diagnostics.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
   function doExport() {
     try {
       const blob = new Blob([JSON.stringify(exportPayload(), null, 2)], { type: 'application/json' });
@@ -3044,6 +3074,7 @@
     state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
     state.settings.accent = safeColor(state.settings.accent) || '';
     state.settings.clockTz2 = (typeof state.settings.clockTz2 === 'string' ? state.settings.clockTz2.trim().slice(0, 64) : '');
+    state.settings.diag = state.settings.diag === true;
     state.settings.widgets = normalizeWidgets(state.settings.widgets);
     state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
     state.settings.clock12h = state.settings.clock12h === true;
@@ -3308,6 +3339,19 @@
       backupDays.value = String(p.days);
       await saveBackupPrefs(p);
     });
+    // Local diagnostics (opt-in, no network): toggle + export.
+    const diagCb = document.getElementById('f-diag');
+    const diagExport = document.getElementById('btn-diag-export');
+    const syncDiag = () => {
+      if (diagCb) diagCb.checked = !!(state.settings && state.settings.diag);
+      if (diagExport) diagExport.hidden = !diagCb || !diagCb.checked;
+    };
+    if (diagCb) diagCb.addEventListener('change', async () => {
+      state.settings.diag = !!diagCb.checked;
+      await Store.set(K.settings, state.settings);
+      syncDiag();
+    });
+    if (diagExport) diagExport.addEventListener('click', exportDiagLog);
 
     // General
     const nameInput = document.getElementById('f-name');
@@ -3456,6 +3500,10 @@
         if (bc) bc.checked = !!p.remind;
         if (bd) bd.value = String(p.days || BACKUP_DEFAULT_DAYS);
       }).catch(() => {});
+      const dg = document.getElementById('f-diag');
+      const dx = document.getElementById('btn-diag-export');
+      if (dg) dg.checked = !!(state.settings && state.settings.diag);
+      if (dx) dx.hidden = !(state.settings && state.settings.diag);
       renderSwatches();
       renderWallLibGrid();
       const wallRotCb = document.getElementById('f-wall-rotate');
@@ -3848,7 +3896,9 @@
     const countEl = document.getElementById('todo-count');
     const clearBtn = document.getElementById('todo-clear-done');
     const done = state.todos.filter(it => it.done).length;
-    countEl.textContent = done + '/' + state.todos.length;
+    const overdue = state.todos.filter(it => !it.done && /^\d{4}-\d{2}-\d{2}$/.test(it.due || '') && it.due < todayStr()).length;
+    countEl.textContent = done + '/' + state.todos.length + (overdue ? ' · ' + t('todo.overdue_count', { n: overdue }) : '');
+    countEl.classList.toggle('has-overdue', overdue > 0);
     if (clearBtn) clearBtn.hidden = done === 0 || !state.todos.length;
     if (!state.todos.length) {
       list.innerHTML = `<li class="todo-empty">${t('todo.empty')}</li>`;
@@ -4825,6 +4875,7 @@
     // files) is coerced into shape before any renderer or submit path can touch it.
     state.settings.accent = safeColor(state.settings.accent) || '';
     state.settings.clockTz2 = (typeof state.settings.clockTz2 === 'string' ? state.settings.clockTz2.trim().slice(0, 64) : '');
+    state.settings.diag = state.settings.diag === true;
     state.settings.groups = sanitizeGroups(state.settings.groups);
     state.settings.customEngines = sanitizeCustomEngines(state.settings.customEngines);
     state.settings.hiddenEngines = sanitizeHiddenEngines(state.settings.hiddenEngines);
@@ -5523,6 +5574,12 @@
     sweepPending(); // sweep expired / corrupted pending leftovers on boot
     renderStorageUse(); // data-management usage line (boot)
     maybeRemindBackup(); // interval backup nudge (opt-in, local-only)
+    // Error capture (only active when settings.diag is on; messages stay local).
+    window.addEventListener('error', (e) => diagPush((e && e.message) || 'window error'));
+    window.addEventListener('unhandledrejection', (e) => {
+      const reason = e && e.reason;
+      diagPush(reason && (reason.message || String(reason)) || 'unhandled promise rejection');
+    });
 
     // Cloud sync init, last: the migration write-back has landed and every event is bound.
     if (window.LT_SYNC) {
