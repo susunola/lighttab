@@ -5,28 +5,28 @@
   color-scheme: dark;
   /* Text ink (white on dark chrome; dark slate on light chrome). */
   --ink: rgba(255, 255, 255, 0.96);
-  --ink-2: rgba(255, 255, 255, 0.66);
-  --ink-3: rgba(255, 255, 255, 0.55);
+  --ink-2: rgba(255, 255, 255, 0.74);
+  --ink-3: rgba(255, 255, 255, 0.64);
   /* Hairlines between translucent surfaces. */
-  --line: rgba(255, 255, 255, 0.16);
-  --line-2: rgba(255, 255, 255, 0.22);
+  --line: rgba(255, 255, 255, 0.10);
+  --line-2: rgba(255, 255, 255, 0.18);
   /* Glass surfaces standing directly on the wallpaper. Light theme turns these white. */
   /* Frosted surfaces. The dark theme tints DOWN, not up. The old rgba(255,255,255,0.07) was a white
      wash: it brightens whatever sits behind it, so over a bright wallpaper the surface went pale and
      the white ink on it measured ~1.7:1 contrast — unreadable. A dark translucent tint keeps white
      text legible on any wallpaper while still transmitting the wallpaper's colour. */
-  --glass: rgba(12, 16, 28, 0.48);
-  --glass-2: rgba(12, 16, 28, 0.60);
+  --glass: rgba(20, 25, 36, 0.58);
+  --glass-2: rgba(24, 30, 42, 0.76);
   /* One blur token shared by every primary surface. saturate() is the part that matters: a plain
      blur greys the backdrop out and the pane reads as plastic rather than glass. */
-  --glass-blur: blur(20px) saturate(150%);
+  --glass-blur: blur(24px) saturate(120%);
   /* Frost material: a directional sheen (the pane catching light) plus a specular edge (thickness).
      An earlier revision also layered an SVG noise grain on top — it read as dirt over photographs,
      so the material is now smooth: clean frost, not textured plastic. */
-  --frost-sheen: linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 32%, rgba(255,255,255,0) 62%);
+  --frost-sheen: linear-gradient(135deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.015) 32%, rgba(255,255,255,0) 62%);
   --frost-edge: inset 0 1px 0 var(--glass-hl), inset 0 -1px 0 rgba(0, 0, 0, 0.18), inset 1px 0 0 rgba(255,255,255,0.05);
   /* Inner top highlight — the bright 1px edge that sells a pane as glass. */
-  --glass-hl: rgba(255, 255, 255, 0.14);
+  --glass-hl: rgba(255, 255, 255, 0.07);
   /* Alpha picked by sweep, not by eye: it is the most transparent value that still clears WCAG AA
      (4.5:1) in the worst pairing — dark theme over a BRIGHT wallpaper. 0.48 measures 5.25:1 with
      chroma 59 (0.42 sat right on the 4.5 line, too tight for real photos). See .lt-glass-check.cjs. */
@@ -38,8 +38,8 @@
   --thumb: rgba(255, 255, 255, 0.18);      /* scrollbar thumbs */
   --check-line: rgba(255, 255, 255, 0.4);  /* to-do round checkbox border */
   /* Solid raised panels (menus / modals / toast). */
-  --panel-1: rgba(18, 24, 40, 0.96);  /* engine list / palette / context menu */
-  --panel-2: rgba(22, 28, 46, 0.97);  /* modal card */
+  --panel-1: rgba(25, 30, 40, 0.98);  /* engine list / palette / context menu */
+  --panel-2: rgba(25, 30, 40, 0.98);  /* modal card */
   --panel-3: rgba(20, 26, 44, 0.92);  /* toast */
   --scrim: rgba(4, 8, 16, 0.55);      /* modal backdrop */
   --handle: rgba(10, 14, 24, 0.55);   /* drag handles / mini overlay pills */
@@ -49,18 +49,18 @@
   --accent-ai: #a78bfa;
   --accent-ai-2: #8b5cf6;
   --danger: #f87171;
-  --shadow-1: 0 12px 32px rgba(0, 0, 0, 0.28);
+  --shadow-1: 0 8px 24px rgba(0, 0, 0, 0.20);
   --shadow-2: 0 18px 60px rgba(0, 0, 0, 0.45);
   --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 22px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
   /* Icon tile geometry (shortcut cards / folder tiles / add tile). Driven by the two sliders in
      Settings → General (settings.iconSize / iconRadius), applied to :root at boot and on change.
      The radius is a percentage so it stays proportional at any tile size (28% ≈ the original
      18px corner on a 64px tile). */
   --icon-size: 64px;
   --icon-radius: 28%;
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+  --font-sans: "Inter", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
     "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
   --font-num: "Inter", "SF Pro Display", "Segoe UI Variable Display",
     -apple-system, "Helvetica Neue", Arial, sans-serif;
@@ -311,8 +311,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 /* A quiet lift on hover — same language as the shortcut tiles. Top-stack widgets have no card
  * chrome (text floats on the wallpaper), so lifting them would just wobble bare text. */
 .widget:not(.w-top):hover {
-  transform: translateY(-2px);
-  box-shadow: var(--frost-edge), var(--shadow-2);
+  transform: none;
+  box-shadow: var(--frost-edge), var(--shadow-1);
   border-color: var(--line-2);
 }
 /* #60 remove-widget affordance: same language as the shortcut card's ✕ — invisible until the
@@ -562,8 +562,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .wclock .clock-date {
   margin-top: 8px;
   font-size: 13.5px;
-  color: var(--ink-2);
-  letter-spacing: 0.03em;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: 0.02em;
 }
 .wclock .clock-lunar {
   margin-top: 4px;
@@ -597,8 +598,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .w-title {
   display: inline-flex; align-items: center; gap: 7px;
   font-size: 13.5px;
-  color: var(--ink-2);
-  letter-spacing: 0.03em;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: 0.02em;
 }
 .w-count {
   min-width: 22px; height: 20px;
@@ -634,7 +636,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   width: 26px; height: 26px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent-2), #2563eb);
+  background: #2563eb;
   color: #fff;
   font-size: 17px;
   line-height: 1;
@@ -748,7 +750,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .cal-cell b { font-weight: 400; line-height: 1; }
 .cal-cell i {
   font-style: normal;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--ink-3);
   line-height: 1;
   margin-top: 3px;
@@ -1112,7 +1114,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   width: 24px; height: 24px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 7px;
-  background: linear-gradient(135deg, var(--accent-2), #2563eb);
+  background: #2563eb;
   color: #fff;
   font-size: 15px; line-height: 1;
   transition: filter .15s ease;
@@ -1154,7 +1156,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .pomo-btn:hover { background: var(--tint-3); color: var(--ink); }
 .pomo-btn.primary {
-  background: linear-gradient(135deg, var(--accent-2), #2563eb);
+  background: #2563eb;
   border-color: transparent;
   color: #fff;
 }
@@ -1165,7 +1167,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   position: relative;
   z-index: 5;
   display: flex; align-items: center;
-  height: 48px;
+  height: 54px;
   max-width: 640px;
   margin: 6px auto 0;
   background-color: var(--glass);
@@ -1466,15 +1468,20 @@ svg.logo-tx text { font-family: inherit; }
 [data-theme="dark"] .card .ico.has-custom-icon { background: #27272a; }
 [data-theme="light"] .card .ico.has-custom-icon { background: #ffffff; }
 .card .title {
-  margin-top: 8px;
-  font-size: 12.5px;
+  margin-top: 11px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--ink);
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
   max-width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-height: 2.8em;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.4;
 }
 .card-actions {
   position: absolute;
@@ -1813,25 +1820,26 @@ svg.logo-tx text { font-family: inherit; }
   overflow: hidden;
   animation: rise2 .2s ease;
 }
-.modal-card.wide { max-width: 560px; }
+.modal-card.wide { max-width: 660px; }
 @keyframes rise2 { from { opacity: 0; transform: translateY(8px); } }
 .modal-head {
   flex: none;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px;
+  padding: 18px 22px;
   border-bottom: 1px solid var(--line);
 }
-.modal-head .tabs { display: flex; gap: 4px; }
+.modal-head .tabs { display: flex; gap: 6px; }
 .modal-head .tab {
-  padding: 6px 12px;
+  padding: 9px 14px;
   font-size: 13px;
-  color: var(--ink-3);
-  border-radius: 8px;
+  font-weight: 500;
+  color: var(--ink-2);
+  border-radius: 10px;
   transition: background .12s, color .12s;
 }
 .modal-head .tab:hover { color: var(--ink-2); }
 .modal-head .tab.active { background: rgba(125,211,252,0.12); color: var(--accent); }
-.modal-body { flex: 1 1 auto; overflow-y: auto; padding: 18px 18px 16px; }
+.modal-body { flex: 1 1 auto; overflow-y: auto; padding: 24px; scrollbar-gutter: stable; }
 /* Pane switches fade in — the animation runs each time a pane is unhidden. */
 .tab-pane { animation: fade .16s ease; }
 .modal-body label { display: block; margin-bottom: 14px; }
@@ -1858,7 +1866,7 @@ svg.logo-tx text { font-family: inherit; }
   border-color: rgba(125,211,252,0.55);
   background: var(--tint-3);
 }
-.form-tip { margin: 4px 0 0; font-size: 11.5px; color: var(--ink-3); }
+.form-tip { margin: 6px 0 0; font-size: 12px; line-height: 1.65; color: var(--ink-3); }
 /* Engine manager (settings → general): rows reuse the dropdown's logo language. */
 .engm-zone { margin: 14px 0 2px; }
 .engm-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
@@ -1928,7 +1936,7 @@ svg.logo-tx text { font-family: inherit; }
 }
 .btn:active { transform: scale(0.97); }
 .btn.primary {
-  background: linear-gradient(180deg, #38bdf8, #2563eb);
+  background: #2563eb;
   color: #fff;
   border-color: rgba(255,255,255,0.08);
 }
@@ -2045,6 +2053,7 @@ svg.logo-tx text { font-family: inherit; }
 .wall-lib { margin-top: 16px; }
 .wall-lib-head {
   display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px;
   margin-bottom: 10px;
 }
 .wall-lib-title {
@@ -2055,7 +2064,7 @@ svg.logo-tx text { font-family: inherit; }
   min-width: 150px;
   padding: 7px 10px;
   margin-left: auto;       /* push the source selector + fetch button to the right */
-  margin-right: 8px;
+  margin-right: 0;
 }
 .wall-lib-grid {
   display: grid;
@@ -2140,6 +2149,12 @@ svg.logo-tx text { font-family: inherit; }
   .search { margin: 6px auto 0; max-width: 100%; }
 }
 @media (max-width: 720px) {
+  .modal { padding: 16px; }
+  .modal-head { padding: 14px 16px; }
+  .modal-body { padding: 18px; }
+  .wall-lib-title { flex-basis: 100%; }
+  .wall-lib-head .wall-src { flex: 1 1 100%; margin-left: 0; }
+  .wall-lib-head .btn { flex: 1; white-space: nowrap; }
   #topbar { padding: 14px 16px 0; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 9px; }
   .card { padding: 14px 6px 10px; border-radius: 16px; }
@@ -2960,3 +2975,117 @@ input[type="file"]:focus-visible {
   border-top: 1px solid var(--line);
 }
 .sync-data .data-label { display: block; margin-bottom: 6px; }
+#sync-panel { min-width: 0; width: 100%; }
+#sync-panel .form-tip { white-space: normal; overflow-wrap: anywhere; line-height: 1.6; }
+.sync-review { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
+.sync-review h3, .sync-data h3 { font-size: 14px; margin: 6px 0; }
+.sync-conflict, .sync-backup { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.sync-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.sync-compare summary { cursor: pointer; font-size: 13px; }
+.sync-preview { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; font-size: 13px; line-height: 1.6; margin-top: 10px; }
+@media (max-width: 520px) { .sync-compare { grid-template-columns: 1fr; } }
+
+/* Low-frequency settings stay available without crowding the initial view. */
+.settings-more { border-top: 1px solid var(--line); margin: 12px 0; }
+.settings-more > summary { padding: 14px 0; cursor: pointer; color: var(--ink-2); font-size: 13px; font-weight: 500; }
+.settings-more[open] > summary { color: var(--ink); }
+.settings-more > .avatar-zone,
+.settings-more > .engm-zone,
+.settings-more > .wgt-zone,
+.settings-more > .data-zone,
+.settings-more > .wall-lib { margin-top: 0; border-top: 0; padding-top: 0; }
+.settings-more > .avatar-zone > .field-label,
+.settings-more > .engm-zone > .field-label,
+.settings-more > .wgt-zone > .data-label,
+.settings-more > .data-zone > .data-label { display: none; }
+
+/* Shared feedback for compact actions; geometry remains unchanged. */
+.todo-submit, .movie-link, .movie-next { border-radius: 10px; }
+.icon-btn:hover, .movie-link:hover, .movie-next:hover { border-color: var(--line-2); }
+.todo-submit:active, .movie-link:active, .movie-next:active { transform: scale(0.96); }
+
+/* Shortcut material: a fine rim, restrained sheen, and grounded depth. */
+.card:not(.card-add) .ico {
+  box-shadow: 0 2px 3px rgba(0,0,0,.22), 0 9px 18px rgba(0,0,0,.25), 0 20px 32px -16px rgba(0,0,0,.5);
+  transition: box-shadow .2s ease;
+}
+.card:not(.card-add) .ico::after {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.035) 43%, rgba(0,0,0,.10));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 0 0 1px rgba(255,255,255,.12), inset 0 -1px 1px rgba(0,0,0,.18);
+}
+.card:not(.card-add):hover .ico,
+.card:not(.card-add):focus-visible .ico {
+  box-shadow: 0 3px 5px rgba(0,0,0,.18), 0 14px 24px rgba(0,0,0,.32), 0 24px 36px -16px rgba(0,0,0,.5);
+}
+html[data-theme="light"] .card:not(.card-add) .ico {
+  box-shadow: 0 2px 3px rgba(15,23,42,.09), 0 8px 18px rgba(15,23,42,.16);
+}
+.card:focus-within .card-actions { display: flex; }
+@media (prefers-reduced-motion: reduce) {
+  .card .ico { transition: none; }
+}
+
+/* Search and toolbar share the shortcut tiles' restrained surface finish. */
+.search {
+  box-shadow: inset 0 1px 0 var(--glass-hl), 0 3px 6px rgba(0,0,0,.10), 0 12px 28px -10px rgba(0,0,0,.25);
+}
+.search .engine-btn { border-right-color: color-mix(in srgb, var(--line) 55%, transparent); }
+.search:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  box-shadow: inset 0 1px 0 var(--glass-hl), 0 0 0 3px color-mix(in srgb, var(--accent) 9%, transparent), 0 12px 28px -8px rgba(0,0,0,.22);
+}
+.top-actions .icon-btn, .top-actions .avatar-btn {
+  background-image: var(--frost-sheen);
+  box-shadow: inset 0 1px 0 var(--glass-hl), 0 3px 8px rgba(0,0,0,.16);
+  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.top-actions .icon-btn:hover, .top-actions .avatar-btn:hover,
+.top-actions .icon-btn:focus-visible, .top-actions .avatar-btn:focus-visible {
+  background-color: var(--glass-2);
+  border-color: var(--line-2);
+  box-shadow: inset 0 1px 0 var(--glass-hl), 0 5px 12px rgba(0,0,0,.20);
+}
+@media (prefers-reduced-motion: reduce) {
+  .top-actions .icon-btn, .top-actions .avatar-btn { transition: none; }
+}
+
+/* Secondary widget controls use the same soft edge as the toolbar. */
+.w-title > svg { color: var(--ink-2); }
+.movie-link, .movie-next {
+  background-image: var(--frost-sheen);
+  box-shadow: inset 0 1px 0 var(--glass-hl);
+}
+.cal-nav-btn:focus-visible { background: var(--tint-3); color: var(--ink); }
+.todo-add { transition: border-color .18s ease, box-shadow .18s ease; }
+.todo-add:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .todo-add { transition: none; }
+}
+
+/* Typography: optical sizing, quiet labels, and a consistent medium-weight hierarchy. */
+body { font-optical-sizing: auto; font-kerning: normal; }
+button, input, select, textarea { font-family: var(--font-sans); font-optical-sizing: auto; }
+.wclock:not(.clock-font-serif):not(.clock-font-mono) .clock-hhmm {
+  font-weight: 300;
+  letter-spacing: -.035em;
+}
+.wclock .clock-date { font-weight: 400; letter-spacing: .035em; }
+.w-title { font-weight: 550; letter-spacing: .035em; }
+.card .title { font-weight: 450; letter-spacing: .012em; text-shadow: 0 1px 3px rgba(0,0,0,.65); }
+#q { font-weight: 400; letter-spacing: .015em; }
+#q::placeholder { font-weight: 400; }
+.modal-head .tab { font-weight: 500; letter-spacing: .025em; }
+.modal-head .tab.active { font-weight: 600; }
+.modal-body label > span, .modal-body .field-label { letter-spacing: .015em; }
+.form-tip, .data-tip { font-weight: 400; letter-spacing: .01em; }
+.cal-cell b, .cal-month, .movie-score, .w-count { font-variant-numeric: tabular-nums; }
+.cal-cell i { letter-spacing: 0; }
+.btn, .movie-link, .movie-next { font-weight: 500; letter-spacing: .015em; }
+html[data-theme="light"] .card .title { text-shadow: 0 1px 3px rgba(255,255,255,.65); }

@@ -20,9 +20,10 @@
 
 Live clock and greeting (with the Chinese lunar calendar), a local month view, one-box search,
 an AI prompt launcher, a grouped icon grid, to-dos and wallpapers — all of it stored in your own
-browser. The extension requests a single permission (`storage`); besides search suggestions
-(sent straight to your chosen engine, switchable off) it makes no network requests
-unless you explicitly turn on an online feature (cloud sync, Bing daily wallpaper library).
+browser. The required API permission is `storage`; the manifest also declares three search-suggestion
+hosts and content scripts for supported AI sites. Search suggestions are on by default and can be
+disabled. Online sync, wallpaper and weather features are optional. A startup loopback probe checks
+whether WorkBuddy is running on this computer; it does not contact a remote service.
 
 ## Features
 
@@ -39,19 +40,37 @@ unless you explicitly turn on an online feature (cloud sync, Bing daily wallpape
 - **Weather widget** (opt-in, off by default) — current temperature, condition, today's high/low and humidity for a city you pick in Settings, powered by Open-Meteo (no API key, CORS-open). Expandable to a 7-day forecast with a hi/lo temperature trend sparkline. Cached for 30 minutes; shows the last reading with a "may be outdated" hint when the network fails
 - **Minimalism toggles** — the search bar and the clock card can each be hidden entirely in *Settings → General* (the layout closes up; the icon grid rides up when both are off)
 - **JSON backup / restore** and one-click Chrome bookmark import (optional permission)
-- **Optional cloud sync** — sign in with an email to sync shortcuts, to-dos, settings, wallpaper and templates across devices over HTTPS. Off by default
+- **Optional cloud sync** — sign in with an email to sync shortcuts, to-dos, settings, wallpaper and templates across devices over HTTPS. Off by default. First-login differences and concurrent edits pause the affected document for a choice; local recovery backups are saved before replacement
 
 ## Privacy
 
-- Single required permission: `storage` — everything lives in your own browser
+- Required API permission: `storage`; three search-suggestion host permissions and AI content-script matches are also declared in the manifest
 - No tracking, no analytics, no ads
-- **Search suggestions** (on by default, switchable in *Settings → General*) — what you type is sent directly to your chosen search engine (Baidu / Google / Bing) to fetch suggestions; turning it off keeps keystrokes local until you press Enter. No other data ever leaves the browser by default. Only three **opt-in** features ever reach the network beyond that:
-  - **Cloud sync** — email sign-up/login (only a password hash is stored server-side); whole-document last-write-wins sync keeps multiple devices consistent. Your token stays local and is never synced. Over HTTPS to the self-hosted backend at `lighttab.atomwangnus.com`
+- **Search suggestions** (on by default, switchable in *Settings → General*) — what you type is sent directly to your chosen search engine (Baidu / Google / Bing) to fetch suggestions; turning it off keeps keystrokes local until you press Enter. Additional online features:
+  - **Cloud sync** — email sign-up/login over HTTPS to `lighttab.atomwangnus.com`. First-login differences and revision conflicts require choosing the device or cloud copy. Unaffected documents continue syncing. Your token stays local and is excluded from sync and recovery exports; data is not end-to-end encrypted
   - **Bing daily wallpaper library** — when you open it in settings, metadata and images are fetched via the backend proxy at `lighttab.atomwangnus.com`
   - **Weather widget** — off by default; only after you enable it and set a city does the page fetch forecasts directly from `api.open-meteo.com` (and city geocoding from `geocoding-api.open-meteo.com`) over HTTPS. No account, no API key, no other data leaves the browser
 - The optional `bookmarks` permission is requested only at the moment you click "import from bookmarks"; likewise the optional `tabs` permission is requested only when you click "Add current tab" in the shortcut dialog (used once to read the active tab's title + URL)
+- **AI launching** sends the selected prompt to the chosen AI service through its page. The content script is declared for Doubao, Dola and ChatGPT. Launching a search or website also contacts the selected destination.
+- **WorkBuddy detection** probes `127.0.0.1` ports 18488–18490 on startup to detect the local desktop app.
 
 See [privacy.html](./privacy.html) for the full policy.
+
+### Sync recovery
+
+In **Settings → Sync**, expand the device/cloud previews before choosing a conflicting copy.
+The choice applies to that whole document (for example the complete shortcut list), not individual
+items. If either copy changes before the choice completes, review the updated preview and choose again.
+
+The latest **3 recovery backups** remain on this browser. They include the five synced data documents
+and the schema version, not authentication credentials or search history. Download important backups
+before clearing browser data. A displaced cloud conflict is saved together with the other local data,
+not as a complete snapshot of the cloud account.
+
+**Restore to device** first backs up current content, then signs out of cloud sync and restores locally.
+Sign in again when ready to compare with cloud data. If a recovery backup cannot be saved (for example,
+because storage is full), replacement stops; download and delete old recovery backups to free space.
+Cloud data deletion still requires a backend implementation and is unavailable in this release.
 
 ## Install
 
@@ -82,13 +101,24 @@ Two layers, both kept out of the runtime (no runtime dependencies):
    fresh profile (boot, grid keyboard, modal, to-dos…):
 
    ```bash
-   npm i -D @playwright/test   # first time only
+   npm i -D playwright   # first time only; provides both browser and test APIs
    npx playwright install chromium
    npx playwright test -c tests/e2e/playwright.config.js
    ```
 
    These need a real browser, so they are not part of CI — run them before publishing
    a release. Tests live in `tests/e2e/`.
+
+3. **Real extension installation** — with Playwright and its Chromium installed, run
+   `node scripts/check-extension.cjs`. This loads the actual MV3 extension in an isolated profile,
+   blocks external requests, checks startup and verifies `chrome.storage.local` persistence after
+   reload. It also runs conflict preview, backup download, cloud choice and restoration through the
+   real settings UI using a mocked cloud service. Unlike the `file://` tests, this catches installation/CSP
+   failures. It does not validate live AI services, the production sync backend or Chrome Web Store approval.
+
+4. **Sync safety scenarios** — `node scripts/check-sync.cjs` (also run by the smoke suite/CI):
+   first sign-in, two-device conflicts, stale choices, offline reconnect, deletion, malformed payloads,
+   backup quota failures and edits queued during sync. Uses mocked storage and the existing revision API.
 
 ## Structure
 
@@ -104,7 +134,7 @@ lighttab/
 │   ├── icondb.js          # built-in brand-icon library (simple-icons, CC0)
 │   ├── lunar.js           # Chinese lunar calendar, with English name variants
 │   ├── holidays.js        # China statutory-holiday table (2026, refreshed yearly)
-│   ├── sync.js            # optional cloud sync client (local-first, LWW)
+│   ├── sync.js            # optional cloud sync, explicit conflict choices and local recovery
 │   └── inject-ai.js       # content script that auto-fills and sends on Doubao / Dola / ChatGPT
 ├── scripts/
 │   └── smoke.cjs          # offline smoke checks (node scripts/smoke.cjs)

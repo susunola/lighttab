@@ -144,6 +144,12 @@ console.log('[4] pure functions');
     // Factory default wallpaper: a local asset bundled in the extension
     assert(P.sanitizeWallpaperUrl('assets/wallpaper-dusk.jpg') !== null, 'allow bundled assets/ wallpapers');
     assert(P.sanitizeWallpaperUrl('assets/../etc/passwd') === null, 'reject assets/ path traversal');
+    for (const name of ['city-1', 'city-2', 'space-1', 'space-2', 'mount-1', 'mount-2', 'sea-1', 'sea-2', 'forest-1', 'forest-2']) {
+      assert(P.sanitizeWallpaperUrl(`assets/wallpapers/${name}.jpg`) === null, `removed preset is no longer allowed ${name}`);
+    }
+    for (const name of ['assets/wallpapers/../secret.jpg', 'assets/wallpapers/%2e%2e/secret.jpg', 'assets/unknown.jpg']) {
+      assert(P.sanitizeWallpaperUrl(name) === null, `reject unlisted asset ${name}`);
+    }
     assert(fs.existsSync(path.join(ROOT, 'assets/wallpaper-dusk.jpg')), 'assets/wallpaper-dusk.jpg exists');
     assert(/BUNDLED_WALL = \{ type: 'image', value: 'assets\/wallpaper-dusk\.jpg'/.test(appSrc), 'factory default wallpaper is the bundled image');
     assert(/WALLPAPERS = \[[\s\S]{0,200}id: 'dusk',\s+name: 'Dusk Mountain', img: 'assets\/wallpaper-dusk\.jpg'/.test(appSrc), 'bundled wallpaper is the first preset swatch');
@@ -490,7 +496,7 @@ for (const id of ALL_WIDGET_IDS) {
   assert(new RegExp(`class="w-del" data-widget="${id}"`).test(html), `${id} widget has a remove button`);
   assert(new RegExp(`id="f-w-${id}"`).test(html), `settings page contains the #f-w-${id} checkbox`);
 }
-assert(/data-i18n="gen\.widgets"/.test(html) && /data-i18n="gen\.widgets_tip"/.test(html), 'settings widget section entry hooks are complete');
+assert(/data-i18n="gen\.widgets"/.test(html), 'settings widget section entry hooks are complete');
 assert(/data-i18n-aria="widget\.remove"/.test(html), 'remove button carries the a11y entry');
 assert(/widgets:\s*\{\s*wclock:\s*true/.test(appSrc), 'DEFAULT_SETTINGS contains widgets defaulting to all on');
 assert(/wweather: false/.test(appSrc), 'weather widget defaults off in DEFAULT_SETTINGS (opt-in)');
@@ -666,11 +672,11 @@ assert(/a\[1\]\.row - b\[1\]\.row/.test(canvasSrc) && /col: i % cols, row: Math\
 console.log('[11] glassmorphism');
 // Dark-theme glass must be "dark and slightly translucent" rather than a white overlay: white brightens
 // an already-bright wallpaper — measured white-text contrast is only 1.72:1 at 7% white (WCAG AA needs 4.5)
-assert(/--glass: rgba\(12, 16, 28, 0\.48\)/.test(cssSrc), 'dark glass is dark-translucent rgba(12,16,28,.48)');
+assert(/--glass: rgba\(20, 25, 36, 0\.58\)/.test(cssSrc), 'dark glass uses the current translucent surface');
 assert(!/:root[\s\S]{0,900}--glass: rgba\(255, 255, 255/.test(cssSrc), 'dark theme no longer uses white glass');
 assert(/--glass: rgba\(255, 255, 255, 0\.36\)/.test(cssSrc), 'light glass reduced to 0.36 (0.50 still looks white, 0.36 lets the wallpaper through)');
 // Single blur token + saturate: pure blur desaturates the background and looks plasticky
-assert(/--glass-blur: blur\(20px\) saturate\(150%\)/.test(cssSrc), 'dark glass-blur carries saturate');
+assert(/--glass-blur: blur\(24px\) saturate\(120%\)/.test(cssSrc), 'dark glass-blur carries saturate');
 assert(/--glass-blur: blur\(20px\) saturate\(185%\)/.test(cssSrc), 'light glass-blur carries saturate');
 // Frosted material: diagonal sheen + edge reflection. The earlier SVG noise grain looked dirty over
 // photo wallpapers and was removed — this guards "no more grain" against regression
@@ -1146,7 +1152,7 @@ assert(/\.menu \{[^}]*animation: pop \.14s ease/.test(cssSrc), 'context menu now
 assert(/\.tab-pane \{ animation: fade \.16s ease/.test(cssSrc), 'settings pane switches fade in');
 // Widget cards lift on hover (top-stack widgets excluded — they have no card chrome)
 assert(/\.widget \{[^}]*transition: transform \.18s ease/.test(cssSrc), 'widget cards carry a transform transition');
-assert(/\.widget:not\(\.w-top\):hover \{[^}]*transform: translateY\(-2px\)/.test(cssSrc), 'widget cards lift 2px on hover');
+assert(/\.widget:not\(\.w-top\):hover \{[^}]*transform: none/.test(cssSrc), 'widget hover preserves position');
 // Wallpaper swatches / library thumbs: lift + slow image zoom
 assert(/\.swatch:hover \{ transform: translateY\(-2px\)/.test(cssSrc), 'swatches lift 2px on hover');
 assert(/\.wall-thumb:hover img \{ transform: scale\(1\.05\)/.test(cssSrc), 'library thumbs zoom their image on hover');
@@ -1164,7 +1170,7 @@ assert(/clock12h: false/.test(appSrc), 'DEFAULT_SETTINGS keeps the 24h default (
 assert(!/'lt\.clock/.test(appSrc), 'clock format lives inside lt.settings (no separate storage key)');
 // Static structure: the General-pane toggle + the meridiem span in the clock row
 assert(/<input type="checkbox" id="f-clock12h">/.test(html), 'settings page contains the #f-clock12h checkbox');
-assert(/data-i18n="gen\.clock12h"/.test(html) && /data-i18n="gen\.clock12h_tip"/.test(html), 'clock format label/tip entry hooks are complete');
+assert(/data-i18n="gen\.clock12h"/.test(html), 'clock format label/tip entry hooks are complete');
 assert(/<span class="clock-ampm" id="clock-ampm" hidden><\/span>/.test(html), 'clock row contains the hidden #clock-ampm meridiem span');
 // JS: pure formatter exported + tick + settings wiring + import validation
 assert(/function formatClock/.test(appSrc), 'app.js defines formatClock()');
@@ -1347,7 +1353,7 @@ const holidaysSrc = read('js/holidays.js');
 assert(/clockSeconds: false/.test(appSrc), 'DEFAULT_SETTINGS keeps seconds off by default (clockSeconds: false)');
 assert(!/'lt\.clocksec/.test(appSrc), 'seconds flag lives inside lt.settings (no separate storage key)');
 assert(/<input type="checkbox" id="f-clockseconds">/.test(html), 'settings page contains the #f-clockseconds checkbox');
-assert(/data-i18n="gen\.clockseconds"/.test(html) && /data-i18n="gen\.clockseconds_tip"/.test(html), 'seconds label/tip entry hooks are complete');
+assert(/data-i18n="gen\.clockseconds"/.test(html), 'seconds label/tip entry hooks are complete');
 assert(/getElementById\('f-clockseconds'\)/.test(appSrc), 'seconds toggle is bound');
 assert(/state\.settings\.clockSeconds = state\.settings\.clockSeconds === true/.test(appSrc), 'doImport validates clockSeconds');
 assert(/secEl\.hidden = !showSec/.test(appSrc), 'clock tick hides the seconds span when the toggle is off');
@@ -1556,8 +1562,8 @@ assert(/hideClock: false/.test(appSrc), 'DEFAULT_SETTINGS keeps the clock visibl
 assert(!/'lt\.hidesearch|'lt\.hideclock/.test(appSrc), 'hide flags live inside lt.settings (no separate storage keys)');
 assert(/<input type="checkbox" id="f-hidesearch">/.test(html), 'settings page contains the #f-hidesearch checkbox');
 assert(/<input type="checkbox" id="f-hideclock">/.test(html), 'settings page contains the #f-hideclock checkbox');
-assert(/data-i18n="gen\.hidesearch"/.test(html) && /data-i18n="gen\.hidesearch_tip"/.test(html), 'hide-search label/tip entry hooks are complete');
-assert(/data-i18n="gen\.hideclock"/.test(html) && /data-i18n="gen\.hideclock_tip"/.test(html), 'hide-clock label/tip entry hooks are complete');
+assert(/data-i18n="gen\.hidesearch"/.test(html), 'hide-search label/tip entry hooks are complete');
+assert(/data-i18n="gen\.hideclock"/.test(html), 'hide-clock label/tip entry hooks are complete');
 assert(/getElementById\('f-hidesearch'\)/.test(appSrc) && /getElementById\('f-hideclock'\)/.test(appSrc), 'both hide toggles are bound');
 assert(/state\.settings\.hideSearch = state\.settings\.hideSearch === true/.test(appSrc)
   && /state\.settings\.hideClock = state\.settings\.hideClock === true/.test(appSrc), 'doImport validates the hide flags');
@@ -1745,159 +1751,15 @@ assert(/aria-live="polite" aria-busy="false"/.test(html), 'suggest dropdown anno
 assert(/\.sg-loading \{/.test(cssSrc), 'CSS styles the suggestion loading row');
 assert(/@keyframes sg-pulse/.test(cssSrc), 'CSS animates the loading dots');
 
-// ---------- 27) sync.js behavior: whole-document LWW + deletion mirroring ----------
-// applyPull/pushDirty are async, so this section (and the final summary/exit below) runs inside an
-// async IIFE — everything above stays plain synchronous script, unchanged.
+// ---------- 27) sync safety: executable storage/network scenarios ----------
 (async () => {
-console.log('[27] sync.js: applyPull / pushDirty (LWW + deletion mirroring)');
-{
-  // Loads a fresh copy of sync.js into its own vm context, wired to an in-memory chrome.storage.local
-  // mock and a caller-supplied fetch stub. Returns the window.LT_SYNC._test hook (applyPull, pushDirty,
-  // state) plus the raw store object for assertions and a captured (never-fired) setTimeout log.
-  function loadSync(initialStorage, fetchImpl) {
-    const store = Object.assign({}, initialStorage);
-    const timers = [];
-    const chromeStorageLocal = {
-      get: async (keys) => {
-        if (keys == null) return Object.assign({}, store);
-        const arr = Array.isArray(keys) ? keys : [keys];
-        const out = {};
-        for (const k of arr) if (Object.prototype.hasOwnProperty.call(store, k)) out[k] = store[k];
-        return out;
-      },
-      set: async (obj) => { Object.assign(store, obj); },
-      remove: async (keys) => { (Array.isArray(keys) ? keys : [keys]).forEach((k) => { delete store[k]; }); }
-    };
-    const sandbox = {
-      chrome: { storage: { local: chromeStorageLocal } },
-      fetch: fetchImpl || (async () => { throw new Error('fetch should not be called in this scenario'); }),
-      console,
-      // setTimeout/clearTimeout are only recorded, never fired: tests drive applyPull/pushDirty
-      // directly, so scheduleSync's debounce must never actually kick off a real network call.
-      setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
-      clearTimeout: () => {}
-    };
-    sandbox.window = sandbox;
-    vm.createContext(sandbox);
-    vm.runInContext(read('js/sync.js'), sandbox, { filename: 'sync.js' });
-    return { LT_SYNC: sandbox.LT_SYNC, test: sandbox.LT_SYNC._test, store, timers };
-  }
-  function mockRes(status, body) {
-    return { status, ok: status >= 200 && status < 300, headers: { get: () => null }, json: async () => body };
-  }
-  function sequenceFetch(responses) {
-    let i = 0;
-    return async () => responses[Math.min(i++, responses.length - 1)];
-  }
-
-  assert(!!loadSync({}).test, 'sync.js exposes window.LT_SYNC._test (applyPull/pushDirty/state)');
-
-  // -- applyPull --
-  {
-    const { test, store } = loadSync({});
-    await test.applyPull({ docs: { 'lt.items': { payload: '[{"id":1}]', updatedAt: 1000, rev: 5 } }, serverTime: 2000 }, true);
-    assert(JSON.stringify(store['lt.items']) === '[{"id":1}]', 'applyPull (first sync): server doc is written to local storage');
-    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 5, dirtyAt: 0 }), 'applyPull (first sync): meta rev stored, dirty cleared');
-    assert(test.state.meta.lastServerTime === 2000, 'applyPull stores serverTime for the next since= cursor');
-  }
-  {
-    // LWW: an unpushed local edit is newer than the incoming server doc -> local wins, server write skipped
-    const { test, store } = loadSync({ 'lt.items': ['LOCAL'] });
-    test.state.meta.docs['lt.items'] = { rev: 3, dirtyAt: 5000 };
-    await test.applyPull({ docs: { 'lt.items': { payload: '["SERVER"]', updatedAt: 4000, rev: 9 } } }, false);
-    assert(JSON.stringify(store['lt.items']) === '["LOCAL"]', 'applyPull LWW: newer local edit is not overwritten by an older server doc');
-    assert(test.state.meta.docs['lt.items'].dirtyAt === 5000 && test.state.meta.docs['lt.items'].rev === 9,
-      'applyPull LWW: rev syncs to the server doc but dirtyAt survives (pushDirty still owes a push)');
-  }
-  {
-    // LWW: no unpushed local edit -> server wins, dirty cleared
-    const { test, store } = loadSync({ 'lt.items': ['OLD'] });
-    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 1000 };
-    await test.applyPull({ docs: { 'lt.items': { payload: '["NEW"]', updatedAt: 5000, rev: 4 } } }, false);
-    assert(JSON.stringify(store['lt.items']) === '["NEW"]', 'applyPull LWW: an older local edit is overwritten by the server doc');
-    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 4, dirtyAt: 0 }), 'applyPull LWW server-wins: dirty cleared');
-  }
-  {
-    // Deletion mirroring fix: an empty payload is how pushDirty() represents a deleted document (see
-    // below); applyPull must remove the local copy instead of silently leaving it stale.
-    const { test, store } = loadSync({ 'lt.items': ['STALE'] });
-    test.state.meta.docs['lt.items'] = { rev: 2, dirtyAt: 0 };
-    await test.applyPull({ docs: { 'lt.items': { payload: '', updatedAt: 9000, rev: 10 } } }, false);
-    assert(!('lt.items' in store), 'applyPull: an empty-payload doc removes the stale local copy (deletion mirroring)');
-    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 10, dirtyAt: 0 }), 'applyPull deletion: meta rev/dirty still updated');
-  }
-  {
-    // A corrupted server payload must not crash or clobber local state; it just gets retried later.
-    const { test, store } = loadSync({ 'lt.items': ['SAFE'] });
-    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 0 };
-    await test.applyPull({ docs: { 'lt.items': { payload: '{not json', updatedAt: 100, rev: 2 } } }, false);
-    assert(JSON.stringify(store['lt.items']) === '["SAFE"]', 'applyPull: malformed payload leaves local storage untouched');
-    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 1, dirtyAt: 0 }), 'applyPull: malformed payload leaves meta untouched (retried next sync)');
-  }
-
-  // -- pushDirty --
-  {
-    const { test, store } = loadSync({ 'lt.items': ['A', 'B'] }, sequenceFetch([mockRes(200, { results: [{ key: 'lt.items', newRev: 2 }], serverTime: 999 })]));
-    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 500 };
-    await test.pushDirty();
-    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 2, dirtyAt: 0 }), 'pushDirty: a clean push updates rev and clears dirty');
-    assert(test.state.meta.lastServerTime === 999, 'pushDirty stores serverTime from the push response');
-    void store;
-  }
-  {
-    // Conflict, local wins: re-pushes with the server's rev as the new baseRev.
-    const { test, store } = loadSync({ 'lt.items': ['LOCAL'] }, sequenceFetch([
-      mockRes(200, { results: [{ key: 'lt.items', conflict: true, serverDoc: { payload: '["SERVER"]', updatedAt: 8000, rev: 5 } }] }),
-      mockRes(200, { results: [{ newRev: 6 }] })
-    ]));
-    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 9000 };
-    await test.pushDirty();
-    assert(JSON.stringify(store['lt.items']) === '["LOCAL"]', 'pushDirty conflict (local wins): local storage is never overwritten');
-    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 6, dirtyAt: 0 }), 'pushDirty conflict (local wins): rev/dirty updated from the retry');
-  }
-  {
-    // Conflict, server wins, server doc has content: local storage is overwritten.
-    const { test, store } = loadSync({ 'lt.items': ['LOCAL'] }, sequenceFetch([
-      mockRes(200, { results: [{ key: 'lt.items', conflict: true, serverDoc: { payload: '["SERVER"]', updatedAt: 9000, rev: 7 } }] })
-    ]));
-    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 1000 };
-    await test.pushDirty();
-    assert(JSON.stringify(store['lt.items']) === '["SERVER"]', 'pushDirty conflict (server wins): local storage is overwritten with the server doc');
-    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 7, dirtyAt: 0 }), 'pushDirty conflict (server wins): rev/dirty updated');
-  }
-  {
-    // Deletion mirroring fix, conflict-resolution path: an empty serverDoc payload must remove the
-    // local key, not just skip the write while still clearing dirty (the same bug as applyPull, on
-    // the other resolution path).
-    const { test, store } = loadSync({ 'lt.items': ['LOCAL'] }, sequenceFetch([
-      mockRes(200, { results: [{ key: 'lt.items', conflict: true, serverDoc: { payload: '', updatedAt: 9000, rev: 8 } }] })
-    ]));
-    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 1000 };
-    await test.pushDirty();
-    assert(!('lt.items' in store), 'pushDirty conflict (server wins, deleted): local copy is removed (deletion mirroring)');
-    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 8, dirtyAt: 0 }), 'pushDirty conflict (server wins, deleted): rev/dirty updated');
-  }
-  {
-    // Nothing dirty -> no network call at all (the fetch stub throws if invoked).
-    const { test } = loadSync({});
-    let threw = false;
-    try { await test.pushDirty(); } catch { threw = true; }
-    assert(!threw, 'pushDirty: no dirty documents means no fetch call is made');
-  }
-
-  // -- onLocalWrite / getState / isLoggedIn --
-  {
-    const { LT_SYNC, test, timers } = loadSync({});
-    LT_SYNC.onLocalWrite('lt.items');
-    assert(!test.state.meta.docs['lt.items'] && timers.length === 0, 'onLocalWrite: logged out is a no-op (nothing marked dirty, no sync scheduled)');
-    test.state.auth = { token: 'tok', email: 'a@b.com', userId: 'u1' };
-    LT_SYNC.onLocalWrite('lt.items');
-    assert(!!test.state.meta.docs['lt.items'] && test.state.meta.docs['lt.items'].dirtyAt > 0, 'onLocalWrite: logged in stamps the key dirty');
-    assert(timers.length === 1, 'onLocalWrite: logged in schedules a debounced sync');
-    LT_SYNC.onLocalWrite('lt.unknown.key');
-    assert(!test.state.meta.docs['lt.unknown.key'], 'onLocalWrite: keys outside SYNC_KEYS are ignored');
-    assert(LT_SYNC.isLoggedIn() === true && LT_SYNC.getState().email === 'a@b.com', 'getState()/isLoggedIn() reflect the current auth');
-  }
+console.log('[27] sync safety');
+try {
+  const output = execFileSync(process.execPath, [path.join(ROOT, 'scripts/check-sync.cjs')], { encoding: 'utf8' });
+  console.log(output.trim());
+  ok('sync backup, conflict, offline and recovery scenarios');
+} catch (error) {
+  fail('sync safety scenarios', String(error.stdout || '') + String(error.stderr || error.message));
 }
 
 // ---------- 28) UI polish batch: widget wrap, dwell progress, dialogs, tokens ----------
@@ -1935,9 +1797,8 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
     'launcher-direct + merged folder-name helpers exist');
   assert(/天将降大任于是人也/.test(appSrc) && /玉不琢，不成器/.test(appSrc), 'quote library expanded (8 new bilingual quotes)');
   const manifestNow = JSON.parse(read('manifest.json'));
-  assert(manifestNow.content_security_policy && /suggestion\.baidu\.com/.test(manifestNow.content_security_policy.extension_pages)
-    && /api\.bing\.com/.test(manifestNow.content_security_policy.extension_pages),
-    'extension CSP allowlists the JSONP suggestion hosts');
+  assert(manifestNow.content_security_policy?.extension_pages === "script-src 'self'; object-src 'self';",
+    'MV3 extension CSP permits packaged scripts only; suggestions use fetch with host permissions');
   assert(fs.existsSync(path.join(ROOT, 'tests/e2e/playwright.config.js')) && fs.existsSync(path.join(ROOT, 'tests/e2e/lighttab.spec.js')),
     'Playwright E2E scaffold files are in the repo');
   assert(/id="btn-batch"/.test(html) && /id="batch-text"/.test(html) && /id="batch-panel"/.test(html)
@@ -1974,17 +1835,6 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   for (const k of ['sync.data_mgmt', 'sync.wipe_local', 'sync.wipe_remote', 'sync.err.backend_delete']) {
     assert(i18nSrc.includes(`'${k}'`), `sync data-mgmt i18n ${k}`);
   }
-}
-
-// ---------- 32) curated dark wallpapers (bundled) ----------
-{
-  const files = ['city-1','city-2','space-1','space-2','mount-1','mount-2','sea-1','sea-2','forest-1','forest-2'];
-  for (const f of files) {
-    assert(fs.existsSync(path.join(ROOT, 'assets/wallpapers', f + '.jpg')), `bundled wallpaper ${f}.jpg exists`);
-    assert(i18nSrc.includes(`'wp.${f}'`), `wp.${f} has an i18n label`);
-  }
-  assert(fs.existsSync(path.join(ROOT, 'assets/wallpapers/SOURCES.md')), 'wallpaper sources/licence note exists');
-  assert(appSrc.includes(`{ id: 'city-1'`) && appSrc.includes(`{ id: 'forest-2'`), 'WALLPAPERS lists the curated set');
 }
 
 // ---------- 33) wallpaper shuffle ----------

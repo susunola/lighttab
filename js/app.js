@@ -35,17 +35,6 @@
     // The factory default is a bundled render (procedurally generated, zero licensing surface);
     // entries with `img` are bundled files, entries with `css` are gradients.
     { id: 'dusk',     name: 'Dusk Mountain', img: 'assets/wallpaper-dusk.jpg' },
-    // Curated dark wallpapers (sources + per-artist licence notes: assets/wallpapers/SOURCES.md).
-    { id: 'city-1',    name: 'City Lights',   img: 'assets/wallpapers/city-1.jpg',    light: false },
-    { id: 'city-2',    name: 'City Skyline',  img: 'assets/wallpapers/city-2.jpg',    light: false },
-    { id: 'space-1',   name: 'Milky Way',     img: 'assets/wallpapers/space-1.jpg',   light: false },
-    { id: 'space-2',   name: 'Deep Space',    img: 'assets/wallpapers/space-2.jpg',   light: false },
-    { id: 'mount-1',   name: 'Night Peaks',   img: 'assets/wallpapers/mount-1.jpg',   light: false },
-    { id: 'mount-2',   name: 'Peaks & Stars', img: 'assets/wallpapers/mount-2.jpg',   light: false },
-    { id: 'sea-1',     name: 'Moonlit Sea',   img: 'assets/wallpapers/sea-1.jpg',     light: false },
-    { id: 'sea-2',     name: 'Night Shore',   img: 'assets/wallpapers/sea-2.jpg',     light: false },
-    { id: 'forest-1',  name: 'Forest Mist',   img: 'assets/wallpapers/forest-1.jpg',  light: false },
-    { id: 'forest-2',  name: 'Dark Forest',   img: 'assets/wallpapers/forest-2.jpg',  light: false },
     { id: 'midnight', name: 'Dusk Blue',    css: 'linear-gradient(135deg,#0b1426 0%,#152a4f 45%,#1c3d6e 100%)' },
     { id: 'aurora',   name: 'Aurora',       css: 'linear-gradient(135deg,#0f1c3a 0%,#1e3a6e 50%,#2d5f8f 100%)' },
     { id: 'violet',   name: 'Night Violet', css: 'linear-gradient(135deg,#0f0a26 0%,#2b1b54 50%,#432e7a 100%)' },
@@ -201,7 +190,7 @@
   function sanitizeWallpaperUrl(v) {
     if (typeof v !== 'string' || !v) return null;
     if (/['"\\\r\n]/.test(v)) return null;
-    if (/^data:image\//i.test(v) || /^https:/i.test(v) || /^assets\/[\w.-]+$/.test(v)) return v;
+    if (/^data:image\//i.test(v) || /^https:/i.test(v) || WALLPAPERS.some(w => w.img === v)) return v;
     return null;
   }
   // Custom per-card icon guard: only local base64 raster images (data:image/png|jpeg|webp|gif),
@@ -322,10 +311,9 @@
     },
     async set(key, val) {
       try {
-        if (hasChromeStorage) await chrome.storage.local.set({ [key]: val });
+        if (window.LT_SYNC) await window.LT_SYNC.writeLocal(key, val);
+        else if (hasChromeStorage) await chrome.storage.local.set({ [key]: val });
         else localStorage.setItem(key, JSON.stringify(val));
-        // Cloud sync: mark dirty after writing a data key (the sync module ignores this while logged out).
-        if (window.LT_SYNC) window.LT_SYNC.onLocalWrite(key);
       } catch (err) {
         console.warn('[LightTab] save failed', key, err);
         // A failed write must not block the main flow, but the user has to know (wallpaper dataURLs hit the quota first).
@@ -3259,7 +3247,6 @@
       renderWallLibGrid();
       fetchWallLib();
     });
-    syncWallSources();
     document.getElementById('btn-reset-all').addEventListener('click', resetAll);
     // Template manager (Settings -> Templates): the "new template" button.
     document.getElementById('btn-prompt-add').addEventListener('click', () => window.LT_PROMPTS.toggleNewPromptEditor());
@@ -3454,7 +3441,10 @@
       if (iconRadiusVal && iconRadiusRg) iconRadiusVal.textContent = iconRadiusRg.value + '%';
       const wallSrcSel = document.getElementById('f-wall-src');
       if (wallSrcSel) wallSrcSel.value = wallLibSource;
-      if (tab === 'wall' && wallLibImages === null) fetchWallLib(); // warm the pool (cached fallback when offline)
+      if (tab === 'wall') {
+        syncWallSources(); // Discover online sources only after the user opens the wallpaper tab.
+        if (wallLibImages === null) fetchWallLib(); // warm the pool (cached fallback when offline)
+      }
       // Remember what opened the settings so closing returns focus there (a11y).
       if (document.activeElement && !modal.contains(document.activeElement)) modalReturnFocus = document.activeElement;
       modal.hidden = false;
@@ -3464,6 +3454,7 @@
   function syncStatusText(st) {
     switch (st.status) {
       case 'syncing': return t('sync.status.syncing');
+      case 'conflict': return t('sync.status.conflict');
       case 'offline': return t('sync.status.offline');
       case 'error': return st.lastError ? t(st.lastError) : t('sync.status.error');
       default: return st.lastSyncAt ? t('sync.status.synced') : t('sync.status.pending');
@@ -3499,7 +3490,7 @@
           ${pending ? `<button type="button" class="btn ghost" data-sync="resend">${t('sync.resend')}</button>` : ''}
         </div>`;
     } else {
-      const dot = st.status === 'syncing' ? 'busy' : (st.status === 'error' || st.status === 'offline' ? 'warn' : 'ok');
+      const dot = st.status === 'syncing' ? 'busy' : (['error', 'offline', 'conflict'].includes(st.status) ? 'warn' : 'ok');
       panel.innerHTML = `
         <div class="sync-row">
           <span class="data-label">${t('sync.logged_in')}</span>
@@ -3520,9 +3511,62 @@
             <button type="button" class="btn ghost sm" data-sync="wipe-local">${t('sync.wipe_local')}</button>
             <button type="button" class="btn ghost sm danger" data-sync="wipe-remote">${t('sync.wipe_remote')}</button>
           </div>
+          <label><span>${t('sync.delete_password')}</span><input id="sync-delete-password" type="password" autocomplete="current-password"></label><p class="form-tip">${t('sync.delete_tip')}</p>
         </div>`;
     }
+    const conflicts = Object.entries(st.conflicts || {});
+    if (st.loggedIn && conflicts.length) {
+      panel.insertAdjacentHTML('beforeend', `<section class="sync-review" aria-label="${t('sync.review')}">
+        <h3>${t('sync.review')}</h3><p class="form-tip">${t('sync.review_tip')}</p>
+        ${st.lastError ? `<p role="alert" class="form-tip">${escapeHtml(t(st.lastError))}</p>` : ''}
+        ${conflicts.map(([key, doc]) => `<div class="sync-conflict">
+          <strong>${escapeHtml(t('sync.key.' + key.slice(3)))}</strong>
+          <div class="sync-compare">
+            <details><summary>${t('sync.local')}</summary><div class="sync-preview">${escapeHtml(syncPreview(doc.local, key))}</div></details>
+            <details><summary>${t('sync.cloud')}</summary><div class="sync-preview">${escapeHtml(syncPreview(doc.payload, key))}</div></details>
+          </div>
+          <div class="sync-actions">
+            <button type="button" class="btn ghost sm" data-sync="keep-local" data-key="${escapeHtml(key)}">${t('sync.keep_local')}</button>
+            <button type="button" class="btn ghost sm" data-sync="use-cloud" data-key="${escapeHtml(key)}">${t('sync.use_cloud')}</button>
+          </div>
+        </div>`).join('')}</section>`);
+    }
+    panel.insertAdjacentHTML('beforeend', `<section class="sync-data" aria-label="${t('sync.backups')}">
+      <h3>${t('sync.backups')}</h3><p class="form-tip">${t('sync.backups_tip')}</p>
+      ${(st.backups || []).map(entry => `<div class="sync-backup">
+        <strong>${escapeHtml(new Date(entry.createdAt).toLocaleString(isEn() ? 'en-US' : 'zh-CN'))}</strong>
+        <p class="form-tip">${escapeHtml(t('sync.reason.' + entry.reason))} · ${t('sync.backup_counts', { items: entry.counts[0], todos: entry.counts[1], prompts: entry.counts[2] })}</p>
+        <div class="sync-actions">
+          <button type="button" class="btn ghost sm" data-sync="export-backup" data-id="${escapeHtml(entry.id)}">${t('sync.export_backup')}</button>
+          <button type="button" class="btn ghost sm" data-sync="restore-backup" data-id="${escapeHtml(entry.id)}">${t('sync.restore_backup')}</button>
+          <button type="button" class="btn ghost sm" data-sync="delete-backup" data-id="${escapeHtml(entry.id)}">${t('sync.delete_backup')}</button>
+        </div>
+      </div>`).join('') || `<p class="form-tip">${t('sync.no_backups')}</p>`}
+    </section>`);
     renderAvatar(); // the avatar menu mirrors the login state, keep it in step
+  }
+  function syncPreview(payload, key) {
+    if (!payload) return t('sync.deleted');
+    try {
+      const value = JSON.parse(payload);
+      const short = text => String(text || '').slice(0, 500);
+      if (Array.isArray(value)) {
+        if (!value.length) return t('sync.empty_list');
+        return value.slice(0, 20).map((entry, index) => {
+          if (!entry || typeof entry !== 'object') return '';
+          const title = short(entry.title || entry.name || entry.text);
+          const body = key === 'lt.prompts' ? short(entry.tmpl) : short(entry.url);
+          const children = Array.isArray(entry.children) ? entry.children.slice(0, 8).map(child => short(child.title)).join(' · ') : '';
+          return `${index + 1}. ${key === 'lt.todos' ? (entry.done ? '✓ ' : '○ ') : ''}${title}${body ? '\n' + body : ''}${children ? '\n' + children : ''}`;
+        }).join('\n\n') + (value.length > 20 ? '\n…' : '');
+      }
+      if (key === 'lt.settings') return t('sync.settings_preview', {
+        name: short(value.name) || '—', language: value.lang === 'en' ? 'English' : '中文',
+        engine: short(value.engine), groups: Array.isArray(value.groups) ? value.groups.length : 0
+      });
+      if (key === 'lt.wallpaper') return t('sync.wallpaper_preview', { type: short(value?.type) });
+      return t('sync.deleted');
+    } catch { return t('sync.err.response'); }
   }
   function bindSyncPanel() {
     const panel = document.getElementById('sync-panel');
@@ -3531,6 +3575,36 @@
       const btn = e.target.closest('[data-sync]');
       if (!btn) return;
       const action = btn.dataset.sync;
+      if (['keep-local', 'use-cloud', 'export-backup', 'restore-backup', 'delete-backup'].includes(action)) {
+        const api = window.LT_SYNC;
+        const st = api.getState();
+        const doc = st.conflicts?.[btn.dataset.key];
+        if (action === 'restore-backup' && !confirm(t('sync.restore_confirm'))) return;
+        if (action === 'delete-backup' && !confirm(t('sync.delete_confirm'))) return;
+        btn.disabled = true;
+        try {
+          let result;
+          if (action === 'keep-local' || action === 'use-cloud') {
+            if (!doc) return;
+            result = await api.resolveConflict(btn.dataset.key, action === 'keep-local' ? 'local' : 'cloud', doc.rev, doc.local);
+          } else if (action === 'restore-backup') {
+            result = await api.restoreBackup(btn.dataset.id);
+            if (result.ok) showToast(t('sync.restored'));
+          } else if (action === 'delete-backup') {
+            await api.deleteBackup(btn.dataset.id);
+          } else {
+            const data = await api.getBackup(btn.dataset.id);
+            const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+            const link = document.createElement('a');
+            link.href = url; link.download = 'LightTab-recovery-' + btn.dataset.id + '.json';
+            document.body.appendChild(link); link.click(); link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+          }
+          if (result && !result.ok) showToast(t(result.error));
+        } catch (error) { showToast(t(error.message)); }
+        finally { renderSyncPanel(); }
+        return;
+      }
       const errEl = document.getElementById('sync-err');
       if (action === 'login' || action === 'register') {
         const email = (document.getElementById('sync-email').value || '').trim();
@@ -3576,7 +3650,9 @@
         if (r && r.ok) showToast(t('sync.wipe_local_done'));
       } else if (action === 'wipe-remote') {
         if (!confirm(t('sync.wipe_remote_confirm'))) return;
-        const r = await window.LT_SYNC.deleteRemoteData();
+        const password = document.getElementById('sync-delete-password').value;
+        const r = await window.LT_SYNC.deleteRemoteData(password);
+        if (r?.ok) showToast(t('sync.delete_done')); 
         if (!r || !r.ok) showToast(r && r.error ? t(r.error) : t('sync.status.error'));
       }
       renderSyncPanel();

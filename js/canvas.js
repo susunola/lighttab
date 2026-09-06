@@ -194,11 +194,12 @@
     const visible = Array.from(grid.querySelectorAll('.card'));
     const cols = getCardCols(grid.clientWidth);
     const map = getCardLayout();
+    delete map.__add__; // The add action is derived from visible shortcuts, never pinned.
     // Garbage-collect coordinates whose card is gone. Without this their cells stay marked occupied
     // forever, so freshly added cards get pushed into later rows and the grid looks scrambled
     // (a short first row above a full one). Keyed on the whole state.items set rather than the
     // currently rendered subset, so switching groups never discards a coordinate. The grid's
-    // trailing add tile ('__add__') is a permanent resident — it keeps its cell like any card.
+    // trailing add tile is positioned after the last visible shortcut below.
     const alive = new Set([...(A().state.items || []).map((it) => it.id), '__add__']);
     let pruned = 0;
     for (const id in map) if (!alive.has(id)) { delete map[id]; pruned++; }
@@ -234,11 +235,17 @@
     let cur = { col: 0, row: 0 };
     for (const c of visible) {
       const id = c.dataset.id;
+      if (id === '__add__') continue;
       if (map[id] && typeof map[id].col === 'number' && typeof map[id].row === 'number') continue;
       cur = nextFree(cur.col, cur.row);
       map[id] = { col: cur.col, row: cur.row };
       occupied.add(cur.col + ',' + cur.row);
     }
+    const last = visible.filter(c => c.dataset.id !== '__add__').reduce((last, c) => {
+      const p = map[c.dataset.id];
+      return p ? Math.max(last, p.row * cols + p.col) : last;
+    }, -1);
+    map.__add__ = { col: (last + 1) % cols, row: Math.floor((last + 1) / cols) };
     return map;
   }
 
@@ -284,7 +291,7 @@
     const grid = document.getElementById('grid');
     if (!grid) return;
     for (const c of grid.querySelectorAll('.card')) {
-      if (c.querySelector('.card-drag-handle')) continue;
+      if (c.classList.contains('card-add') || c.querySelector('.card-drag-handle')) continue;
       const h = document.createElement('span');
       h.className = 'card-drag-handle';
       h.title = A().t('drag.card');
@@ -304,7 +311,7 @@
     function onPointerDown(e) {
       if (!canvasEligible() || e.button !== 0) return;
       const card = e.target.closest('.card');
-      if (!card) return;
+      if (!card || card.classList.contains('card-add')) return;
       // Only the edit/delete buttons opt out of dragging; icon, title and blank space are all draggable - a movement threshold separates click from drag.
       if (e.target.closest('.card-actions')) return;
       const rr = grid.getBoundingClientRect();

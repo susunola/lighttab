@@ -3,7 +3,7 @@
 'use strict';
 
 const path = require('path');
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('playwright/test');
 
 const NEWTAB = 'file://' + path.join(__dirname, '..', '..', 'newtab.html');
 
@@ -38,7 +38,7 @@ test('to-do with a due date lands in the calendar dots', async ({ page }) => {
   await page.goto(NEWTAB);
   await page.locator('#todo-input').fill('Ship the release notes');
   await page.locator('#todo-due').fill('2099-12-31');
-  await page.locator('#todo-submit').click();
+  await page.locator('#todo-form button[type="submit"]').click();
   await expect(page.locator('#todo-list .todo-item').first()).toContainText('Ship the release notes');
   await expect(page.locator('#todo-list .t-due').first()).toBeVisible();
 });

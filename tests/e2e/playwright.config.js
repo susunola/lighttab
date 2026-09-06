@@ -1,5 +1,5 @@
 // LightTab browser E2E — run locally with Playwright (kept out of the zero-dependency runtime):
-//   npm i -D @playwright/test && npx playwright install chromium
+//   npm i -D playwright && npx playwright install chromium
 //   npx playwright test -c tests/e2e/playwright.config.js
 // The newtab page loads as file:// in preview mode (localStorage), which is enough to exercise
 // boot, rendering, modals, grid operations and the to-do flow without the extension runtime.

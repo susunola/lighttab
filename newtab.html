@@ -336,6 +336,7 @@
             <span data-i18n="wall.rotate">Daily wallpaper auto-rotate</span>
           </label>
           <p class="form-tip" data-i18n="wall.rotate_tip">When on, an image from the library is applied each calendar day. Manual picks are kept for the rest of that day.</p>
+<details class="settings-more"><summary data-i18n="wall.lib_title">Wallpaper library</summary>
           <div class="wall-lib">
             <div class="wall-lib-head">
               <span class="wall-lib-title" data-i18n="wall.lib_title">Wallpaper library</span>
@@ -351,7 +352,8 @@
             <div class="wall-lib-grid" id="wall-lib-grid"></div>
             <p class="form-tip wall-lib-tip" id="wall-lib-tip" data-i18n="wall.lib_tip">Curated Bing daily wallpapers; click to apply. Requires network (see credits).</p>
           </div>
-          <div class="upload-row">
+</details>
+                    <div class="upload-row">
             <label class="btn ghost file-btn">
               <input id="f-upload" type="file" accept="image/*" hidden>
               <span data-i18n="wall.upload">Upload custom image</span>
@@ -365,6 +367,7 @@
             <span data-i18n="gen.name">Display name (used in greeting)</span>
             <input id="f-name" type="text" maxlength="20" data-i18n-ph="gen.name_ph" placeholder="Leave empty to hide the name">
           </label>
+<details class="settings-more"><summary data-i18n="gen.avatar">Avatar</summary>
           <div class="avatar-zone">
             <span class="field-label" data-i18n="gen.avatar">Avatar</span>
             <div class="avatar-row">
@@ -377,7 +380,8 @@
             </div>
             <p class="form-tip" data-i18n="avatar.tip">Optional: upload a square image as your top-right avatar (PNG/JPG/WebP/GIF, ≤4MB, auto-cropped round). Leave empty to show the name initial or a default icon.</p>
           </div>
-          <label>
+</details>
+                    <label>
             <span data-i18n="gen.engine">Default search engine</span>
             <select id="f-engine"></select>
           </label>
@@ -386,6 +390,7 @@
             <span data-i18n="gen.suggest">Search suggestions</span>
           </label>
           <p class="form-tip" data-i18n="gen.suggest_tip">Suggestions are sent directly to your chosen search engine.</p>
+<details class="settings-more"><summary data-i18n="engm.title">Search engines</summary>
           <div class="engm-zone">
             <span class="field-label" data-i18n="engm.title">Search engines</span>
             <div class="engm-list" id="engm-list"></div>
@@ -397,7 +402,8 @@
             <p class="form-tip" data-i18n="engm.tip">Custom URLs must contain {q} where the query goes. Removed built-ins can be restored at any time.</p>
             <button type="button" class="btn ghost sm" id="engm-restore" data-i18n="engm.restore" hidden>Restore built-in engines</button>
           </div>
-          <label>
+</details>
+                    <label>
             <span data-i18n="gen.lang">Language</span>
             <select id="f-lang">
               <option value="zh">中文</option>
@@ -419,16 +425,15 @@
               <input id="f-accent" type="color" value="#38bdf8" data-i18n-title="gen.accent_custom" title="Custom colour">
             </span>
           </label>
+<details class="settings-more"><summary data-i18n="settings.display">Clock and layout</summary>
           <label class="check-row">
             <input type="checkbox" id="f-clock12h">
             <span data-i18n="gen.clock12h">12-hour clock</span>
           </label>
-          <p class="form-tip" data-i18n="gen.clock12h_tip">Shows h:mm with a small AM/PM indicator.</p>
           <label class="check-row">
             <input type="checkbox" id="f-clockseconds">
             <span data-i18n="gen.clockseconds">Show seconds</span>
           </label>
-          <p class="form-tip" data-i18n="gen.clockseconds_tip">Shows the clock down to the second (hh:mm:ss).</p>
           <label>
             <span data-i18n="gen.clockfont">Clock font</span>
             <select id="f-clockfont">
@@ -441,12 +446,10 @@
             <input type="checkbox" id="f-hidesearch">
             <span data-i18n="gen.hidesearch">Hide search bar</span>
           </label>
-          <p class="form-tip" data-i18n="gen.hidesearch_tip">Removes the search bar from the layout; the icon grid moves up. Turn it back on any time.</p>
           <label class="check-row">
             <input type="checkbox" id="f-hideclock">
             <span data-i18n="gen.hideclock">Hide clock</span>
           </label>
-          <p class="form-tip" data-i18n="gen.hideclock_tip">Hides the clock card (left column or above the search box); turn it back on to restore.</p>
           <label class="range-row">
             <span data-i18n="gen.iconsize">Icon size</span>
             <input type="range" id="f-iconsize" min="48" max="80" step="2" value="64">
@@ -457,6 +460,8 @@
             <input type="range" id="f-iconradius" min="20" max="50" step="1" value="28">
             <span class="range-val" id="f-iconradius-val">28%</span>
           </label>
+</details>
+          <details class="settings-more"><summary data-i18n="gen.widgets">Widgets</summary>
           <div class="wgt-zone">
             <span class="data-label" data-i18n="gen.widgets">Widgets</span>
             <div class="wgt-rows">
@@ -521,8 +526,9 @@
                 <p class="data-tip" data-i18n="weather.city_tip">The city name is resolved to coordinates via Open-Meteo and stored locally; forecasts are fetched directly from Open-Meteo, no API key.</p>
               </div>
             </div>
-            <p class="data-tip" data-i18n="gen.widgets_tip">Uncheck to remove a widget; the dropdown moves it between the top stack and the left column. With the left column emptied it collapses and the icon grid spans the full width.</p>
           </div>
+</details>
+          <details class="settings-more"><summary data-i18n="gen.data">Data management</summary>
           <div class="data-zone">
             <span class="data-label" data-i18n="gen.data">Data management</span>
             <div class="data-actions">
@@ -541,7 +547,8 @@
             </label>
             <p class="storage-use" id="storage-use" data-i18n-aria="store.used" hidden></p>
           </div>
-          <div class="modal-actions">
+</details>
+                    <div class="modal-actions">
             <button type="button" class="btn ghost" id="btn-reset-all" data-i18n="gen.reset">Reset to defaults</button>
             <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
           </div>

@@ -27,38 +27,48 @@
       <svg class="logo" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="#1a1033"/><g stroke="#8b5cf6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="38" y1="32" x2="38" y2="86"/><line x1="38" y1="86" x2="64" y2="86"/><line x1="72" y1="38" x2="102" y2="38"/><line x1="87" y1="38" x2="87" y2="86"/></g><circle cx="64" cy="100" r="3.5" fill="#c4b5fd"/></svg>
       <div>
         <h1>LightTab — Privacy Policy</h1>
-        <p class="meta">Last updated: 2026-09-03</p>
+        <p class="meta">Last updated: 2026-09-06</p>
       </div>
     </div>
 
     <div class="card">
       <span class="badge">Local-first by default</span>
-      <p>LightTab does not collect, sell, or share any user data. By default, all user data — shortcuts, display name, to-dos, wallpapers, and AI prompt templates — is stored <strong>exclusively in the user's local browser</strong> via <code>chrome.storage.local</code>. There is no analytics and no tracking.</p>
-      <p>No network requests are made unless the user actively opts in to an optional online feature (cloud sync, or the wallpaper library), as described below.</p>
+      <p>LightTab stores shortcuts, display name, to-dos, wallpapers, and AI prompt templates in the local browser via <code>chrome.storage.local</code>. It contains no analytics or advertising trackers. Optional cloud sync uploads the selected data to the sync service.</p>
+      <p>Search suggestions are enabled by default and send typed queries directly to the selected search provider. Other network activity is described below. Local storage does not mean that every feature operates offline.</p>
     </div>
 
     <h2>Permissions</h2>
     <p><strong><code>storage</code></strong> — used solely for local persistence as described above. It does not transmit data anywhere on its own.</p>
-    <p><strong><code>bookmarks</code></strong> (optional) — requested only when the user explicitly clicks "Import from bookmarks" in settings. It is used once to read the local bookmark tree; the data is not retained or transmitted.</p>
+    <p><strong><code>bookmarks</code></strong> (optional) — requested when the user imports bookmarks. Imported shortcuts are retained locally and are included in cloud sync if enabled.</p>
+    <p><strong><code>tabs</code></strong> (optional) — requested for "Add current tab" to read its title and URL. Saved shortcuts follow the same storage and sync behavior.</p>
+    <p>The manifest also declares access to the Baidu, Google and Bing suggestion endpoints and content-script matches for the supported AI sites.</p>
+
+    <h2>Search suggestions and destinations</h2>
+    <p>Suggestions send typed queries to <code>suggestion.baidu.com</code>, <code>suggestqueries.google.com</code> or <code>api.bing.com</code>, depending on the selected engine. Disable suggestions in Settings → General to keep typing local until you launch a search. Opening a search, website or AI tool contacts the selected service under that service's own policies.</p>
 
     <h2>Optional cloud sync</h2>
     <p>LightTab offers an <strong>optional</strong> multi-device sync. It is completely off until the user registers an account and logs in. Once enabled:</p>
     <ul>
       <li>Local data (shortcuts, display name, to-dos, wallpapers, prompt templates, and settings) is synced to the user's own account on <code>lighttab.atomwangnus.com</code>.</li>
-      <li>Passwords are stored only as bcrypt hashes — never in plaintext. All traffic is encrypted over HTTPS.</li>
+      <li>The client sends sign-in credentials and synchronization data over HTTPS. Sync payloads are not end-to-end encrypted by the extension.</li>
       <li>No data is shared across accounts, and the server uses the data only to perform synchronization.</li>
     </ul>
-    <p>The user can log out at any time. After logging out, the extension makes no further network requests and behaves exactly like the fully local version.</p>
+    <p>Logging out stops cloud sync on this browser, but does not delete existing server data or disable other online features. Remote data deletion is not currently available in the extension. First-login differences and revision conflicts pause the affected document until you choose the device or cloud copy.</p>
+    <p>Before sign-in sync, cloud replacement or backup restoration, LightTab saves a local recovery snapshot. The latest three snapshots include the five synced data documents and schema version, but no sign-in credentials or search history. A displaced cloud conflict is saved with the remaining local documents, not as a complete cloud-account snapshot. Backups are not uploaded. You can download, restore or delete them in Settings → Sync; clearing browser data also removes them. Restoration signs out of cloud sync and leaves cloud data unchanged. If saving a backup fails, replacement stops.</p>
 
     <h2>Wallpaper library (optional)</h2>
-    <p>The settings → wallpaper tab offers an optional "Bing daily wallpaper" library. Only when the user clicks "Fetch latest" does the extension contact <code>lighttab.atomwangnus.com</code> to retrieve wallpaper metadata and images (which originate from Bing). No request is made otherwise.</p>
+    <p>Opening the wallpaper tab contacts <code>lighttab.atomwangnus.com</code> to discover available sources and fetch library metadata. Selecting or rotating online wallpapers may fetch image URLs from their hosts. Enabled daily rotation can refresh the library automatically. Available sources may include Bing, Wallhaven and Unsplash.</p>
     <p>Wallpaper images and their titles/copyright notices belong to their respective rights holders; LightTab displays the attribution provided by the source and stores the chosen image only as the user's local background preference.</p>
 
     <h2>Content script</h2>
-    <p>The extension injects a content script on <code>doubao.com</code> and <code>chatgpt.com</code>. When the user actively launches an AI prompt template, this script reads an extension-written local entry (<code>lt.pending.&lt;nonce&gt;</code>), fills it into the chat input, and submits it. It does <strong>not</strong> read, store, or transmit any page content, chat history, cookies, or other user data, and it makes no network requests.</p>
+    <p>The extension injects a content script on supported pages of <code>www.doubao.com</code>, <code>www.dola.com</code> and <code>chatgpt.com</code>. On a prompt launch it reads a temporary local prompt entry, locates the page's input and send controls, fills the prompt and attempts to submit it. Submission sends your prompt to the selected AI provider. If automatic entry fails, the extension attempts to copy the prompt and displays a notice. It does not collect your conversation history or cookies.</p>
+
+    <h2>Weather and local app detection</h2>
+    <p>Weather is off by default. When enabled, city lookup and forecasts contact <code>geocoding-api.open-meteo.com</code> and <code>api.open-meteo.com</code>. Forecasts are cached locally.</p>
+    <p>At startup, LightTab probes <code>127.0.0.1</code> ports 18488–18490 to detect WorkBuddy on this computer. These requests stay on the local computer. Choosing WorkBuddy can pass a prompt to the desktop app via its deep link.</p>
 
     <h2>Contact</h2>
-    <p>For any privacy questions, please open an issue in the project repository.</p>
+    <p>For any privacy questions, please open an issue in the <a href="https://github.com/susunola/lighttab/issues">project repository</a>. Do not post passwords, private prompts or other sensitive information in public issues.</p>
   </div>
 </body>
 </html>
