@@ -425,6 +425,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .widget.wtodo.w-top { --wtop-del: 218px; }  /* 420px list */
 .widget.wmovie.w-top { --wtop-del: 176px; } /* 320px movie card */
 .widget.wweather.w-top { --wtop-del: 128px; } /* ~240px weather line */
+.widget.wcount.w-top { --wtop-del: 150px; }   /* ~260px countdown card */
+.widget.wpomodoro.w-top { --wtop-del: 120px; } /* ~220px timer */
 
 /* --- clock in the top stack: big time over one compact date line (launcher convention) --- */
 .widget.wclock.w-top { padding: clamp(4px, 1.4vh, 14px) 0 clamp(8px, 1.4vh, 16px); }
@@ -438,7 +440,13 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
      (weight 200 with a single soft shadow all but vanished — iOS/iTab do the same layering). */
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 2px 14px rgba(0, 0, 0, 0.42), 0 6px 36px rgba(0, 0, 0, 0.35);
 }
-.widget.wclock.w-top .clock-sec { display: none; }  /* seconds are noise at this size */
+/* Seconds are noise at this size — unless the user explicitly turned them on (clock-sec-on). */
+.widget.wclock.w-top:not(.clock-sec-on) .clock-sec { display: none; }
+.widget.wclock.w-top.clock-sec-on .clock-sec {
+  font-size: clamp(16px, 1.4vw, 22px);
+  font-weight: 300;
+  color: var(--ink);
+}
 .widget.wclock.w-top .clock-ampm {
   font-size: clamp(16px, 1.4vw, 22px);
   font-weight: 300;
@@ -499,6 +507,14 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .widget.wweather.w-top .weather-card.open { max-width: 320px; }
 .widget.wweather.w-top .weather-meta { justify-content: center; gap: 16px; }
 
+/* --- countdown / pomodoro in the top stack: centred, no card chrome --- */
+.widget.wcount.w-top { padding: 2px 0 8px; }
+.widget.wcount.w-top .w-head { justify-content: center; }
+.widget.wcount.w-top .count-card { max-width: 320px; margin: 0 auto; text-align: left; }
+.widget.wpomodoro.w-top { padding: 2px 0 8px; }
+.widget.wpomodoro.w-top .w-head { justify-content: center; gap: 10px; }
+.widget.wpomodoro.w-top .pomo-card { max-width: 240px; margin: 0 auto; }
+
 /* WorkBuddy desktop reachability dot in the engine dropdown (#61) */
 .eng-state {
   width: 6px; height: 6px;
@@ -553,6 +569,18 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   margin-top: 4px;
   font-size: 12px;
   color: var(--ink-3);
+}
+/* Clock face font (Settings → General): system stacks, no bundled font files. */
+.wclock.clock-font-serif .clock-hhmm,
+.wclock.clock-font-serif .clock-sec,
+.wclock.clock-font-serif .clock-ampm {
+  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+}
+.wclock.clock-font-mono .clock-hhmm,
+.wclock.clock-font-mono .clock-sec,
+.wclock.clock-font-mono .clock-ampm {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: 0;
 }
 
 /* To-do widget */
@@ -724,6 +752,32 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .cal-cell.today b { color: var(--accent); font-weight: 600; }
 .cal-cell.today i { color: var(--accent); }
 .cal-cell.empty { cursor: default; }
+/* Statutory-holiday markers (js/holidays.js): a tiny corner badge — 休/Off on holidays (red),
+ * 班/Work on 调休 make-up workdays (muted). position:relative on the cell keeps it in the corner;
+ * the .today highlight comes later in this block and still wins the background. */
+.cal-cell { position: relative; }
+.cal-badge {
+  position: absolute;
+  top: 1px; right: 3px;
+  font-style: normal;
+  font-size: 8px;
+  line-height: 1;
+  padding: 1.5px 2.5px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+.cal-badge.hol { color: #f87171; background: rgba(248, 113, 113, 0.14); }
+.cal-badge.work { color: var(--ink-3); background: var(--tint-3); }
+/* Quiet line under the month grid: the next statutory holiday counted from today. */
+.cal-next-holiday {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
 
 /* Movie-of-the-day widget (built-in Douban annual-best pool) */
 .wmovie .movie-date {
@@ -950,6 +1004,149 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   transition: background .15s ease, color .15s ease;
 }
 .weather-fc-toggle:hover { background: var(--tint-2); color: var(--ink-2); }
+
+/* Countdown widget (off-work clock + custom countdown days; fully local) */
+.count-card { display: flex; flex-direction: column; gap: 8px; }
+.count-off {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 4px 0 2px;
+}
+.count-off-label { font-size: 11.5px; color: var(--ink-3); letter-spacing: 0.03em; }
+.count-off-time {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 30px;
+  font-weight: 300;
+  color: var(--ink);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  padding: 0 6px;
+  border-radius: 8px;
+  transition: background .15s ease;
+}
+.count-off-time:hover { background: var(--tint-2); }
+.count-off-time.relaxed { font-size: 15px; font-weight: 400; color: var(--ink-2); padding: 4px 10px; }
+.count-off-input {
+  font-family: var(--font-num);
+  font-size: 15px;
+  color: var(--ink);
+  background: var(--tint-2);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 4px 8px;
+  outline: none;
+}
+.count-days { display: flex; flex-direction: column; }
+.count-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 4px;
+  border-radius: 8px;
+  transition: background .12s ease;
+}
+.count-row:hover { background: var(--tint-2); }
+.count-name {
+  flex: 1; min-width: 0;
+  font-size: 12.5px; color: var(--ink-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.count-n { flex: none; font-size: 12px; color: var(--accent); font-family: var(--font-num); }
+.count-n.past { color: var(--ink-3); }
+.count-del {
+  flex: none;
+  width: 20px; height: 20px;
+  display: none; align-items: center; justify-content: center;
+  border-radius: 6px;
+  color: var(--ink-3);
+  font-size: 15px; line-height: 1;
+  cursor: pointer;
+}
+.count-row:hover .count-del { display: inline-flex; }
+.count-del:hover { color: var(--danger); }
+/* Guide state: same quiet dashed-outline language as the weather widget's set-city prompt. */
+.count-guide {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--tint-2);
+  font-size: 12.5px;
+  color: var(--ink-3);
+  cursor: pointer;
+  text-align: center;
+  transition: background .15s ease, color .15s ease;
+}
+.count-guide:hover { background: var(--tint-3); color: var(--ink); }
+.count-add {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--tint-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 5px 6px 5px 10px;
+}
+.count-add:focus-within { border-color: rgba(125, 211, 252, 0.5); background: var(--tint-3); }
+.count-add input {
+  min-width: 0;
+  background: transparent;
+  border: 0; outline: 0;
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.count-add input::placeholder { color: var(--ink-3); }
+#count-name { flex: 1; }
+#count-date { flex: none; width: 118px; font-family: var(--font-num); color-scheme: dark; }
+[data-theme="light"] #count-date { color-scheme: light; }
+.count-add-btn {
+  flex: none;
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--accent-2), #2563eb);
+  color: #fff;
+  font-size: 15px; line-height: 1;
+  transition: filter .15s ease;
+}
+.count-add-btn:hover { filter: brightness(1.1); }
+
+/* Pomodoro widget (25 min focus / 5 min break; in-memory state only) */
+.pomo-dots { display: inline-flex; gap: 5px; align-items: center; }
+.pomo-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ink-3);
+}
+.pomo-dot.on { background: var(--accent); box-shadow: none; }
+.pomo-card { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.pomo-phase { font-size: 11.5px; color: var(--ink-3); letter-spacing: 0.06em; }
+.pomo-time {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 42px;
+  font-weight: 300;
+  color: var(--ink);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.pomo-time.break { color: var(--accent); }
+.pomo-controls { display: flex; gap: 8px; margin-top: 2px; }
+.pomo-btn {
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--tint-2);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.pomo-btn:hover { background: var(--tint-3); color: var(--ink); }
+.pomo-btn.primary {
+  background: linear-gradient(135deg, var(--accent-2), #2563eb);
+  border-color: transparent;
+  color: #fff;
+}
+.pomo-btn.primary:hover { filter: brightness(1.1); }
 
 /* ====== Search ====== */
 .search {

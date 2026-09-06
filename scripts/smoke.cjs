@@ -40,7 +40,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 // ---------- 1) JS syntax ----------
 console.log('[1] node --check');
-const JS_FILES = ['js/app.js', 'js/canvas.js', 'js/prompts.js', 'js/sync.js', 'js/inject-ai.js', 'js/lunar.js', 'js/icondb.js', 'js/i18n.js'];
+const JS_FILES = ['js/app.js', 'js/canvas.js', 'js/prompts.js', 'js/sync.js', 'js/inject-ai.js', 'js/lunar.js', 'js/holidays.js', 'js/icondb.js', 'js/i18n.js'];
 for (const f of JS_FILES) {
   try {
     execFileSync(process.execPath, ['--check', path.join(ROOT, f)], { stdio: 'pipe' });
@@ -200,10 +200,11 @@ console.log('[4] pure functions');
     // #60 normalizeWidgets: missing/dirty data always falls back to DEFAULT_SETTINGS — the four legacy
     // widgets default to visible; the weather widget (opt-in) defaults off; only explicit booleans override defaults
     const NW = P.normalizeWidgets;
-    assert(JSON.stringify(NW(undefined)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true, wmovie: true, wweather: false }),
-      'normalizeWidgets(undefined) → four visible by default, weather off');
-    assert(JSON.stringify(NW(null)) === JSON.stringify({ wclock: true, wcal: true, wtodo: true, wmovie: true, wweather: false }),
-      'normalizeWidgets(null) → four visible by default, weather off');
+    const W_DEFAULTS = { wclock: true, wcal: true, wtodo: true, wmovie: true, wweather: false, wcount: false, wpomodoro: false };
+    assert(JSON.stringify(NW(undefined)) === JSON.stringify(W_DEFAULTS),
+      'normalizeWidgets(undefined) → four visible by default, weather/countdown/pomodoro off');
+    assert(JSON.stringify(NW(null)) === JSON.stringify(W_DEFAULTS),
+      'normalizeWidgets(null) → four visible by default, weather/countdown/pomodoro off');
     assert(NW({ wcal: false }).wcal === false && NW({ wcal: false }).wclock === true && NW({ wcal: false }).wweather === false,
       'normalizeWidgets partial object → missing keys get defaults');
     assert(NW({ wweather: true }).wweather === true && NW({ wweather: true }).wmovie === true,
@@ -212,7 +213,7 @@ console.log('[4] pure functions');
       'normalizeWidgets non-boolean dirty values fall back to defaults (legacy visible / weather still off)');
     assert(NW({ bogus: false }).wclock === true && !('bogus' in NW({ bogus: false })),
       'normalizeWidgets drops unknown keys');
-    assert(Object.values(NW({ wclock: false, wcal: false, wtodo: false, wmovie: false, wweather: false })).every((v) => v === false),
+    assert(Object.values(NW({ wclock: false, wcal: false, wtodo: false, wmovie: false, wweather: false, wcount: false, wpomodoro: false })).every((v) => v === false),
       'normalizeWidgets allows removing all (the whole left column collapses)');
     // resolveTheme: 'dark'/'light' map directly; 'system' falls back to dark without matchMedia, follows the system otherwise
     assert(P.resolveTheme('dark') === 'dark' && P.resolveTheme('light') === 'light', 'resolveTheme fixed dark/light');
@@ -413,7 +414,8 @@ assert(/iconCropRect/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || '
 
 // ---------- 9) #60 removable left-column widgets ----------
 console.log('[9] #60 removable left-column widgets');
-for (const id of ['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather']) {
+const ALL_WIDGET_IDS = ['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather', 'wcount', 'wpomodoro'];
+for (const id of ALL_WIDGET_IDS) {
   assert(new RegExp(`class="w-del" data-widget="${id}"`).test(html), `${id} widget has a remove button`);
   assert(new RegExp(`id="f-w-${id}"`).test(html), `settings page contains the #f-w-${id} checkbox`);
 }
@@ -421,7 +423,7 @@ assert(/data-i18n="gen\.widgets"/.test(html) && /data-i18n="gen\.widgets_tip"/.t
 assert(/data-i18n-aria="widget\.remove"/.test(html), 'remove button carries the a11y entry');
 assert(/widgets:\s*\{\s*wclock:\s*true/.test(appSrc), 'DEFAULT_SETTINGS contains widgets defaulting to all on');
 assert(/wweather: false/.test(appSrc), 'weather widget defaults off in DEFAULT_SETTINGS (opt-in)');
-assert(/const WIDGETS = \['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather'\]/.test(appSrc), 'app.js defines WIDGETS as the single source of truth');
+assert(/const WIDGETS = \['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather', 'wcount', 'wpomodoro'\]/.test(appSrc), 'app.js defines WIDGETS as the single source of truth');
 assert(/function normalizeWidgets/.test(appSrc), 'app.js defines normalizeWidgets()');
 assert(/function applyWidgets/.test(appSrc), 'app.js defines applyWidgets()');
 assert(/function removeWidget/.test(appSrc), 'app.js defines removeWidget()');
@@ -493,8 +495,8 @@ for (const k of ['wb.running', 'wb.not_running', 'wb.not_detected', 'wb.get']) {
   assert(i18nSrc.includes(`'${k}'`), `i18n contains ${k}`);
 }
 // ---------- #62 per-widget position (clock / calendar / todo can each be placed above the search box) ----------
-assert(/widgetPos: \{ wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left', wweather: 'left' \}/.test(appSrc),
-  'DEFAULT_SETTINGS widgetPos defaults to only the clock on top; calendar/todo/movie/weather in the left column');
+assert(/widgetPos: \{ wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left', wweather: 'left', wcount: 'left', wpomodoro: 'left' \}/.test(appSrc),
+  'DEFAULT_SETTINGS widgetPos defaults to only the clock on top; every other widget starts in the left column');
 // The top slot wants a glanceable "time + one-line date", not the full date+lunar+ganzhi sentence
 assert(/function compactDateLine/.test(appSrc), 'app.js defines compactDateLine() (compact date line for the top state)');
 assert(/function clockIsTop/.test(appSrc), 'app.js defines clockIsTop()');
@@ -513,7 +515,7 @@ assert(/applyWidgetPos\(\);/.test(appSrc), 'applyWidgets drives applyWidgetPos')
 assert(/normalizeWidgetPos/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''),
   'normalizeWidgetPos is exported to LT_PURE');
 assert(!/clockPos/.test(cssSrc) && !/wclock-top/.test(cssSrc), 'old wclock-top CSS is gone');
-for (const id of ['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather']) {
+for (const id of ALL_WIDGET_IDS) {
   assert(new RegExp(`id="f-pos-${id}"`).test(html), `settings page contains the #f-pos-${id} position dropdown`);
 }
 assert(/data-i18n="wpos\.top"/.test(html) && /data-i18n="wpos\.left"/.test(html), 'position option entries are complete');
@@ -1246,6 +1248,214 @@ assert(/localRawSet\(K\.history/.test(appSrc), 'history persists via localRawSet
 }
 // CSS: calc row, history rows, header/clear, delete × and the Tab-cycle flash
 for (const sel of ['.sg-calc', '.sg-calc-hint', '.sg-head', '.sg-clear', '.sg-hist', '.sg-hist-del', '#engine-btn.eng-flash']) {
+  assert(cssSrc.includes(sel), `CSS defines ${sel}`);
+}
+
+// ---------- 22) time features: seconds, clock fonts, holidays, countdown, pomodoro ----------
+console.log('[22] time features (seconds / clock font / holidays / countdown / pomodoro)');
+const holidaysSrc = read('js/holidays.js');
+// --- 22a) seconds toggle ---
+assert(/clockSeconds: false/.test(appSrc), 'DEFAULT_SETTINGS keeps seconds off by default (clockSeconds: false)');
+assert(!/'lt\.clocksec/.test(appSrc), 'seconds flag lives inside lt.settings (no separate storage key)');
+assert(/<input type="checkbox" id="f-clockseconds">/.test(html), 'settings page contains the #f-clockseconds checkbox');
+assert(/data-i18n="gen\.clockseconds"/.test(html) && /data-i18n="gen\.clockseconds_tip"/.test(html), 'seconds label/tip entry hooks are complete');
+assert(/getElementById\('f-clockseconds'\)/.test(appSrc), 'seconds toggle is bound');
+assert(/state\.settings\.clockSeconds = state\.settings\.clockSeconds === true/.test(appSrc), 'doImport validates clockSeconds');
+assert(/secEl\.hidden = !showSec/.test(appSrc), 'clock tick hides the seconds span when the toggle is off');
+assert(/if \(showSec\) secEl\.textContent = ss/.test(appSrc), 'clock tick only writes seconds when enabled');
+assert(/setInterval\(tick, 1000\)/.test(appSrc), 'clock tick keeps the 1s cadence (seconds on) / current cadence (off)');
+assert(/classList\.toggle\('clock-sec-on', state\.settings\.clockSeconds === true\)/.test(appSrc),
+  'startClock flags the widget so an explicit seconds opt-in overrides the top-state hide rule');
+assert(/\.widget\.wclock\.w-top:not\(\.clock-sec-on\) \.clock-sec \{ display: none/.test(cssSrc),
+  'top-state clock hides seconds only when the toggle is off');
+// --- 22b) clock font choice ---
+assert(/clockFont: 'modern'/.test(appSrc), "DEFAULT_SETTINGS keeps the modern (Inter) clock font by default");
+assert(/const CLOCK_FONTS = \['modern', 'serif', 'mono'\]/.test(appSrc), 'app.js defines the three clock fonts');
+assert(/<select id="f-clockfont">/.test(html), 'settings page contains the #f-clockfont dropdown');
+assert(/data-i18n="gen\.clockfont"/.test(html) && /data-i18n="clockfont\.modern"/.test(html)
+  && /data-i18n="clockfont\.serif"/.test(html) && /data-i18n="clockfont\.mono"/.test(html),
+  'clock font label/option entry hooks are complete');
+assert(/function applyClockFont/.test(appSrc) && /clock-font-serif/.test(appSrc) && /clock-font-mono/.test(appSrc),
+  'applyClockFont toggles the serif/mono classes on the clock widget');
+assert(/getElementById\('f-clockfont'\)/.test(appSrc), 'clock font select is bound');
+assert(/state\.settings\.clockFont = CLOCK_FONTS\.includes/.test(appSrc), 'doImport validates clockFont');
+assert(/\.wclock\.clock-font-serif \.clock-hhmm/.test(cssSrc) && /Georgia, "Times New Roman"/.test(cssSrc),
+  'CSS defines the serif clock font (system stack, no bundled font)');
+assert(/\.wclock\.clock-font-mono \.clock-hhmm/.test(cssSrc) && /ui-monospace/.test(cssSrc),
+  'CSS defines the mono clock font (system stack, no bundled font)');
+// --- 22c) statutory holidays (js/holidays.js) ---
+assert(/<script src="js\/holidays\.js"><\/script>/.test(html), 'newtab.html loads js/holidays.js');
+assert(/2026年部分节假日安排的通知/.test(holidaysSrc) && /国办发明电〔2025〕7号/.test(holidaysSrc),
+  'holidays.js cites the official 2026 State Council notice');
+assert(/covers calendar year 2026 ONLY/.test(holidaysSrc), 'holidays.js notes the table needs a yearly refresh');
+{
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(holidaysSrc, sandbox, { filename: 'holidays.js' });
+  const H = sandbox.window.LT_HOLIDAYS;
+  assert(!!H && H.table && typeof H.table === 'object', 'holidays.js exposes window.LT_HOLIDAYS.table');
+  if (H && H.table) {
+    const dates = Object.keys(H.table);
+    assert(dates.every(d => /^2026-\d{2}-\d{2}$/.test(d)), 'holiday table covers 2026 only', dates.filter(d => !/^2026-/.test(d)).join(','));
+    const rests = dates.filter(d => H.table[d].h);
+    const works = dates.filter(d => H.table[d].work);
+    assert(rests.length === 33, `holiday table has the 33 statutory rest days of 2026 (3+9+3+5+3+3+7, got ${rests.length})`);
+    assert(works.length === 6, `holiday table has the 6 调休 make-up workdays of 2026 (got ${works.length})`);
+    assert(H.table['2026-01-01'].h === 'newyear' && H.table['2026-01-04'].work === true, 'New Year: Jan 1 rest, Jan 4 work');
+    assert(H.table['2026-02-15'].h === 'spring' && H.table['2026-02-23'].h === 'spring'
+      && H.table['2026-02-14'].work === true && H.table['2026-02-28'].work === true,
+      'Spring Festival: Feb 15-23 rest, Feb 14 & 28 work');
+    assert(H.table['2026-10-01'].h === 'national' && H.table['2026-10-07'].h === 'national'
+      && H.table['2026-09-20'].work === true && H.table['2026-10-10'].work === true,
+      'National Day: Oct 1-7 rest, Sep 20 & Oct 10 work');
+    assert(H.table['2026-09-25'].h === 'midautumn', 'Mid-Autumn: Sep 25 rest');
+    assert(!H.table['2026-09-06'], 'an ordinary day has no entry');
+    // nextHoliday (LT_PURE, app.js sandbox — same convention as section 4b)
+    const noop2 = () => {};
+    const asb = {
+      document: { readyState: 'loading', addEventListener: noop2, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
+      localStorage: { getItem: () => null, setItem: noop2, removeItem: noop2, key: () => null, length: 0 },
+      navigator: {}, structuredClone, URL, URLSearchParams,
+      setTimeout, clearTimeout, setInterval, clearInterval,
+      requestAnimationFrame: noop2, cancelAnimationFrame: noop2, console
+    };
+    asb.window = asb;
+    vm.createContext(asb);
+    vm.runInContext(appSrc, asb, { filename: 'app.js' });
+    const P2 = asb.LT_PURE;
+    assert(!!P2 && typeof P2.nextHoliday === 'function', 'nextHoliday is exported to LT_PURE');
+    if (P2 && P2.nextHoliday) {
+      const nh1 = P2.nextHoliday('2026-09-06', H.table);
+      assert(!!nh1 && nh1.key === 'midautumn' && nh1.date === '2026-09-25' && nh1.days === 19,
+        'nextHoliday(2026-09-06) → Mid-Autumn in 19 days', JSON.stringify(nh1));
+      const nh2 = P2.nextHoliday('2026-10-01', H.table);
+      assert(!!nh2 && nh2.key === 'national' && nh2.days === 0, 'nextHoliday on a holiday itself → days 0');
+      const nh3 = P2.nextHoliday('2026-10-08', H.table);
+      assert(nh3 === null, 'nextHoliday after the last holiday of the dataset → null (line hidden)');
+      const nh4 = P2.nextHoliday('2025-12-31', H.table);
+      assert(!!nh4 && nh4.key === 'newyear' && nh4.date === '2026-01-01', 'nextHoliday before the dataset starts → New Year');
+      assert(P2.nextHoliday('bogus', H.table) === null && P2.nextHoliday('2026-09-06', null) === null,
+        'nextHoliday rejects malformed input');
+    }
+  }
+}
+assert(/id="cal-next-holiday"/.test(html), 'calendar card contains the #cal-next-holiday line');
+assert(/cal-badge/.test(appSrc) && /cal-badge/.test(cssSrc), 'calendar cells render the 休/班 corner badges');
+assert(/t\('hol\.' \+ nh\.key\)/.test(appSrc), 'the next-holiday line resolves names via the hol.* i18n entries');
+assert(/\.cal-next-holiday \{/.test(cssSrc), 'CSS defines .cal-next-holiday');
+assert(/\.cal-badge\.hol/.test(cssSrc) && /\.cal-badge\.work/.test(cssSrc), 'CSS defines both badge variants');
+// --- 22d) countdown widget (wcount) ---
+assert(/<section class="widget wcount"/.test(html) && /id="count-card"/.test(html), 'newtab.html contains the .widget.wcount card');
+assert(/data-i18n="widget\.countdown"/.test(html), 'countdown card title carries data-i18n="widget.countdown"');
+assert(/wcount: false/.test(appSrc), 'countdown widget defaults off in DEFAULT_SETTINGS (opt-in)');
+assert(/countdown: \{ off: '18:00', days: \[\] \}/.test(appSrc), 'DEFAULT_SETTINGS contains countdown { off, days }');
+assert(!/'lt\.countdown/.test(appSrc), 'countdown data lives inside lt.settings (no separate storage key)');
+assert(/function renderCountdown/.test(appSrc) && /function countTick/.test(appSrc) && /function bindCountdown/.test(appSrc),
+  'app.js defines renderCountdown / countTick / bindCountdown');
+assert(/function normalizeCountdown/.test(appSrc) && /function daysUntil/.test(appSrc), 'app.js defines normalizeCountdown / daysUntil');
+assert(/state\.settings\.countdown = normalizeCountdown\(state\.settings\.countdown\)/.test(appSrc), 'doImport validates the countdown field');
+assert(/const COUNT_DAYS_MAX = 5/.test(appSrc), 'custom countdown days are capped at 5');
+assert(/count-guide/.test(appSrc), 'renders a guide state when no countdown day is configured');
+assert(/setInterval\(countTick, 1000\)/.test(appSrc), 'countdown ticks once per second');
+assert(/if \(countEditing\) return;/.test(appSrc), 'the tick never re-renders while the off-time editor is open');
+{
+  const ltPure22 = appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || '';
+  for (const fn of ['nextHoliday', 'daysUntil', 'normalizeCountdown', 'pomoInitial', 'pomoAdvance']) {
+    assert(new RegExp('\\b' + fn + '\\b').test(ltPure22), `${fn} is exported to LT_PURE`);
+  }
+  // daysUntil / normalizeCountdown behaviour (sandboxed app.js, same convention as section 4b)
+  const noop3 = () => {};
+  const csb = {
+    document: { readyState: 'loading', addEventListener: noop3, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
+    localStorage: { getItem: () => null, setItem: noop3, removeItem: noop3, key: () => null, length: 0 },
+    navigator: {}, structuredClone, URL, URLSearchParams,
+    setTimeout, clearTimeout, setInterval, clearInterval,
+    requestAnimationFrame: noop3, cancelAnimationFrame: noop3, console
+  };
+  csb.window = csb;
+  vm.createContext(csb);
+  vm.runInContext(appSrc, csb, { filename: 'app.js' });
+  const P3 = csb.LT_PURE;
+  assert(!!P3 && typeof P3.daysUntil === 'function', 'daysUntil available in sandbox');
+  if (P3 && P3.daysUntil) {
+    assert(P3.daysUntil('2026-09-06', '2026-10-01') === 25, 'daysUntil: Sep 6 → Oct 1 = 25 days');
+    assert(P3.daysUntil('2026-10-01', '2026-10-01') === 0, 'daysUntil: same day = 0');
+    assert(P3.daysUntil('2026-10-02', '2026-10-01') === -1, 'daysUntil: past dates go negative');
+    assert(P3.daysUntil('2026-09-06', 'bogus') === null && P3.daysUntil('', '2026-10-01') === null, 'daysUntil rejects malformed input');
+    const nc = P3.normalizeCountdown({ off: '19:30', days: [{ name: 'Trip', date: '2026-10-01' }, { name: '', date: '2026-01-01' }, { name: 'x', date: 'nope' }] });
+    assert(nc.off === '19:30' && nc.days.length === 1 && nc.days[0].name === 'Trip' && !!nc.days[0].id,
+      'normalizeCountdown keeps valid entries, drops dirty ones, assigns ids', JSON.stringify(nc));
+    assert(P3.normalizeCountdown({ off: '99:99' }).off === '18:00', 'normalizeCountdown falls back to 18:00 on a bad time');
+    assert(P3.normalizeCountdown({ off: '18:00', days: Array(9).fill({ name: 'a', date: '2026-10-01' }) }).days.length === 5,
+      'normalizeCountdown caps the days list at 5');
+    assert(JSON.stringify(P3.normalizeCountdown(null)) === JSON.stringify({ off: '18:00', days: [] }), 'normalizeCountdown(null) → defaults');
+  }
+}
+// --- 22e) pomodoro widget (wpomodoro) ---
+assert(/<section class="widget wpomodoro"/.test(html) && /id="pomo-card"/.test(html) && /id="pomo-dots"/.test(html),
+  'newtab.html contains the .widget.wpomodoro card with the cycle dots');
+assert(/data-i18n="widget\.pomodoro"/.test(html), 'pomodoro card title carries data-i18n="widget.pomodoro"');
+assert(/wpomodoro: false/.test(appSrc), 'pomodoro widget defaults off in DEFAULT_SETTINGS (opt-in)');
+assert(/const POMO_FOCUS_S = 25 \* 60/.test(appSrc) && /const POMO_BREAK_S = 5 \* 60/.test(appSrc), 'pomodoro is 25 min focus / 5 min break');
+assert(/function renderPomodoro/.test(appSrc) && /function pomoTick/.test(appSrc) && /function bindPomodoro/.test(appSrc),
+  'app.js defines renderPomodoro / pomoTick / bindPomodoro');
+assert(/setInterval\(pomoTick, 1000\)/.test(appSrc), 'pomodoro ticks once per second');
+assert(/showToast\(t\(wasFocus \? 'pomo\.toast_break' : 'pomo\.toast_focus'\)\)/.test(appSrc), 'a toast fires on every phase switch');
+{
+  // pomo state machine behaviour (sandboxed app.js, same convention as section 4b)
+  const noop4 = () => {};
+  const psb = {
+    document: { readyState: 'loading', addEventListener: noop4, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
+    localStorage: { getItem: () => null, setItem: noop4, removeItem: noop4, key: () => null, length: 0 },
+    navigator: {}, structuredClone, URL, URLSearchParams,
+    setTimeout, clearTimeout, setInterval, clearInterval,
+    requestAnimationFrame: noop4, cancelAnimationFrame: noop4, console
+  };
+  psb.window = psb;
+  vm.createContext(psb);
+  vm.runInContext(appSrc, psb, { filename: 'app.js' });
+  const P4 = psb.LT_PURE;
+  assert(!!P4 && typeof P4.pomoInitial === 'function' && typeof P4.pomoAdvance === 'function', 'pomo pure functions available in sandbox');
+  if (P4 && P4.pomoInitial) {
+    const s0 = P4.pomoInitial();
+    assert(s0.phase === 'focus' && s0.left === 1500 && s0.running === false && s0.done === 0, 'pomoInitial → idle 25:00 focus');
+    const s1 = P4.pomoAdvance(s0);
+    assert(s1.phase === 'break' && s1.left === 300 && s1.done === 1, 'focus done → 5:00 break, one dot');
+    const s2 = P4.pomoAdvance(s1);
+    assert(s2.phase === 'focus' && s2.left === 1500 && s2.done === 1, 'break done → back to focus, dot kept');
+    let sN = s0;
+    for (let i = 0; i < 8; i++) sN = P4.pomoAdvance(sN);
+    assert(sN.done === 0 && sN.phase === 'focus', 'four focus sessions wrap the dot counter (one full set)');
+  }
+}
+// i18n: every new entry exists in both languages and is non-empty (no key echo)
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  const tKeys = ['gen.clockseconds', 'gen.clockseconds_tip', 'gen.clockfont', 'clockfont.modern', 'clockfont.serif', 'clockfont.mono',
+    'widget.countdown', 'widget.pomodoro',
+    'hol.newyear', 'hol.spring', 'hol.qingming', 'hol.labour', 'hol.dragonboat', 'hol.midautumn', 'hol.national',
+    'cal.badge_rest', 'cal.badge_work', 'cal.next_holiday', 'cal.holiday_today',
+    'cd.offwork', 'cd.relax', 'cd.relax_weekend', 'cd.off_edit', 'cd.guide', 'cd.name_ph', 'cd.add', 'cd.del',
+    'cd.days_left', 'cd.days_passed', 'cd.today', 'cd.limit', 'cd.invalid',
+    'pomo.focus', 'pomo.break', 'pomo.start', 'pomo.pause', 'pomo.reset', 'pomo.toast_break', 'pomo.toast_focus'];
+  I.setLang('zh');
+  assert(tKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'time-feature entries translated in zh',
+    tKeys.filter(k => I.t(k) === k || !I.t(k)).join(' | '));
+  assert(I.t('cal.badge_rest') === '休' && I.t('cal.badge_work') === '班', 'badge entries zh are 休/班');
+  I.setLang('en');
+  assert(tKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'time-feature entries translated in en',
+    tKeys.filter(k => I.t(k) === k || !I.t(k)).join(' | '));
+  assert(I.t('cal.next_holiday', { name: 'National Day', n: 7 }) === 'Next holiday: National Day · in 7 days',
+    'cal.next_holiday interpolates {name}/{n}', I.t('cal.next_holiday', { name: 'National Day', n: 7 }));
+  I.setLang('zh');
+}
+// CSS: new widget / badge / font styles
+for (const sel of ['.cal-badge', '.cal-next-holiday', '.count-card', '.count-off-time', '.count-guide',
+  '.count-row', '.count-add', '.pomo-time', '.pomo-dot', '.pomo-btn',
+  '.wclock.clock-font-serif', '.wclock.clock-font-mono', '.widget.wcount.w-top', '.widget.wpomodoro.w-top']) {
   assert(cssSrc.includes(sel), `CSS defines ${sel}`);
 }
 

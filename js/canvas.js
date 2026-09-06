@@ -15,6 +15,8 @@
     { key: 'wtodo',  sel: '#todo-widget' },
     { key: 'wmovie', sel: '.wmovie' },
     { key: 'wweather', sel: '.wweather' },
+    { key: 'wcount', sel: '.wcount' },
+    { key: 'wpomodoro', sel: '.wpomodoro' },
     { key: 'search', sel: '#search' },
     { key: 'grid',   sel: '#grid-wrap' }
   ];

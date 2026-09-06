@@ -81,6 +81,7 @@
           <span data-i18n="cal.d0">Su</span><span data-i18n="cal.d1">Mo</span><span data-i18n="cal.d2">Tu</span><span data-i18n="cal.d3">We</span><span data-i18n="cal.d4">Th</span><span data-i18n="cal.d5">Fr</span><span data-i18n="cal.d6">Sa</span>
         </div>
         <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-next-holiday" id="cal-next-holiday" hidden></div>
       </section>
 
       <section class="widget wtodo" id="todo-widget" data-i18n-aria="widget.todo" aria-label="To-dos">
@@ -127,6 +128,33 @@
           <span class="weather-updated" id="weather-updated" aria-hidden="true"></span>
         </div>
         <div class="weather-card" id="weather-card"></div>
+      </section>
+
+      <section class="widget wcount" data-i18n-aria="widget.countdown" aria-label="Countdown" hidden>
+        <button type="button" class="w-del" data-widget="wcount" data-i18n-aria="widget.remove" aria-label="Remove this widget">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+        </button>
+        <div class="w-head">
+          <span class="w-title">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14M5 21h14M7 3c0 5 3.5 6.5 5 9-1.5 2.5-5 4-5 9M17 3c0 5-3.5 6.5-5 9 1.5 2.5 5 4 5 9"/></svg>
+            <span data-i18n="widget.countdown">Countdown</span>
+          </span>
+        </div>
+        <div class="count-card" id="count-card"></div>
+      </section>
+
+      <section class="widget wpomodoro" data-i18n-aria="widget.pomodoro" aria-label="Pomodoro" hidden>
+        <button type="button" class="w-del" data-widget="wpomodoro" data-i18n-aria="widget.remove" aria-label="Remove this widget">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+        </button>
+        <div class="w-head">
+          <span class="w-title">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>
+            <span data-i18n="widget.pomodoro">Pomodoro</span>
+          </span>
+          <span class="pomo-dots" id="pomo-dots" aria-hidden="true"></span>
+        </div>
+        <div class="pomo-card" id="pomo-card"></div>
       </section>
     </aside>
 
@@ -373,6 +401,19 @@
             <span data-i18n="gen.clock12h">12-hour clock</span>
           </label>
           <p class="form-tip" data-i18n="gen.clock12h_tip">Shows h:mm with a small AM/PM indicator.</p>
+          <label class="check-row">
+            <input type="checkbox" id="f-clockseconds">
+            <span data-i18n="gen.clockseconds">Show seconds</span>
+          </label>
+          <p class="form-tip" data-i18n="gen.clockseconds_tip">Shows the clock down to the second (hh:mm:ss).</p>
+          <label>
+            <span data-i18n="gen.clockfont">Clock font</span>
+            <select id="f-clockfont">
+              <option value="modern" data-i18n="clockfont.modern">Modern</option>
+              <option value="serif" data-i18n="clockfont.serif">Serif</option>
+              <option value="mono" data-i18n="clockfont.mono">Mono</option>
+            </select>
+          </label>
           <div class="wgt-zone">
             <span class="data-label" data-i18n="gen.widgets">Widgets</span>
             <div class="wgt-rows">
@@ -412,6 +453,22 @@
                 <input type="checkbox" id="f-w-wweather">
                 <span class="wgt-name" data-i18n="widget.weather">Weather</span>
                 <select id="f-pos-wweather" class="wgt-pos">
+                  <option value="top" data-i18n="wpos.top">Above search</option>
+                  <option value="left" data-i18n="wpos.left">Left column</option>
+                </select>
+              </label>
+              <label class="wgt-row">
+                <input type="checkbox" id="f-w-wcount">
+                <span class="wgt-name" data-i18n="widget.countdown">Countdown</span>
+                <select id="f-pos-wcount" class="wgt-pos">
+                  <option value="top" data-i18n="wpos.top">Above search</option>
+                  <option value="left" data-i18n="wpos.left">Left column</option>
+                </select>
+              </label>
+              <label class="wgt-row">
+                <input type="checkbox" id="f-w-wpomodoro">
+                <span class="wgt-name" data-i18n="widget.pomodoro">Pomodoro</span>
+                <select id="f-pos-wpomodoro" class="wgt-pos">
                   <option value="top" data-i18n="wpos.top">Above search</option>
                   <option value="left" data-i18n="wpos.left">Left column</option>
                 </select>
@@ -459,6 +516,7 @@
 
   <script src="js/icondb.js"></script>
   <script src="js/lunar.js"></script>
+  <script src="js/holidays.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/sync.js"></script>
   <script src="js/canvas.js"></script>

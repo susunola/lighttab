@@ -48,6 +48,21 @@
     'widget.todo':     { zh: '待办', en: 'To-dos' },
     'widget.movie':    { zh: '每日电影', en: 'Movie of the day' },
     'widget.weather':  { zh: '天气', en: 'Weather' },
+    'widget.countdown':  { zh: '倒计时', en: 'Countdown' },
+    'widget.pomodoro':   { zh: '番茄钟', en: 'Pomodoro' },
+
+    // ---------- China statutory holidays (2026 table in js/holidays.js) ----------
+    'hol.newyear':    { zh: '元旦', en: "New Year's Day" },
+    'hol.spring':     { zh: '春节', en: 'Spring Festival' },
+    'hol.qingming':   { zh: '清明节', en: 'Qingming Festival' },
+    'hol.labour':     { zh: '劳动节', en: 'Labour Day' },
+    'hol.dragonboat': { zh: '端午节', en: 'Dragon Boat Festival' },
+    'hol.midautumn':  { zh: '中秋节', en: 'Mid-Autumn Festival' },
+    'hol.national':   { zh: '国庆节', en: 'National Day' },
+    'cal.badge_rest': { zh: '休', en: 'Off' },
+    'cal.badge_work': { zh: '班', en: 'Work' },
+    'cal.next_holiday': { zh: '下一个假期：{name} · 还有 {n} 天', en: 'Next holiday: {name} · in {n} days' },
+    'cal.holiday_today': { zh: '今天是{name}，好好享受', en: 'Today is {name} — enjoy it' },
 
     // ---------- Weather widget (opt-in, Open-Meteo) ----------
     'weather.set_city':    { zh: '设置城市，查看天气', en: 'Set a city to see the weather' },
@@ -69,6 +84,31 @@
     'weather.d4': { zh: '周四', en: 'Thu' },
     'weather.d5': { zh: '周五', en: 'Fri' },
     'weather.d6': { zh: '周六', en: 'Sat' },
+
+    // ---------- Countdown widget (off-work clock + custom countdown days) ----------
+    'cd.offwork':    { zh: '距离下班还有', en: 'Off work in' },
+    'cd.relax':      { zh: '已下班，好好休息', en: 'Enjoy your evening' },
+    'cd.relax_weekend': { zh: '周末愉快', en: 'Enjoy your weekend' },
+    'cd.off_edit':   { zh: '点击修改下班时间', en: 'Click to set the off-work time' },
+    'cd.guide':      { zh: '添加一个倒数日（如 春节、旅行）', en: 'Add a day to count down to (a festival, a trip…)' },
+    'cd.name_ph':    { zh: '名称', en: 'Name' },
+    'cd.add':        { zh: '添加', en: 'Add' },
+    'cd.del':        { zh: '删除', en: 'Delete' },
+    'cd.days_left':  { zh: '还有 {n} 天', en: '{n} days left' },
+    'cd.days_left_1': { zh: '还有 {n} 天', en: '{n} day left' },
+    'cd.days_passed': { zh: '已过 {n} 天', en: '{n} days ago' },
+    'cd.today':      { zh: '就是今天', en: 'Today is the day' },
+    'cd.limit':      { zh: '最多添加 {n} 个倒数日', en: 'Up to {n} countdown days' },
+    'cd.invalid':    { zh: '请填写名称并选择日期', en: 'Enter a name and pick a date' },
+
+    // ---------- Pomodoro widget (25 min focus / 5 min break) ----------
+    'pomo.focus':  { zh: '专注', en: 'Focus' },
+    'pomo.break':  { zh: '休息', en: 'Break' },
+    'pomo.start':  { zh: '开始', en: 'Start' },
+    'pomo.pause':  { zh: '暂停', en: 'Pause' },
+    'pomo.reset':  { zh: '重置', en: 'Reset' },
+    'pomo.toast_break': { zh: '专注结束，休息 5 分钟吧', en: 'Focus done — take a 5-minute break' },
+    'pomo.toast_focus': { zh: '休息结束，开始新的专注', en: 'Break over — back to focus' },
 
     // ---------- Movie-of-the-day ----------
     'movie.rating': { zh: '豆瓣评分', en: 'Rating' },
@@ -237,6 +277,12 @@
     'theme.system': { zh: '跟随系统', en: 'Follow system' },
     'gen.clock12h':     { zh: '12 小时制时钟', en: '12-hour clock' },
     'gen.clock12h_tip': { zh: '开启后时钟按 12 小时制显示，带上午/下午小标。', en: 'Shows h:mm with a small AM/PM indicator (上午/下午 in Chinese).' },
+    'gen.clockseconds':     { zh: '显示秒', en: 'Show seconds' },
+    'gen.clockseconds_tip': { zh: '开启后时钟显示到秒（hh:mm:ss）。', en: 'Shows the clock down to the second (hh:mm:ss).' },
+    'gen.clockfont':    { zh: '时钟字体', en: 'Clock font' },
+    'clockfont.modern': { zh: '现代', en: 'Modern' },
+    'clockfont.serif':  { zh: '衬线', en: 'Serif' },
+    'clockfont.mono':   { zh: '等宽', en: 'Mono' },
     'gen.data':     { zh: '数据管理', en: 'Data management' },
     'gen.export':   { zh: '导出数据', en: 'Export data' },
     'gen.import':   { zh: '导入数据', en: 'Import data' },

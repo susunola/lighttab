@@ -26,9 +26,11 @@ unless you explicitly turn on an online feature (cloud sync, Bing daily wallpape
 
 ## Features
 
-- **Clock & greeting** — live time, date and a time-of-day greeting, plus the Chinese lunar calendar (sexagenary year, zodiac, leap months, 1900–2100, computed entirely on-device). The clock can sit in the left column or lifted above the search box as a large centred time line (phone-launcher style), and switches between 24-hour and 12-hour (AM/PM · 上午/下午) formats in *Settings → General*
+- **Clock & greeting** — live time, date and a time-of-day greeting, plus the Chinese lunar calendar (sexagenary year, zodiac, leap months, 1900–2100, computed entirely on-device). The clock can sit in the left column or lifted above the search box as a large centred time line (phone-launcher style), switches between 24-hour and 12-hour (AM/PM · 上午/下午) formats, can show seconds, and offers three face fonts (modern / serif / mono) — all in *Settings → General*
 - **Bilingual UI (English / 中文)** — switch the whole interface in *Settings → General → Language*. Greetings, dates, the lunar line, calendar, engine names, menus and messages all follow. Persisted locally, applied instantly, no reload
-- **Calendar widget** — local month view with lunar-day labels and month navigation (zero network)
+- **Calendar widget** — local month view with lunar-day labels and month navigation (zero network). Chinese statutory holidays carry a small 休/Off corner badge (调休 make-up workdays get 班/Work), and a quiet line under the grid counts down to the next holiday (2026 official schedule, refreshed yearly)
+- **Countdown widget** (opt-in, off by default) — a ticking off-work countdown (click the time to change it; weekends and after-hours show a relaxed state) plus up to 5 custom countdown days ("name · N days left"), all computed locally
+- **Pomodoro widget** (opt-in, off by default) — 25 min focus / 5 min break cycles with start/pause/reset, auto-switching phases with a toast, and cycle dots (4 focus sessions = one set). Session-only state, nothing persisted
 - **One-box search** — URL shortcuts (bare domains with paths work, e.g. `github.com/susunola`), 6 search engines, 2 AI chats (Doubao, ChatGPT) and a WorkBuddy deep link. Live suggestions from Baidu / Google / Bing via JSONP (no extra permissions; switchable off in Settings). Tab / Shift+Tab in the search box cycles engines; a pure arithmetic expression (e.g. `128 × 3.5`) shows an inline result row — Enter copies it, no `eval()` involved; the last 10 searches are kept locally (`lt.history`) and resurface below the box — deletable one by one or cleared at once. When WorkBuddy Desktop is running it is shown live in the engine list via a local loopback probe (no extra permissions)
 - **AI prompt launcher** (press `/`) — pick a template, type your content, and send the same prompt to several targets at once. The prompt text never travels in the URL (it goes through a nonce channel in extension mode); if the target page blocks auto-fill, the prompt is copied to your clipboard with an on-page notice
 - **Icon grid** — drag to reorder (hold a tile over another to group them into an iOS-style folder with a 2×2 mini-icon tile, an inline-renamable popup and drag-out to ungroup; folders auto-dissolve below 2 items), groups, and a built-in brand-icon library so no favicon is ever fetched from a third party
@@ -82,6 +84,7 @@ lighttab/
 │   ├── i18n.js            # zh + en dictionary, t() runtime, static DOM pass
 │   ├── icondb.js          # built-in brand-icon library (simple-icons, CC0)
 │   ├── lunar.js           # Chinese lunar calendar, with English name variants
+│   ├── holidays.js        # China statutory-holiday table (2026, refreshed yearly)
 │   ├── sync.js            # optional cloud sync client (local-first, LWW)
 │   └── inject-ai.js       # content script that auto-fills Doubao / ChatGPT
 ├── scripts/

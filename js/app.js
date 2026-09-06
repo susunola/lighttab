@@ -71,6 +71,10 @@
     theme: 'dark',
     // Clock format: false = 24h (default); true = 12h with a small AM/PM (上午/下午) indicator.
     clock12h: false,
+    // Seconds display: false (default) = hh:mm; true = the seconds span shows hh:mm:ss.
+    clockSeconds: false,
+    // Clock face font: 'modern' (bundled Inter, default) | 'serif' | 'mono' (system stacks, zero downloads).
+    clockFont: 'modern',
     wallpaper: { ...BUNDLED_WALL },
     // Daily Bing wallpaper auto-rotate: when on, one Bing daily image from the local pool is
     // applied per calendar day. Manual picks always win for the rest of that day.
@@ -89,19 +93,22 @@
     // Left-column widgets the user kept. Removing one hides it in both the flow and canvas layouts;
     // removing all three collapses the whole left column so the icon grid spans the full width.
     // Lives inside settings on purpose — it then rides along with export / import / cloud sync for free.
-    widgets: { wclock: true, wcal: true, wtodo: true, wmovie: true, wweather: false },
+    widgets: { wclock: true, wcal: true, wtodo: true, wmovie: true, wweather: false, wcount: false, wpomodoro: false },
     // Per-widget placement: 'left' keeps the widget as a left-column card, 'top' lifts it into the
     // stack above the search box (centred, card chrome dropped — the phone-launcher look).
     // Only the clock rides up top by default — that slot wants a glanceable time + date line, not a
     // month grid. Calendar, to-do and movie stay left-column cards; all can still be lifted from Settings.
-    widgetPos: { wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left', wweather: 'left' },
+    widgetPos: { wclock: 'top', wcal: 'left', wtodo: 'left', wmovie: 'left', wweather: 'left', wcount: 'left', wpomodoro: 'left' },
     // Weather widget (opt-in, Open-Meteo): null until the user picks a city in Settings → General,
     // then { name, lat, lon, last: { temp, rh, code, hi, lo }, fetchedAt }. Lives inside settings so
     // it rides along with export / import / cloud sync for free.
-    weather: null
+    weather: null,
+    // Countdown widget (opt-in): a daily off-work time plus up to 5 custom countdown days
+    // ({ id, name, date: 'YYYY-MM-DD' }). Lives inside settings like everything else.
+    countdown: { off: '18:00', days: [] }
   };
   // Left-column widget ids, in render order. Single source of truth for visibility + settings UI.
-  const WIDGETS = ['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather'];
+  const WIDGETS = ['wclock', 'wcal', 'wtodo', 'wmovie', 'wweather', 'wcount', 'wpomodoro'];
 
   // Built-in prompt templates.
   //   name    display name
@@ -766,6 +773,16 @@
     const ampm = h < 12 ? (en ? 'AM' : '上午') : (en ? 'PM' : '下午');
     return { hhmm: `${h % 12 || 12}:${pad2(m)}`, ampm };
   }
+  // Clock face font (Settings → General): applied as a class on the widget card; 'modern' is the
+  // bundled Inter (no class), serif/mono switch to system font stacks — no font files are bundled.
+  const CLOCK_FONTS = ['modern', 'serif', 'mono'];
+  function applyClockFont() {
+    const el = document.querySelector('.widget.wclock');
+    if (!el) return;
+    const f = CLOCK_FONTS.includes(state.settings.clockFont) ? state.settings.clockFont : 'modern';
+    el.classList.toggle('clock-font-serif', f === 'serif');
+    el.classList.toggle('clock-font-mono', f === 'mono');
+  }
   function startClock() {
     const hhmmEl = document.getElementById('clock-hhmm');
     const secEl = document.getElementById('clock-sec');
@@ -781,8 +798,11 @@
       const hh = d.getHours();
       const mm = d.getMinutes();
       const ss = pad2(d.getSeconds());
-      // Seconds tick every second; hh:mm, greeting and the date chip only touch the DOM when their own period rolls over.
-      secEl.textContent = ss;
+      // Seconds display is opt-in (settings.clockSeconds): the span is hidden otherwise.
+      // The 1s tick cadence is kept either way — the greeting / date-chip rollovers share this tick.
+      const showSec = state.settings.clockSeconds === true;
+      secEl.hidden = !showSec;
+      if (showSec) secEl.textContent = ss;
       if (hh * 60 + mm !== lastMinute) {
         lastMinute = hh * 60 + mm;
         const fc = formatClock(hh, mm, state.settings.clock12h === true, isEn());
@@ -809,6 +829,10 @@
       }
     }
     tick();
+    applyClockFont();
+    // The top-state CSS hides the seconds span as noise; an explicit opt-in overrides that.
+    const clockWidget = secEl.closest('.widget');
+    if (clockWidget) clockWidget.classList.toggle('clock-sec-on', state.settings.clockSeconds === true);
     if (clockTimer) clearInterval(clockTimer);
     clockTimer = setInterval(tick, 1000);
   }
@@ -2402,6 +2426,9 @@
     state.settings.widgets = normalizeWidgets(state.settings.widgets);
     state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
     state.settings.clock12h = state.settings.clock12h === true;
+    state.settings.clockSeconds = state.settings.clockSeconds === true;
+    state.settings.clockFont = CLOCK_FONTS.includes(state.settings.clockFont) ? state.settings.clockFont : 'modern';
+    state.settings.countdown = normalizeCountdown(state.settings.countdown);
     // Imported engine lists get the same validation as the add form: customs must be well-formed
     // http(s) URLs carrying {q}; hidden ids must name real built-ins.
     state.settings.customEngines = Array.isArray(state.settings.customEngines)
@@ -2611,6 +2638,20 @@
       await Store.set(K.settings, state.settings);
       startClock(); // force a redraw so the format flips immediately
     });
+    // Seconds toggle (General): the seconds span shows/hides; the 1s cadence is unchanged.
+    const clockSecCb = document.getElementById('f-clockseconds');
+    if (clockSecCb) clockSecCb.addEventListener('change', async () => {
+      state.settings.clockSeconds = !!clockSecCb.checked;
+      await Store.set(K.settings, state.settings);
+      startClock(); // force a redraw so the seconds flip immediately
+    });
+    // Clock face font (General): modern (bundled Inter) / serif / mono system stacks.
+    const clockFontSel = document.getElementById('f-clockfont');
+    if (clockFontSel) clockFontSel.addEventListener('change', async () => {
+      state.settings.clockFont = CLOCK_FONTS.includes(clockFontSel.value) ? clockFontSel.value : 'modern';
+      await Store.set(K.settings, state.settings);
+      applyClockFont(); // class-only change, no redraw needed
+    });
     // Wallpaper daily auto-rotate toggle (Wallpaper pane). Turning it on clears today's marker so the
     // very first rotate applies immediately instead of being blocked by an earlier manual pick.
     const wallRotCb = document.getElementById('f-wall-rotate');
@@ -2643,6 +2684,10 @@
       if (suggestCb) suggestCb.checked = state.settings.suggest !== false;
       const clock12hCb = document.getElementById('f-clock12h');
       if (clock12hCb) clock12hCb.checked = state.settings.clock12h === true;
+      const clockSecCb = document.getElementById('f-clockseconds');
+      if (clockSecCb) clockSecCb.checked = state.settings.clockSeconds === true;
+      const clockFontSel = document.getElementById('f-clockfont');
+      if (clockFontSel) clockFontSel.value = CLOCK_FONTS.includes(state.settings.clockFont) ? state.settings.clockFont : 'modern';
       const wallSrcSel = document.getElementById('f-wall-src');
       if (wallSrcSel) wallSrcSel.value = wallLibSource;
       if (tab === 'wall' && wallLibImages === null) fetchWallLib(); // warm the pool (cached fallback when offline)
@@ -3020,6 +3065,22 @@
   }
 
   // ---------- Calendar widget (fully local month view with lunar days; zero network) ----------
+  // Next statutory holiday after todayStr (pure — smoke-tested). table is the LT_HOLIDAYS map
+  // { 'YYYY-MM-DD': { h } | { work: true } }; make-up workdays are skipped. Returns
+  // { key, date, days } (days = calendar days until the first holiday date, 0 = today), or null
+  // when the dataset has no holiday left (the table covers one year and is refreshed yearly).
+  function nextHoliday(todayStr, table) {
+    if (typeof todayStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(todayStr) || !table) return null;
+    const t0 = new Date(todayStr + 'T00:00:00').getTime();
+    if (isNaN(t0)) return null;
+    const dates = Object.keys(table).filter(k => table[k] && table[k].h).sort();
+    for (const k of dates) {
+      if (k < todayStr) continue;
+      const days = Math.round((new Date(k + 'T00:00:00').getTime() - t0) / 86400000);
+      return { key: table[k].h, date: k, days };
+    }
+    return null;
+  }
   const calCursor = { y: 0, m: 0 }; // currently displayed year/month; 0 = follow today
   function renderCalendar() {
     const title = document.getElementById('cal-title');
@@ -3041,10 +3102,30 @@
         if (lu) lday = isEn() ? window.LT_LUNAR.dayNameEn(lu.day) : window.LT_LUNAR.dayName(lu.day);
       }
       const isToday = isThisMonth && d === now.getDate();
-      const cls = 'cal-cell' + (isToday ? ' today' : '');
-      cells.push(`<span class="${cls}"><b>${d}</b><i>${lday}</i></span>`);
+      // Statutory-holiday markers (js/holidays.js): a corner badge — 休/Off for holidays,
+      // 班/Work for 调休 make-up workdays. The today highlight always wins visually.
+      const hol = window.LT_HOLIDAYS && window.LT_HOLIDAYS.table[`${y}-${pad2(m)}-${pad2(d)}`];
+      const badge = !hol ? '' : hol.work
+        ? `<em class="cal-badge work">${escapeHtml(t('cal.badge_work'))}</em>`
+        : `<em class="cal-badge hol">${escapeHtml(t('cal.badge_rest'))}</em>`;
+      const cls = 'cal-cell' + (isToday ? ' today' : '') + (hol ? (hol.work ? ' workday' : ' holiday') : '');
+      cells.push(`<span class="${cls}"><b>${d}</b><i>${lday}</i>${badge}</span>`);
     }
     grid.innerHTML = cells.join('');
+    // One quiet line under the grid: the next statutory holiday counted from today (not from the
+    // viewed month). Hidden once the dataset's year has run out (see the note in js/holidays.js).
+    const nhEl = document.getElementById('cal-next-holiday');
+    if (nhEl) {
+      const nh = window.LT_HOLIDAYS ? nextHoliday(todayStr(), window.LT_HOLIDAYS.table) : null;
+      if (nh) {
+        nhEl.textContent = nh.days === 0
+          ? t('cal.holiday_today', { name: t('hol.' + nh.key) })
+          : t('cal.next_holiday', { name: t('hol.' + nh.key), n: nh.days });
+        nhEl.hidden = false;
+      } else {
+        nhEl.hidden = true;
+      }
+    }
   }
   function bindCalendar() {
     const prev = document.getElementById('cal-prev');
@@ -3385,6 +3466,232 @@
     }
   }
 
+  // ---------- Countdown widget (off-work clock + custom countdown days) ----------
+  // Persisted in settings.countdown = { off: 'HH:MM', days: [{ id, name, date }] } (cap: 5 days).
+  // Zero network: everything is computed from the local clock.
+  const COUNT_DAYS_MAX = 5;
+  // Whole days from todayStr to dateStr (pure — smoke-tested). Local midnights, negative when past.
+  function daysUntil(todayStr, dateStr) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(todayStr || '') || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '')) return null;
+    return Math.round((new Date(dateStr + 'T00:00:00') - new Date(todayStr + 'T00:00:00')) / 86400000);
+  }
+  // Coerce an imported / synced countdown field into shape (pure — smoke-tested).
+  function normalizeCountdown(raw) {
+    const out = { off: '18:00', days: [] };
+    if (raw && typeof raw === 'object') {
+      if (typeof raw.off === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.off)) out.off = raw.off;
+      if (Array.isArray(raw.days)) {
+        out.days = raw.days
+          .filter(d => d && typeof d.name === 'string' && d.name.trim() && typeof d.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.date))
+          .slice(0, COUNT_DAYS_MAX)
+          .map(d => ({ id: d.id || nid(), name: d.name.trim().slice(0, 24), date: d.date }));
+      }
+    }
+    return out;
+  }
+  function countdownData() {
+    state.settings.countdown = normalizeCountdown(state.settings.countdown);
+    return state.settings.countdown;
+  }
+  function saveCountdown() { return Store.set(K.settings, state.settings); }
+  let countEditing = false; // the off-work time is being edited inline — ticks must not re-render it
+  let countShowAdd = false; // the add form opens from the guide state; stays open once days exist
+  // Off-work state for "now": 'weekend' | 'relax' (past off time) | 'count' (HH:MM:SS remaining).
+  function offWorkState(now, off) {
+    const wd = now.getDay();
+    if (wd === 0 || wd === 6) return { mode: 'weekend' };
+    const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(off || '');
+    const oh = m ? +m[1] : 18, om = m ? +m[2] : 0;
+    const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), oh, om, 0);
+    const leftMs = target - now;
+    if (leftMs <= 0) return { mode: 'relax' };
+    const s = Math.floor(leftMs / 1000);
+    return { mode: 'count', text: `${pad2(Math.floor(s / 3600))}:${pad2(Math.floor((s % 3600) / 60))}:${pad2(s % 60)}` };
+  }
+  function renderCountdown() {
+    const card = document.getElementById('count-card');
+    if (!card) return;
+    const cd = countdownData();
+    const ow = offWorkState(new Date(), cd.off);
+    let html = '<div class="count-off">' +
+      '<span class="count-off-label">' + escapeHtml(t('cd.offwork')) + '</span>';
+    if (countEditing) {
+      html += '<input type="time" class="count-off-input" id="count-off-input" value="' + escapeHtml(cd.off) + '" aria-label="' + escapeHtml(t('cd.off_edit')) + '">';
+    } else if (ow.mode === 'count') {
+      html += '<button type="button" class="count-off-time" id="count-off-edit" title="' + escapeHtml(t('cd.off_edit')) + '">' +
+        '<span id="count-left">' + ow.text + '</span></button>';
+    } else {
+      html += '<button type="button" class="count-off-time relaxed" id="count-off-edit" title="' + escapeHtml(t('cd.off_edit')) + '">' +
+        escapeHtml(t(ow.mode === 'weekend' ? 'cd.relax_weekend' : 'cd.relax')) + '</button>';
+    }
+    html += '</div>';
+    const today = todayStr();
+    if (cd.days.length) {
+      html += '<ul class="count-days">' + cd.days.map(d => {
+        const n = daysUntil(today, d.date);
+        const rel = n === null ? '' : n > 0 ? t(n === 1 ? 'cd.days_left_1' : 'cd.days_left', { n }) : n < 0 ? t('cd.days_passed', { n: -n }) : t('cd.today');
+        return '<li class="count-row" data-id="' + escapeHtml(d.id) + '">' +
+          '<span class="count-name">' + escapeHtml(d.name) + '</span>' +
+          '<span class="count-n' + (n !== null && n < 0 ? ' past' : '') + '">' + escapeHtml(rel) + '</span>' +
+          '<span class="count-del" title="' + escapeHtml(t('cd.del')) + '" role="button" aria-label="' + escapeHtml(t('cd.del')) + '">×</span></li>';
+      }).join('') + '</ul>';
+    }
+    if (!cd.days.length && !countShowAdd) {
+      // Guide state (weather-widget style): a quiet dashed prompt that reveals the add form.
+      html += '<button type="button" class="count-guide" id="count-guide">' + escapeHtml(t('cd.guide')) + '</button>';
+    } else if (cd.days.length < COUNT_DAYS_MAX) {
+      html += '<form class="count-add" id="count-add" autocomplete="off">' +
+        '<input id="count-name" type="text" maxlength="24" placeholder="' + escapeHtml(t('cd.name_ph')) + '" aria-label="' + escapeHtml(t('cd.name_ph')) + '">' +
+        '<input id="count-date" type="date" aria-label="date">' +
+        '<button type="submit" class="count-add-btn" aria-label="' + escapeHtml(t('cd.add')) + '">+</button></form>';
+    }
+    card.innerHTML = html;
+    const offInput = card.querySelector('#count-off-input');
+    if (offInput) { offInput.focus(); }
+  }
+  // 1s tick: re-renders nothing while the off-time editor is open; otherwise only the HH:MM:SS
+  // text is rewritten, with a full re-render when the mode flips or the calendar day rolls over.
+  let countLastKey = '';
+  function countTick() {
+    if (!widgetVisible('wcount')) return;
+    if (countEditing) return;
+    const cd = countdownData();
+    const ow = offWorkState(new Date(), cd.off);
+    const key = todayStr() + '|' + ow.mode + '|' + cd.days.length + '|' + countShowAdd + '|' + isEn();
+    if (key !== countLastKey) { countLastKey = key; renderCountdown(); return; }
+    const el = document.getElementById('count-left');
+    if (el && ow.mode === 'count') el.textContent = ow.text;
+  }
+  function bindCountdown() {
+    const card = document.getElementById('count-card');
+    if (!card) return;
+    card.addEventListener('click', async (e) => {
+      if (e.target.closest('#count-off-edit')) {
+        countEditing = true;
+        renderCountdown();
+        return;
+      }
+      if (e.target.closest('#count-guide')) {
+        countShowAdd = true;
+        countTick();
+        const nameEl = document.getElementById('count-name');
+        if (nameEl) nameEl.focus();
+        return;
+      }
+      const del = e.target.closest('.count-del');
+      if (del) {
+        const row = del.closest('.count-row');
+        const cd = countdownData();
+        cd.days = cd.days.filter(d => d.id !== row.dataset.id);
+        await saveCountdown();
+        countLastKey = '';
+        renderCountdown();
+      }
+    });
+    card.addEventListener('change', async (e) => {
+      if (e.target.id !== 'count-off-input') return;
+      const v = e.target.value;
+      if (/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) {
+        countdownData().off = v;
+        await saveCountdown();
+      }
+      countEditing = false;
+      countLastKey = '';
+      renderCountdown();
+    });
+    card.addEventListener('focusout', (e) => {
+      // Clicking away without picking a time closes the editor, keeping the previous value.
+      if (e.target.id === 'count-off-input') {
+        countEditing = false;
+        countLastKey = '';
+        setTimeout(renderCountdown, 0);
+      }
+    });
+    card.addEventListener('submit', async (e) => {
+      if (e.target.id !== 'count-add') return;
+      e.preventDefault();
+      const cd = countdownData();
+      if (cd.days.length >= COUNT_DAYS_MAX) return showToast(t('cd.limit', { n: COUNT_DAYS_MAX }));
+      const name = (document.getElementById('count-name').value || '').trim();
+      const date = document.getElementById('count-date').value;
+      if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return showToast(t('cd.invalid'));
+      cd.days.push({ id: nid(), name: name.slice(0, 24), date });
+      await saveCountdown();
+      countLastKey = '';
+      renderCountdown();
+    });
+  }
+
+  // ---------- Pomodoro widget (25 min focus / 5 min break, in-memory only) ----------
+  // Deliberately not persisted: a timer is a session tool, and a restored mid-cycle timer would
+  // be a lie after a reload anyway.
+  const POMO_FOCUS_S = 25 * 60;
+  const POMO_BREAK_S = 5 * 60;
+  // Pure state machine (smoke-tested): pomoInitial → pomoAdvance flips phase on completion and
+  // counts finished focus sessions, wrapping every 4 (one full set = 4 dots).
+  function pomoInitial() {
+    return { phase: 'focus', left: POMO_FOCUS_S, running: false, done: 0 };
+  }
+  function pomoAdvance(st) {
+    if (st.phase === 'focus') return { phase: 'break', left: POMO_BREAK_S, running: st.running, done: (st.done + 1) % 4 };
+    return { phase: 'focus', left: POMO_FOCUS_S, running: st.running, done: st.done };
+  }
+  let pomo = pomoInitial();
+  function renderPomodoro() {
+    const timeEl = document.getElementById('pomo-time');
+    const card = document.getElementById('pomo-card');
+    if (!card) { return; }
+    if (!timeEl) {
+      card.innerHTML =
+        '<div class="pomo-phase" id="pomo-phase"></div>' +
+        '<div class="pomo-time" id="pomo-time"></div>' +
+        '<div class="pomo-controls">' +
+          '<button type="button" class="pomo-btn primary" id="pomo-toggle"></button>' +
+          '<button type="button" class="pomo-btn" id="pomo-reset"></button>' +
+        '</div>';
+    }
+    renderPomodoroState();
+  }
+  function renderPomodoroState() {
+    const timeEl = document.getElementById('pomo-time');
+    const phaseEl = document.getElementById('pomo-phase');
+    const toggleEl = document.getElementById('pomo-toggle');
+    const resetEl = document.getElementById('pomo-reset');
+    const dotsEl = document.getElementById('pomo-dots');
+    if (!timeEl) return;
+    timeEl.textContent = pad2(Math.floor(pomo.left / 60)) + ':' + pad2(pomo.left % 60);
+    timeEl.classList.toggle('break', pomo.phase === 'break');
+    if (phaseEl) phaseEl.textContent = t(pomo.phase === 'focus' ? 'pomo.focus' : 'pomo.break');
+    if (toggleEl) toggleEl.textContent = t(pomo.running ? 'pomo.pause' : 'pomo.start');
+    if (resetEl) resetEl.textContent = t('pomo.reset');
+    if (dotsEl) {
+      dotsEl.innerHTML = [0, 1, 2, 3].map(i =>
+        '<span class="pomo-dot' + (i < pomo.done ? ' on' : '') + '"></span>').join('');
+    }
+  }
+  function pomoTick() {
+    if (!pomo.running) return;
+    if (--pomo.left <= 0) {
+      const wasFocus = pomo.phase === 'focus';
+      pomo = pomoAdvance(pomo);
+      showToast(t(wasFocus ? 'pomo.toast_break' : 'pomo.toast_focus'));
+    }
+    renderPomodoroState();
+  }
+  function bindPomodoro() {
+    const card = document.getElementById('pomo-card');
+    if (!card) return;
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('#pomo-toggle')) {
+        pomo.running = !pomo.running;
+        renderPomodoroState();
+      } else if (e.target.closest('#pomo-reset')) {
+        pomo = pomoInitial();
+        renderPomodoroState();
+      }
+    });
+  }
+
   // ---------- Reset ----------
   async function resetAll() {
     if (!confirm(t('toast.reset_confirm'))) return;
@@ -3535,6 +3842,8 @@
     renderTodos();
     renderCalendar();
     renderWeather(); // condition words / humidity label follow the language
+    renderCountdown(); // off-work labels / day rows follow the language
+    renderPomodoro(); // phase / button labels follow the language
     window.LT_PROMPTS.renderPromptManager();
     setEngine(state.settings.engine);
     startClock();
@@ -3797,6 +4106,9 @@
     // fetch only if it just became visible with a stale cache (maybeFetchWeather decides).
     renderWeather();
     maybeFetchWeather();
+    // Countdown / pomodoro are pure-local: just re-render on visibility changes.
+    renderCountdown();
+    renderPomodoro();
   }
   // Per-widget placement (#62). Coerce anything off disk / out of an imported file into a full
   // {wclock,wcal,wtodo} map of 'left' | 'top'; unknown values fall back to the shipped default so a
@@ -3947,6 +4259,14 @@
     maybeFetchWeather(); // boot-time refresh, only when the cache is stale (30 min TTL)
     setInterval(maybeFetchWeather, WEATHER_REFRESH_MS); // page-open refresh cadence
     bindTodo();
+    // Countdown / pomodoro widgets: render once, then keep them live on a 1s tick
+    // (both tickers no-op immediately when their widget is hidden or idle).
+    bindCountdown();
+    renderCountdown();
+    bindPomodoro();
+    renderPomodoro();
+    setInterval(countTick, 1000);
+    setInterval(pomoTick, 1000);
 
     // Search
     const form = document.getElementById('search-form');
@@ -4084,7 +4404,7 @@
   // Exposed for the offline probe harness: it has to drive port fallback and timeout paths with a
   // stubbed fetch, which is impossible from the outside.
   window.LT_PROBE_WB = probeWorkBuddy;
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord, formatClock, calcEval, normalizeCalc, updateHistory, histMatches };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord, formatClock, calcEval, normalizeCalc, updateHistory, histMatches, nextHoliday, daysUntil, normalizeCountdown, pomoInitial, pomoAdvance };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
