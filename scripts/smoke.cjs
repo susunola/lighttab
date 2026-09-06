@@ -253,6 +253,35 @@ console.log('[4] pure functions');
       'updateHistory new query wins casing, existing entries dedupe against it');
     assert(P.updateHistory(['1', '2', '3'], '', 2).length === 2, 'updateHistory respects the cap');
     assert(JSON.stringify(P.updateHistory(['x'], 'x', 10)) === JSON.stringify(['x']), 'updateHistory drops an exact re-search');
+    // Read-time sanitizers: corrupt/foreign/crafted records are coerced or dropped, never trusted
+    assert(P.sanitizeItems(null, new Set()) === null, 'sanitizeItems(null) signals a missing key');
+    assert(JSON.stringify(P.sanitizeItems([], new Set())) === '[]', 'sanitizeItems([]) stays empty (user cleared)');
+    assert(P.sanitizeItems([{ id: 'x', title: 'X', url: 'javascript:alert(1)', group: '' }], new Set()).length === 0,
+      'sanitizeItems drops non-http(s) (javascript:) records');
+    const clean = P.sanitizeItems([null, 42, { url: 'https://ok.com', title: 'OK' }], new Set());
+    assert(clean.length === 1 && clean[0].url === 'https://ok.com' && clean[0].title === 'OK' && clean[0].group === ''
+      && typeof clean[0].id === 'string' && clean[0].id.length > 0,
+      'sanitizeItems skips non-objects and fills a fresh id');
+    const twoKids = { type: 'folder', id: 'f', name: 'F', children: [{ url: 'https://a.com', title: 'A' }, { url: 'https://b.com', title: 'B' }] };
+    assert(P.sanitizeItems([twoKids], new Set())[0].type === 'folder' && P.sanitizeItems([twoKids], new Set())[0].children.length === 2,
+      'sanitizeItems keeps a healthy folder');
+    assert(P.sanitizeItems([{ type: 'folder', id: 'f', name: 'F', children: [{ url: 'https://a.com', title: 'A' }] }], new Set()).length === 1
+      && P.sanitizeItems([{ type: 'folder', id: 'f', name: 'F', children: [{ url: 'https://a.com', title: 'A' }] }], new Set())[0].type !== 'folder',
+      'sanitizeItems dissolves a degenerate folder into a plain shortcut');
+    assert(P.sanitizeItems([{ url: 'https://a.com', title: 'A', group: 'gone' }], new Set('gone'))[0].group === '',
+      'sanitizeItems re-groups items whose group no longer exists');
+    assert(P.sanitizeItems([{ url: 'https://a.com', title: 'A', color: 'red' }], new Set())[0].color === undefined,
+      'sanitizeItems strips non-hex colors');
+    assert(P.sanitizeTodos(null) === null && P.sanitizeTodos([{ text: 'hi', done: 1, due: 'not-a-date' }]).length === 1
+      && P.sanitizeTodos([{ text: 'hi', done: 1, due: 'not-a-date' }])[0].done === true
+      && !('due' in P.sanitizeTodos([{ text: 'hi', done: 1, due: 'not-a-date' }])[0]),
+      'sanitizeTodos keeps text/done, drops malformed due');
+    assert(P.sanitizeGroups(['bad', { name: 'Work' }, { id: 'g', name: 'A' }, { id: 'g', name: 'B' }]).length === 2,
+      'sanitizeGroups drops non-objects and dedupes ids');
+    assert(P.sanitizeCustomEngines([{ id: 'u1', name: 'P', url: 'https://p.com/s?q={q}', color: 'red' }])[0].color === '#3b82f6',
+      'sanitizeCustomEngines keeps valid engines, fixes colour');
+    assert(P.sanitizeCustomEngines([{ name: 'Nope', url: 'https://n.com' }]).length === 0,
+      'sanitizeCustomEngines rejects URLs without {q}');
   }
   void elStub;
 }
@@ -740,7 +769,7 @@ assert(/esc\(m\.zh\)/.test(appSrc) && /esc\(m\.blurb\)/.test(appSrc) && /esc\(m\
     'clearCardCanvas restores draggable and removes drag handles');
 }
 // Regression guard: deleting all shortcuts is a legal state; must not fall back to default sites after restart
-assert(/Array\.isArray\(data\.items\) \? data\.items/.test(appSrc),
+assert(/const items = sanitizeItems\(data\.items, gids\);\s*state\.items = items !== null \? items : structuredClone\(DEFAULT_SITES\)/.test(appSrc),
   'loadDataIntoState accepts an empty items array (no more falling back to DEFAULT_SITES)');
 // CSS: card layout (rating badge + body + action row)
 for (const sel of ['.movie-card', '.movie-rate', '.movie-title', '.movie-en', '.movie-genre', '.movie-blurb', '.movie-actions', '.movie-link', '.movie-next']) {
@@ -1646,6 +1675,43 @@ assert(/ai\.preview_copied/.test(appSrc) && /webN && !hasChromeStorage/.test(app
   assert(I.t('ai.preview_copied') !== 'ai.preview_copied' && I.t('ai.preview_copied').length > 0, 'ai.preview_copied translated in en');
   I.setLang('zh');
 }
+
+// ---------- 25) Downgrade experience / read-time hardening references ----------
+console.log('[25] downgrade UX: stale holiday note, boot guard, sanitizer wiring');
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  for (const lang of ['zh', 'en']) {
+    I.setLang(lang);
+    for (const k of ['cal.data_stale', 'boot.fatal']) {
+      assert(I.t(k) !== k && I.t(k).length > 0, `${k} translated in ${lang}`);
+    }
+  }
+  I.setLang('zh');
+}
+assert(/t\('cal\.data_stale', \{ y: cov \}\)/.test(appSrc), 'calendar shows the stale-data note past the table year');
+assert(/async function bootGuarded\(\)/.test(appSrc) && /DOMContentLoaded', bootGuarded/.test(appSrc),
+  'boot runs through a guarded wrapper (storage/context failures surface a toast, not a blank tab)');
+assert(/sanitizeGroups, sanitizeCustomEngines, sanitizeHiddenEngines, sanitizeTodos, sanitizePrompts, sanitizeItems/.test(appSrc),
+  'read-time sanitizers are exported to LT_PURE for offline assertions');
+
+// ---------- 26) Accessibility / keyboard operation ----------
+console.log('[26] a11y: grid keys, modal focus return, visible focus rings');
+assert(/function bindGridKeys\(\)/.test(appSrc) && /bindGridKeys\(\);/.test(appSrc), 'grid keyboard navigation is bound at boot');
+assert(/ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1/.test(appSrc), 'arrow keys move across grid cards');
+assert(/e\.key === 'Delete' \|\| e\.key === 'Backspace'/.test(appSrc), 'Delete removes the focused card (keyboard)');
+assert(/e\.key === 'e' \|\| e\.key === 'E'/.test(appSrc), 'E opens the editor for the focused shortcut');
+assert(/deleteItem\(id\)\.then\(\(\) => \{[\s\S]{0,160}visibleGridCards\(\)/.test(appSrc),
+  'focus returns to the grid after a keyboard delete');
+assert(/aria-expanded="false"/.test(appSrc), 'folder tiles expose aria-expanded');
+assert(/tile\.setAttribute\('aria-expanded', 'true'\)/.test(appSrc), 'opening a folder popup marks the tile expanded');
+assert(/if \(was\) setFolderTileExpanded\(was, false\)/.test(appSrc), 'closing a folder popup clears the tile state');
+assert(/let modalReturnFocus = null;/.test(appSrc) && /function hideModal\(m, refocus\)/.test(appSrc),
+  'modal openers are remembered and restored on close');
+assert(/openModals\.forEach\(m => hideModal\(m\)\)/.test(appSrc), 'Escape closes modals through hideModal (focus return)');
+assert(/\.card:focus-visible/.test(cssSrc), 'CSS ships a visible keyboard focus ring for cards');
 
 console.log('');
 if (failures) {

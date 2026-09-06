@@ -1875,7 +1875,7 @@
       return `<span class="folder-mini${p.customCls ? ' ' + p.customCls : ''}" style="${bgStyle}color:${p.ink}">${p.ico}</span>`;
     }).join('');
     return `
-      <div class="card card-folder" data-id="${escapeHtml(it.id)}" draggable="true" role="button" tabindex="0" title="${name}">
+      <div class="card card-folder" data-id="${escapeHtml(it.id)}" draggable="true" role="button" tabindex="0" aria-expanded="false" title="${name}">
         <div class="ico folder-ico"><div class="folder-mini-grid">${minis}</div></div>
         <div class="title">${name}</div>
       </div>
@@ -1945,9 +1945,15 @@
   }
 
   function folderPopEl() { return document.getElementById('folder-pop'); }
+  function setFolderTileExpanded(id, open) {
+    const tile = [...document.querySelectorAll('#grid .card-folder')].find(n => n.dataset.id === id);
+    if (tile) tile.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
   function closeFolderPopup() {
+    const was = openFolderId;
     openFolderId = null;
     folderDrag = null;
+    if (was) setFolderTileExpanded(was, false);
     const pop = folderPopEl();
     if (pop) pop.hidden = true;
   }
@@ -1960,6 +1966,7 @@
     // Anchor under the folder tile (above when space runs out), clamped into the viewport.
     pop.style.left = '0px'; pop.style.top = '0px';
     const tile = [...document.querySelectorAll('#grid .card-folder')].find(n => n.dataset.id === id);
+    if (tile) tile.setAttribute('aria-expanded', 'true');
     const tr = tile ? tile.getBoundingClientRect() : { left: window.innerWidth / 2, right: window.innerWidth / 2, top: window.innerHeight / 2, bottom: window.innerHeight / 2, width: 0 };
     const pr = pop.getBoundingClientRect();
     const x = Math.max(8, Math.min(tr.left + (tr.width - pr.width) / 2, window.innerWidth - pr.width - 8));
@@ -2245,6 +2252,65 @@
 
   // ---------- Context menu ----------
   let menuEl;
+
+  // ---------- Modal focus management (a11y: closing a modal returns focus to its opener) ----------
+  let modalReturnFocus = null;
+  function hideModal(m, refocus) {
+    if (!m) return;
+    m.hidden = true;
+    if (refocus !== false && modalReturnFocus && document.contains(modalReturnFocus)) {
+      const back = modalReturnFocus;
+      modalReturnFocus = null;
+      try { back.focus({ preventScroll: true }); } catch (_) { try { back.focus(); } catch (_) {} }
+    } else if (refocus === false) {
+      modalReturnFocus = null;
+    }
+  }
+
+  // ---------- Icon grid keyboard navigation (a11y) ----------
+  // Arrow keys move focus between visible grid cards (wrapping both ways), Delete / Backspace
+  // removes the focused shortcut or folder (undo toast, same as the context menu), 'e' opens the
+  // editor for a shortcut. Delegated on #grid so every re-render keeps it working; focus inside a
+  // text-entry element is never hijacked.
+  function visibleGridCards() {
+    return [...document.querySelectorAll('#grid .card')].filter(c => !c.hidden);
+  }
+  function bindGridKeys() {
+    const grid = document.getElementById('grid');
+    if (!grid) return;
+    grid.addEventListener('keydown', (e) => {
+      const card = e.target && e.target.closest ? e.target.closest('.card') : null;
+      if (!card || card.hidden || !grid.contains(card)) return;
+      if (isTypingTarget(e.target)) return;
+      const dir = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (dir) {
+        const cards = visibleGridCards();
+        const idx = cards.indexOf(card);
+        if (idx < 0) return;
+        e.preventDefault();
+        const next = cards[(idx + dir + cards.length) % cards.length];
+        if (next) { try { next.focus({ preventScroll: true }); } catch (_) { next.focus(); } }
+        return;
+      }
+      const id = card.dataset && card.dataset.id;
+      if (!id || id === '__add__') return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        const idx = visibleGridCards().indexOf(card);
+        deleteItem(id).then(() => {
+          // The re-render removed the focused card; hand focus to the card that took its place.
+          const rest = visibleGridCards();
+          const next = rest[Math.min(Math.max(idx, 0), rest.length - 1)] || rest[0];
+          if (next) { try { next.focus({ preventScroll: true }); } catch (_) { next.focus(); } }
+        });
+      } else if (e.key === 'e' || e.key === 'E') {
+        if (card.classList.contains('card-add') || card.classList.contains('card-folder')) return;
+        e.preventDefault();
+        openSiteModal(id);
+      }
+    });
+  }
+
   function openContextMenu(x, y, items) {
     if (!menuEl) menuEl = document.getElementById('context-menu');
     menuEl.innerHTML = items.map((it, i) => {
@@ -2321,6 +2387,8 @@
     // simply do not exist under file://.
     const curtabBtn = document.getElementById('f-curtab');
     if (curtabBtn) curtabBtn.hidden = !!id || !(window.chrome && chrome.permissions && chrome.tabs);
+    // Remember what opened the modal so closing returns focus there (a11y).
+    if (document.activeElement && !modal.contains(document.activeElement)) modalReturnFocus = document.activeElement;
     modal.hidden = false;
     setTimeout(() => form.elements['title'].focus(), 30);
   }
@@ -2360,8 +2428,8 @@
   }
   function bindSiteForm() {
     const modal = document.getElementById('modal-site');
-    modal.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => modal.hidden = true));
-    modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+    modal.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => hideModal(modal)));
+    modal.addEventListener('click', e => { if (e.target === modal) hideModal(modal); });
     const form = document.getElementById('site-form');
     // Custom card icon: upload (square-crop + compress to a small PNG/JPG dataURL), live preview,
     // remove-to-revert. Nothing is persisted until Save; Cancel simply drops the pending icon.
@@ -2406,7 +2474,7 @@
         state.items.push({ id: nid(), title, url, group, icon });
       }
       await Store.set(K.items, state.items);
-      modal.hidden = true;
+      hideModal(modal);
       syncUI();
     });
   }
@@ -2629,7 +2697,7 @@
     setEngine(state.settings.engine);
     renderEngineList(); // refresh the engine dropdown's active highlight
     startClock(); // refresh greeting/name (clock text is throttled per hour, so an import must force a redraw)
-    document.getElementById('modal-set').hidden = true;
+    hideModal(document.getElementById('modal-set'), false);
     syncUI();
     renderTodos();
     renderMovie(); // an import may switch the language, which the movie card renders in
@@ -2711,8 +2779,8 @@
     const tabs = modal.querySelectorAll('.tab');
     const panes = modal.querySelectorAll('.tab-pane');
 
-    modal.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => modal.hidden = true));
-    modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+    modal.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => hideModal(modal)));
+    modal.addEventListener('click', e => { if (e.target === modal) hideModal(modal); });
     tabs.forEach(tb => tb.addEventListener('click', () => {
       tabs.forEach(x => x.classList.toggle('active', x === tb));
       const key = tb.dataset.tab;
@@ -2906,6 +2974,8 @@
       const wallSrcSel = document.getElementById('f-wall-src');
       if (wallSrcSel) wallSrcSel.value = wallLibSource;
       if (tab === 'wall' && wallLibImages === null) fetchWallLib(); // warm the pool (cached fallback when offline)
+      // Remember what opened the settings so closing returns focus there (a11y).
+      if (document.activeElement && !modal.contains(document.activeElement)) modalReturnFocus = document.activeElement;
       modal.hidden = false;
     }
   }
@@ -3365,14 +3435,22 @@
     // viewed month). Hidden once the dataset's year has run out (see the note in js/holidays.js).
     const nhEl = document.getElementById('cal-next-holiday');
     if (nhEl) {
-      const nh = window.LT_HOLIDAYS ? nextHoliday(todayStr(), window.LT_HOLIDAYS.table) : null;
+      const tbl = window.LT_HOLIDAYS && window.LT_HOLIDAYS.table;
+      const nh = tbl ? nextHoliday(todayStr(), tbl) : null;
+      // Coverage year is derived from the table (js/holidays.js is refreshed yearly). Once the
+      // calendar year runs past it there is no data at all — say so instead of silently hiding.
+      let cov = 0;
+      if (tbl) for (const k of Object.keys(tbl)) { const y = +k.slice(0, 4); if (y > cov) cov = y; }
       if (nh) {
         nhEl.textContent = nh.days === 0
           ? t('cal.holiday_today', { name: t('hol.' + nh.key) })
           : t('cal.next_holiday', { name: t('hol.' + nh.key), n: nh.days });
         nhEl.hidden = false;
+      } else if (cov && +todayStr().slice(0, 4) > cov) {
+        nhEl.textContent = t('cal.data_stale', { y: cov });
+        nhEl.hidden = false;
       } else {
-        nhEl.hidden = true;
+        nhEl.hidden = true; // the year's holidays are over; nothing to announce
       }
     }
   }
@@ -4005,9 +4083,101 @@
     renderSwatches(); // reset restores the default gradient — refresh the wallpaper panel
     applyWidgets(); // reset brings every left-column widget back
     renderAvatar(); // reset clears the name / avatar back to defaults
-    document.getElementById('modal-set').hidden = true;
+    hideModal(document.getElementById('modal-set'), false);
     showToast(t('toast.reset_done'));
     window.LT_CANVAS.reinitCanvas(); // reset clears layout coordinates, back to the default canvas
+  }
+
+  // ---------- Read-time sanitizers (boot + cloud pull + preview) ----------
+  // Storage can hold data from an older version, a buggy cloud pull or a hand-edited file. These
+  // guards never invent data and never drop legitimate fields — they only coerce shapes, drop
+  // structurally corrupt records and cap absurd lengths. Missing keys keep their default fallbacks
+  // (empty arrays stay empty: a user may have deleted everything). Shared by loadDataIntoState;
+  // doImport keeps its own stricter pass on top of the same rules.
+  function sanitizeGroups(raw) {
+    const seen = new Set();
+    const out = [];
+    for (const g of (Array.isArray(raw) ? raw : [])) {
+      if (!g || typeof g !== 'object') continue;
+      const name = typeof g.name === 'string' ? g.name.trim().slice(0, 16) : '';
+      if (!name) continue;
+      const id = (typeof g.id === 'string' && g.id) ? g.id : ('g_' + nid());
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, name });
+    }
+    return out;
+  }
+  function sanitizeCustomEngines(raw) {
+    if (!Array.isArray(raw)) return [];
+    const seen = new Set();
+    const out = [];
+    for (const e of raw) {
+      if (!e || typeof e !== 'object' || typeof e.name !== 'string' || typeof e.url !== 'string') continue;
+      if (!/^https?:\/\//i.test(e.url) || !e.url.includes('{q}')) continue;
+      const id = (typeof e.id === 'string' && e.id) ? e.id : ('u-' + nid());
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, name: e.name.slice(0, 12), url: e.url, color: safeColor(e.color) || '#3b82f6', custom: true });
+    }
+    return out;
+  }
+  function sanitizeHiddenEngines(raw) {
+    return Array.isArray(raw) ? raw.filter(id => ENGINES.some(x => x.id === id)) : [];
+  }
+  function sanitizeTodos(raw) {
+    if (!Array.isArray(raw)) return null; // null = key missing entirely -> caller default
+    const out = [];
+    for (const it of raw) {
+      if (!it || typeof it !== 'object' || typeof it.text !== 'string') continue;
+      const rec = { id: (typeof it.id === 'string' && it.id) ? it.id : nid(), text: it.text, done: !!it.done };
+      if (typeof it.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(it.due)) rec.due = it.due;
+      out.push(rec);
+    }
+    return out;
+  }
+  function sanitizePrompts(raw) {
+    if (!Array.isArray(raw)) return null;
+    const validTarget = id => allEngines().some(x => x.id === id);
+    return raw
+      .filter(p => p && typeof p === 'object' && typeof p.tmpl === 'string')
+      .slice(0, 100) // absurd lists are cut; the UI itself caps at 30
+      .map(p => ({
+        id: (typeof p.id === 'string' && p.id) ? p.id : nid(),
+        name: String(p.name || '').slice(0, 24) || t('toast.unnamed_tpl'),
+        tmpl: p.tmpl.slice(0, 4000),
+        hint: typeof p.hint === 'string' ? p.hint.slice(0, 60) : '',
+        targets: Array.isArray(p.targets) ? p.targets.filter(validTarget).slice(0, 4) : [],
+        wb: p.wb && typeof p.wb === 'object' ? p.wb : null
+      }));
+  }
+  // Items (shortcuts + folders). Non-http(s) URLs are unrenderable by design and can carry
+  // javascript: payloads from crafted files, so they are dropped; degenerate folders dissolve.
+  function sanitizeItems(raw, gids) {
+    if (!Array.isArray(raw)) return null;
+    const normUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) && u.length < 2000) ? u : '';
+    const normTitle = (s) => { const v = String(s || ''); return v.length > 500 ? v.slice(0, 500) : v; };
+    const normKid = (c) => {
+      if (!c || typeof c !== 'object') return null;
+      const url = normUrl(c.url);
+      if (!url) return null;
+      return { id: (typeof c.id === 'string' && c.id) ? c.id : nid(), title: normTitle(c.title) || t('toast.unnamed'), url, icon: sanitizeIconDataUrl(c.icon) || undefined, color: safeColor(c.color) || undefined };
+    };
+    const out = [];
+    for (const it of raw) {
+      if (!it || typeof it !== 'object') continue;
+      const group = gids.has(it.group) ? it.group : '';
+      if (it.type === 'folder') {
+        const kids = (Array.isArray(it.children) ? it.children : []).map(normKid).filter(Boolean).slice(0, 64);
+        if (kids.length < 2) { out.push(...kids.map(k => ({ ...k, group }))); continue; } // dissolve
+        out.push({ id: (typeof it.id === 'string' && it.id) ? it.id : nid(), type: 'folder', name: normTitle(it.name) || t('folder.default_name'), group, children: kids });
+        continue;
+      }
+      const url = normUrl(it.url);
+      if (!url) continue;
+      out.push({ id: (typeof it.id === 'string' && it.id) ? it.id : nid(), title: normTitle(it.title) || t('toast.unnamed'), url, group, icon: sanitizeIconDataUrl(it.icon) || undefined, color: safeColor(it.color) || undefined });
+    }
+    return out;
   }
 
   // ---------- Schema migrations ----------
@@ -4074,18 +4244,33 @@
     return cur;
   }
 
-  // Read storage -> migrate -> populate in-memory state. Read-only (never writes); also reused after a cloud-sync pull.
+  // Read storage -> migrate -> sanitize -> populate in-memory state. Read-only (never writes); also
+  // reused after a cloud-sync pull, where the payload arrives as raw JSON from the server.
   async function loadDataIntoState() {
     const raw = await Store.getAll();
     const data = migrateSchema(raw);
     state.settings = Object.assign(structuredClone(DEFAULT_SETTINGS), data.settings || {});
     state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
-    // An empty array is legitimate (the user deleted every shortcut); only a missing key falls back to the default set.
-    state.items = Array.isArray(data.items) ? data.items : structuredClone(DEFAULT_SITES);
+    // Read-time hardening: whatever survived migration (old versions, cloud pulls, hand-edited
+    // files) is coerced into shape before any renderer or submit path can touch it.
+    state.settings.groups = sanitizeGroups(state.settings.groups);
+    state.settings.customEngines = sanitizeCustomEngines(state.settings.customEngines);
+    state.settings.hiddenEngines = sanitizeHiddenEngines(state.settings.hiddenEngines);
+    const gids = new Set(state.settings.groups.map(g => g.id));
+    if (typeof state.settings.engine !== 'string' || !allEngines().some(x => x.id === state.settings.engine)) {
+      state.settings.engine = allEngines()[0].id;
+    }
+    // An empty array is legitimate (the user deleted every shortcut); only a missing key falls back
+    // to the default set — sanitizeItems mirrors that by returning null for a missing key.
+    const items = sanitizeItems(data.items, gids);
+    state.items = items !== null ? items : structuredClone(DEFAULT_SITES);
     state.wallpaper = pickWallpaperFromData(data.wallpaper);
-    state.todos = Array.isArray(data.todos) ? data.todos : [];
-    // Templates: an empty array is legitimate (the user deleted them all); only undefined falls back to the default set.
-    state.prompts = Array.isArray(data.prompts) ? data.prompts : structuredClone(DEFAULT_PROMPTS);
+    const todos = sanitizeTodos(data.todos);
+    state.todos = todos !== null ? todos : [];
+    // Templates: an empty array is legitimate (the user deleted them all); only undefined falls back
+    // to the default set.
+    const prompts = sanitizePrompts(data.prompts);
+    state.prompts = prompts !== null ? prompts : structuredClone(DEFAULT_PROMPTS);
     return { raw, data };
   }
 
@@ -4573,6 +4758,7 @@
     syncUI();
     bindGroupBar();
     bindFolderGlobal();
+    bindGridKeys();
     applyWidgets();
     applySearchVis(); // hide-search preference (the clock side is folded into applyWidgets)
     applyIconSizing(); // --icon-size / --icon-radius on :root
@@ -4630,7 +4816,8 @@
     // Keyboard shortcuts (never steal keys while focus is in a text-entry element).
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
-        document.querySelectorAll('.modal').forEach(m => m.hidden = true);
+        const openModals = [...document.querySelectorAll('.modal')].filter(m => !m.hidden);
+        openModals.forEach(m => hideModal(m));
         document.getElementById('engine-list').hidden = true;
         window.LT_PROMPTS.closePalette(false);
         dismissOnboarding();
@@ -4730,11 +4917,27 @@
   // Exposed for the offline probe harness: it has to drive port fallback and timeout paths with a
   // stubbed fetch, which is impossible from the outside.
   window.LT_PROBE_WB = probeWorkBuddy;
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord, formatClock, calcEval, normalizeCalc, updateHistory, histMatches, nextHoliday, daysUntil, normalizeCountdown, pomoInitial, pomoAdvance, tempTrendPoints };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord, formatClock, calcEval, normalizeCalc, updateHistory, histMatches, nextHoliday, daysUntil, normalizeCountdown, pomoInitial, pomoAdvance, tempTrendPoints, sanitizeGroups, sanitizeCustomEngines, sanitizeHiddenEngines, sanitizeTodos, sanitizePrompts, sanitizeItems };
 
+  // Boot resilience: a storage / extension-context failure mid-init must not leave a dead blank
+  // tab — surface the generic message (the toast survives because it is static DOM).
+  async function bootGuarded() {
+    try {
+      await boot();
+    } catch (err) {
+      console.error('[LightTab] boot failed', err);
+      try {
+        const box = document.getElementById('toast');
+        if (box) {
+          box.innerHTML = `<span>${escapeHtml(t('boot.fatal'))}</span>`;
+          box.hidden = false;
+        }
+      } catch (_) { /* toast unavailable: nothing more we can do */ }
+    }
+  }
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+    document.addEventListener('DOMContentLoaded', bootGuarded);
   } else {
-    boot();
+    bootGuarded();
   }
 })();

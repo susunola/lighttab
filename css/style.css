@@ -2752,3 +2752,30 @@ html[data-theme="light"] .todo-item.done .t-check::after { background: #fff; }
   font-size: 11px;
   color: var(--ink-3);
 }
+
+/* ---------- Keyboard / accessibility: a visible focus ring everywhere Tab can land ---------- */
+.card:focus-visible,
+.icon-btn:focus-visible,
+.engine-btn:focus-visible,
+.engine-go:focus-visible,
+.tpl-trigger:focus-visible,
+.gchip:focus-visible,
+.avatar-btn:focus-visible,
+.todo-submit:focus-visible,
+.wall-thumb:focus-visible,
+.fcard:focus-visible,
+.palette-list li:focus-visible,
+.suggest-list li:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+/* The shortcut dialog keeps its own focus affordances; don't double-ring inputs. */
+.modal input:focus-visible,
+.modal textarea:focus-visible,
+.modal select:focus-visible,
+.search input:focus-visible {
+  outline: none;
+}

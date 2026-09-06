@@ -63,6 +63,8 @@
     'cal.badge_work': { zh: '班', en: 'Work' },
     'cal.next_holiday': { zh: '下一个假期：{name} · 还有 {n} 天', en: 'Next holiday: {name} · in {n} days' },
     'cal.holiday_today': { zh: '今天是{name}，好好享受', en: 'Today is {name} — enjoy it' },
+    'cal.data_stale': { zh: '节假日安排数据更新至 {y} 年，官方发布新年安排后请更新扩展', en: 'Holiday schedule data covers {y} — update the extension once the new official schedule is out' },
+    'boot.fatal':      { zh: '页面初始化失败，请刷新重试', en: 'Failed to initialize — please refresh' },
 
     // ---------- Weather widget (opt-in, Open-Meteo) ----------
     'weather.set_city':    { zh: '设置城市，查看天气', en: 'Set a city to see the weather' },
