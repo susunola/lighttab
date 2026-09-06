@@ -565,6 +565,12 @@ assert(/if \(!l \|\| l\.auto === false\) return; \/\/ a hand-dragged/.test(canva
 // schema migration: the old single clockPos must move smoothly into widgetPos
 assert(/const SCHEMA_VERSION = 5;/.test(appSrc), 'SCHEMA_VERSION bumped to 5 (folders)');
 assert(/3: \(d\) => \{/.test(appSrc), 'MIGRATIONS contains v3→v4');
+// Fresh profiles have no lt.items at all: migrations must NOT materialize a missing items key into
+// an empty array, or loadDataIntoState would keep the [] instead of falling back to DEFAULT_SITES.
+assert(/if \(Array\.isArray\(d\.items\)\) d\.items = d\.items\.map/.test(appSrc),
+  'migration v1→v2 leaves a missing items key untouched (fresh-profile default set)');
+assert(/if \(Array\.isArray\(d\.items\)\) d\.items = d\.items\.flatMap/.test(appSrc),
+  'migration v4→v5 leaves a missing items key untouched (fresh-profile default set)');
 assert(/delete st\.clockPos/.test(appSrc), 'old clockPos field is deleted after migration');
 assert(/state\.settings\.widgetPos = normalizeWidgetPos\(state\.settings\.widgetPos\)/.test(appSrc),
   'doImport validates widgetPos');

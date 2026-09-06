@@ -3850,7 +3850,9 @@
       const s = d.settings || {};
       if (!Array.isArray(s.groups)) s.groups = [];
       d.settings = s;
-      d.items = (d.items || []).map(it => {
+      // Missing items must stay missing — materializing [] here would rob fresh profiles of the
+      // default shortcut set (loadDataIntoState only defaults on a MISSING key, not an empty array).
+      if (Array.isArray(d.items)) d.items = d.items.map(it => {
         const c = { ...it };
         if (typeof c.group !== 'string') c.group = '';
         return c;
@@ -3882,7 +3884,8 @@
     // shortcuts; the folder itself holds the group). Hand-edited / foreign folders are normalized;
     // degenerate folders (< 2 valid kids) dissolve back into plain shortcuts.
     4: (d) => {
-      d.items = (d.items || []).flatMap(it => normalizeFolderRecord(it, t('folder.default_name')));
+      // Same guard as v1: never materialize a missing items key into an empty array here.
+      if (Array.isArray(d.items)) d.items = d.items.flatMap(it => normalizeFolderRecord(it, t('folder.default_name')));
       return d;
     }
   };
