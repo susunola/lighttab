@@ -464,6 +464,12 @@ assert(/function engLogoHtml/.test(appSrc), 'app.js defines engLogoHtml()');
 assert(/ENG_ICON_HOST = \{[^}]*baidu: 'baidu\.com'/.test(appSrc) && /openai: 'openai\.com'/.test(appSrc), 'engine-to-icon-library host mapping is complete');
 assert(!/eng-dot/.test(appSrc) && !/eng-dot/.test(cssSrc) && !/eng-dot/.test(html), 'the old eng-dot color dots are gone');
 assert(/\.eng-logo \{/.test(cssSrc) && /\.eng-letter \{/.test(cssSrc), 'CSS defines .eng-logo / .eng-letter');
+// WorkBuddy ships a bundled logo instead of a letter tile (no public site icon to reuse)
+assert(fs.existsSync(path.join(ROOT, 'assets/engines/workbuddy.png')), 'bundled WorkBuddy engine logo exists');
+assert(/e\.id === 'wbai'[^\n]*assets\/engines\/workbuddy\.png/.test(appSrc.replace(/\s+/g, ' ')) ||
+       /'wbai'\)[\s\S]{0,200}assets\/engines\/workbuddy\.png/.test(appSrc),
+  'engLogoHtml special-cases wbai with the bundled logo');
+assert(/\.eng-logo img \{/.test(cssSrc), 'CSS defines .eng-logo img sizing');
 // Search engine management: custom add + built-in removable (undo), all going through the allEngines() runtime list
 assert(/function allEngines\(\)/.test(appSrc) && /allEngines,/.test(appSrc), 'allEngines() is defined and exported to LT_APP');
 assert(/customEngines: \[\]/.test(appSrc) && /hiddenEngines: \[\]/.test(appSrc), 'DEFAULT_SETTINGS contains customEngines/hiddenEngines');

@@ -969,7 +969,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   color: var(--ink); /* currentColor fallback for near-black brand marks (GitHub) */
 }
 .eng-logo svg { width: 100%; height: 100%; display: block; }
-/* Engines without a brand-icon entry (Bing, Sogou, WorkBuddy) get a letter tile,
+/* Bundled engine logos (WorkBuddy) render as an <img>; contain keeps the mark intact. */
+.eng-logo img { width: 100%; height: 100%; object-fit: contain; display: block; border-radius: 4px; }
+/* Engines without a brand-icon entry (Bing, Sogou) get a letter tile,
  * same language as the icon grid's fallback. */
 .eng-letter {
   border-radius: 4.5px;

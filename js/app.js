@@ -787,13 +787,15 @@
     return ENGINES.filter(e => !hidden.has(e.id)).concat(custom);
   }
   // Engine logos: reuse the brand-icon library where an entry exists (Baidu, Google, GitHub,
-  // bilibili, Doubao, ChatGPT); engines without one (Bing, Sogou, WorkBuddy) get a
-  // brand-coloured letter tile — the same fallback language as the icon grid.
+  // bilibili, Doubao, ChatGPT); WorkBuddy ships a bundled logo (assets/engines/); the rest
+  // (Bing, Sogou) get a brand-coloured letter tile — the same fallback language as the icon grid.
   const ENG_ICON_HOST = {
     baidu: 'baidu.com', google: 'google.com', github: 'github.com',
     bilibili: 'bilibili.com', doubao: 'doubao.com', openai: 'openai.com'
   };
   function engLogoHtml(e) {
+    // WorkBuddy is a desktop deep link with no site icon to reuse — it ships a bundled logo.
+    if (e.id === 'wbai') return '<span class="eng-logo eng-img"><img src="assets/engines/workbuddy.png" alt=""></span>';
     // Try the engine's own URL host first (works for user-added engines too, e.g. a custom
     // Perplexity entry gets the real logo), then the id→host map, then a letter tile.
     const icon = iconFor(e.url) || (ENG_ICON_HOST[e.id] ? iconFor('https://' + ENG_ICON_HOST[e.id]) : null);

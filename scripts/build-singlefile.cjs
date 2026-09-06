@@ -29,6 +29,10 @@ html = html.replace(/<script src="(js\/[^"]+)"><\/script>/g, (m, src) => {
 const wall = fs.readFileSync(path.join(ROOT, 'assets/wallpaper-dusk.jpg'));
 html = html.replaceAll('assets/wallpaper-dusk.jpg', 'data:image/jpeg;base64,' + wall.toString('base64'));
 
+// Same for the bundled WorkBuddy engine logo.
+const wbLogo = fs.readFileSync(path.join(ROOT, 'assets/engines/workbuddy.png'));
+html = html.replaceAll('assets/engines/workbuddy.png', 'data:image/png;base64,' + wbLogo.toString('base64'));
+
 // Same for the bundled variable font: the inlined <style> resolves relative URLs against the
 // document, not the stylesheet, so '../assets/…' would break outside the repo layout.
 const font = fs.readFileSync(path.join(ROOT, 'assets/fonts/inter-var-latin.woff2'));
