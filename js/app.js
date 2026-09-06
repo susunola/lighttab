@@ -1200,6 +1200,7 @@
   let suggestNav = [];        // keyboard-selectable union: {kind:'site'} rows + {kind:'net'} rows
   let suggestHl = -1;         // highlighted index into suggestNav (-1 = the raw input)
   let suggestTyped = '';      // the raw input text, restored when the highlight returns to -1
+  let suggestBusy = false;    // a network suggestion request is in flight (drives the loading row)
   let suggestTimer = 0;       // debounce timer
   let suggestBlurTimer = 0;   // delayed close on blur (so a row click lands first)
   let suggestFetchSeq = 0;    // stale-response guard
@@ -1217,6 +1218,7 @@
     suggestItems = [];
     suggestNav = [];
     suggestHl = -1;
+    suggestBusy = false;
     const list = suggestListEl();
     if (list) list.hidden = true;
   }
@@ -1275,7 +1277,10 @@
     const calc = currentCalc();
     const hist = currentHistRows();
     const sites = buildSuggestNav();
-    if (!calc && !hist.length && !sites.length && !suggestItems.length) { list.hidden = true; return; }
+    // While a network fetch is in flight the dropdown stays open with a quiet loading row —
+    // otherwise a slow engine looks like nothing happened.
+    const pending = suggestBusy && suggestProvider() !== null;
+    if (!pending && !calc && !hist.length && !sites.length && !suggestItems.length) { list.hidden = true; return; }
     if (suggestHl > suggestNav.length - 1) suggestHl = suggestNav.length - 1;
     let html = '';
     // Top row: the inline calculator result (local rows always sit above network suggestions).
@@ -1296,7 +1301,11 @@
       const ni = sites.length + i;
       return `<li role="option" data-n="${ni}" class="${ni === suggestHl ? 'active' : ''}" aria-selected="${ni === suggestHl}">${escapeHtml(s)}</li>`;
     }).join('');
+    if (pending) {
+      html += `<li class="sg-loading" role="presentation" aria-hidden="true"><span class="sg-dot"></span><span class="sg-dot"></span><span class="sg-dot"></span></li>`;
+    }
     list.innerHTML = html;
+    list.setAttribute('aria-busy', pending ? 'true' : 'false');
     list.hidden = false;
   }
   function setSuggestHl(i) {
@@ -1323,9 +1332,12 @@
       return;
     }
     const seq = ++suggestFetchSeq;
+    suggestBusy = true;
+    renderSuggest(); // open the dropdown with the loading row (other local rows stay visible)
     try {
       const raw = await jsonp((cb) => provider.url(q, cb));
-      // A newer keystroke (or a close) superseded this request — discard quietly.
+      // A newer keystroke (or a close) superseded this request — discard quietly (the newer
+      // request keeps suggestBusy true; the finally below only clears it for the latest one).
       if (seq !== suggestFetchSeq) return;
       const items = provider.parse(raw).filter(s => typeof s === 'string' && s.trim()).slice(0, SUGGEST_MAX);
       suggestCache.set(key, items);
@@ -1335,6 +1347,8 @@
       renderSuggest(); // empty items only drop the network rows; calc / history rows stay up
     } catch {
       // Timeouts, blocked networks and engines that never call back all end here: just stay silent.
+    } finally {
+      if (seq === suggestFetchSeq) { suggestBusy = false; renderSuggest(); }
     }
   }
   // Tab / Shift+Tab in the search box cycles the engine instead of moving focus.
@@ -3580,7 +3594,8 @@
         '<div class="movie-body">' +
           '<div class="movie-title">' + esc(m.zh) + '<span class="movie-year">' + m.y + '</span></div>' +
           '<div class="movie-en">' + esc(m.en) + '</div>' +
-          '<div class="movie-genre">' + esc(m.genre) + '</div>' +
+          // Genre strings are curated in Chinese only — like the blurb, hidden in the English UI.
+          (!isEn() ? '<div class="movie-genre">' + esc(m.genre) + '</div>' : '') +
           // The blurbs are curated in Chinese only; an English UI hides them rather than
           // surfacing a Chinese quote (the title/year/genre row above stays bilingual).
           (!isEn() ? '<p class="movie-blurb">' + esc(m.blurb) + '</p>' : '') +

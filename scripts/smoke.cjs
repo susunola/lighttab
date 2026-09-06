@@ -926,7 +926,7 @@ assert(/\.quote \.quote-text \{[^}]*font-size: 13px/.test(cssSrc), 'quote body t
 // ---------- 15) search suggestions (JSONP dropdown) ----------
 console.log('[15] search suggestions');
 // Static structure: the dropdown lives inside #search; the settings toggle sits in the General pane
-assert(/<ul id="suggest-list" class="suggest-list" role="listbox" hidden><\/ul>/.test(html), 'newtab.html contains the #suggest-list dropdown');
+assert(/<ul id="suggest-list" class="suggest-list" role="listbox"[^>]*hidden><\/ul>/.test(html), 'newtab.html contains the #suggest-list dropdown');
 assert(/<input type="checkbox" id="f-suggest" checked>/.test(html), 'settings page contains the #f-suggest checkbox (statically on, matching DEFAULT_SETTINGS)');
 assert(/data-i18n="gen\.suggest"/.test(html), 'suggest label carries data-i18n="gen.suggest"');
 assert(/data-i18n="gen\.suggest_tip"/.test(html), 'suggest tip carries data-i18n="gen.suggest_tip"');
@@ -1722,6 +1722,13 @@ assert(/function bindModalTrap\(\)/ .test(appSrc) && /bindModalTrap\(\);/.test(a
   'an open modal traps Tab / Shift+Tab inside it (a11y)');
 assert(/!isEn\(\) \? '<p class="movie-blurb">'/.test(appSrc),
   'the zh-only movie blurb is hidden in the English UI');
+assert(/!isEn\(\) \? '<div class="movie-genre">'/.test(appSrc),
+  'the zh-only movie genre is hidden in the English UI');
+assert(/let suggestBusy = false;/.test(appSrc) && /<li class="sg-loading" role="presentation" aria-hidden="true">/.test(appSrc)
+  && /setAttribute\('aria-busy'/.test(appSrc), 'suggestion dropdown shows a loading row while fetching');
+assert(/aria-live="polite" aria-busy="false"/.test(html), 'suggest dropdown announces results (aria-live)');
+assert(/\.sg-loading \{/.test(cssSrc), 'CSS styles the suggestion loading row');
+assert(/@keyframes sg-pulse/.test(cssSrc), 'CSS animates the loading dots');
 
 // ---------- 27) sync.js behavior: whole-document LWW + deletion mirroring ----------
 // applyPull/pushDirty are async, so this section (and the final summary/exit below) runs inside an
