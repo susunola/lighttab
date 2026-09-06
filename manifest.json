@@ -11,7 +11,8 @@
     "storage"
   ],
   "optional_permissions": [
-    "bookmarks"
+    "bookmarks",
+    "tabs"
   ],
   "content_scripts": [
     {

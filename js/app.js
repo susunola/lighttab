@@ -75,6 +75,14 @@
     clockSeconds: false,
     // Clock face font: 'modern' (bundled Inter, default) | 'serif' | 'mono' (system stacks, zero downloads).
     clockFont: 'modern',
+    // Minimalism toggles: true removes the search bar / clock card from the layout entirely
+    // (display:none, not just opacity — the icon grid simply rides up when both are hidden).
+    hideSearch: false,
+    hideClock: false,
+    // Icon tile geometry, driven by the Settings → General sliders onto the --icon-size /
+    // --icon-radius CSS custom properties. 64px tiles with a 28% corner radius are the shipped look.
+    iconSize: 64,
+    iconRadius: 28,
     wallpaper: { ...BUNDLED_WALL },
     // Daily Bing wallpaper auto-rotate: when on, one Bing daily image from the local pool is
     // applied per calendar day. Manual picks always win for the rest of that day.
@@ -1230,7 +1238,7 @@
       if (seq !== suggestFetchSeq) return;
       const items = provider.parse(raw).filter(s => typeof s === 'string' && s.trim()).slice(0, SUGGEST_MAX);
       suggestCache.set(key, items);
-      if (document.getElementById('q').value.trim() !== q) return; // input moved on meanwhile
+      if ((document.getElementById('q')?.value || '').trim() !== q) return; // input moved on meanwhile
       suggestItems = items;
       suggestHl = -1;
       renderSuggest(); // empty items only drop the network rows; calc / history rows stay up
@@ -2191,6 +2199,11 @@
     const iconInput = document.getElementById('f-icon');
     if (iconInput) iconInput.value = '';
     renderIconPreview();
+    // "Add current tab" is offered only when adding (not editing) and only in extension mode —
+    // the preview-mode detection mirrors the bookmarks import: chrome.permissions / chrome.tabs
+    // simply do not exist under file://.
+    const curtabBtn = document.getElementById('f-curtab');
+    if (curtabBtn) curtabBtn.hidden = !!id || !(window.chrome && chrome.permissions && chrome.tabs);
     modal.hidden = false;
     setTimeout(() => form.elements['title'].focus(), 30);
   }
@@ -2254,6 +2267,8 @@
       pendingIcon = null;
       renderIconPreview();
     });
+    const curtabBtn = document.getElementById('f-curtab');
+    if (curtabBtn) curtabBtn.addEventListener('click', fillFromCurrentTab);
     ['f-url', 'f-title'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', renderIconPreview);
@@ -2428,6 +2443,10 @@
     state.settings.clock12h = state.settings.clock12h === true;
     state.settings.clockSeconds = state.settings.clockSeconds === true;
     state.settings.clockFont = CLOCK_FONTS.includes(state.settings.clockFont) ? state.settings.clockFont : 'modern';
+    state.settings.hideSearch = state.settings.hideSearch === true;
+    state.settings.hideClock = state.settings.hideClock === true;
+    state.settings.iconSize = clampIcon(state.settings.iconSize, ICON_SIZE_MIN, ICON_SIZE_MAX, DEFAULT_SETTINGS.iconSize);
+    state.settings.iconRadius = clampIcon(state.settings.iconRadius, ICON_RADIUS_MIN, ICON_RADIUS_MAX, DEFAULT_SETTINGS.iconRadius);
     state.settings.countdown = normalizeCountdown(state.settings.countdown);
     // Imported engine lists get the same validation as the add form: customs must be well-formed
     // http(s) URLs carrying {q}; hidden ids must name real built-ins.
@@ -2494,13 +2513,35 @@
     renderMovie(); // an import may switch the language, which the movie card renders in
     renderSwatches(); // refresh wallpaper labels/active state in the (possibly new) language
     applyWidgets(); // an import may bring in a different left-column widget selection
+    applySearchVis(); // ... or the hide-search preference
+    applyIconSizing(); // ... or custom icon tile geometry
     renderAvatar(); // an import may carry a different name / avatar
     showToast(t('toast.import_done', { items: state.items.length, todos: state.todos.length }));
     window.LT_CANVAS.reinitCanvas(); // an import may bring in or clear layout coordinates, so resync the canvas
   }
+  // Add current tab (shortcut dialog, extension mode only): prefill name + URL from the browser's
+  // active tab. The "tabs" permission is optional and requested on demand, inside this user gesture
+  // — same pattern as the bookmarks import below. Without it chrome.tabs.query returns the active
+  // tab stripped of title/url, so the permission is ensured before querying.
+  async function fillFromCurrentTab() {
+    if (!window.chrome || !chrome.permissions || !chrome.tabs) return; // preview mode: the button is hidden anyway
+    let granted = false;
+    try { granted = await chrome.permissions.contains({ permissions: ['tabs'] }); } catch { granted = false; }
+    if (!granted) {
+      try { granted = await chrome.permissions.request({ permissions: ['tabs'] }); } catch { granted = false; }
+    }
+    if (!granted) { showToast(t('toast.tabs_denied')); return; }
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs && tabs[0];
+    if (!tab || !tab.url) return;
+    const form = document.getElementById('site-form');
+    form.elements['title'].value = String(tab.title || hostnameOf(tab.url) || '').slice(0, 32);
+    form.elements['url'].value = tab.url;
+    renderIconPreview();
+  }
+
   // Import from bookmarks: uses the optional "bookmarks" permission, requested on first click.
-  async function importBookmarks() {
-    // Only detect preview mode (no extension APIs here). chrome.bookmarks simply does not exist until the
+  async function importBookmarks() {    // Only detect preview mode (no extension APIs here). chrome.bookmarks simply does not exist until the
     // permission is granted, which is handled by the request branch below.
     if (!window.chrome || !chrome.permissions) {
       showToast(t('toast.bookmarks_unavailable'));
@@ -2652,6 +2693,46 @@
       await Store.set(K.settings, state.settings);
       applyClockFont(); // class-only change, no redraw needed
     });
+    // Hide search bar / hide clock (General): both default off. Hiding uses the [hidden] attribute
+    // (display:none), so the layout closes up — the icon grid simply rides up when both are gone.
+    const hideSearchCb = document.getElementById('f-hidesearch');
+    if (hideSearchCb) hideSearchCb.addEventListener('change', async () => {
+      state.settings.hideSearch = !!hideSearchCb.checked;
+      await Store.set(K.settings, state.settings);
+      closeSuggest(); // a hidden box can hold no open dropdown
+      applySearchVis();
+    });
+    const hideClockCb = document.getElementById('f-hideclock');
+    if (hideClockCb) hideClockCb.addEventListener('change', async () => {
+      state.settings.hideClock = !!hideClockCb.checked;
+      await Store.set(K.settings, state.settings);
+      applyWidgets(); // clock visibility is computed there, together with the widget registry
+    });
+    // Icon size / corner radius sliders (General): live-preview on input, persist on change.
+    const iconSizeRg = document.getElementById('f-iconsize');
+    const iconRadiusRg = document.getElementById('f-iconradius');
+    const syncIconRangeVals = () => {
+      const sv = document.getElementById('f-iconsize-val');
+      if (sv && iconSizeRg) sv.textContent = iconSizeRg.value + 'px';
+      const rv = document.getElementById('f-iconradius-val');
+      if (rv && iconRadiusRg) rv.textContent = iconRadiusRg.value + '%';
+    };
+    if (iconSizeRg) {
+      iconSizeRg.addEventListener('input', () => {
+        state.settings.iconSize = clampIcon(iconSizeRg.value, ICON_SIZE_MIN, ICON_SIZE_MAX, DEFAULT_SETTINGS.iconSize);
+        applyIconSizing();
+        syncIconRangeVals();
+      });
+      iconSizeRg.addEventListener('change', () => Store.set(K.settings, state.settings));
+    }
+    if (iconRadiusRg) {
+      iconRadiusRg.addEventListener('input', () => {
+        state.settings.iconRadius = clampIcon(iconRadiusRg.value, ICON_RADIUS_MIN, ICON_RADIUS_MAX, DEFAULT_SETTINGS.iconRadius);
+        applyIconSizing();
+        syncIconRangeVals();
+      });
+      iconRadiusRg.addEventListener('change', () => Store.set(K.settings, state.settings));
+    }
     // Wallpaper daily auto-rotate toggle (Wallpaper pane). Turning it on clears today's marker so the
     // very first rotate applies immediately instead of being blocked by an earlier manual pick.
     const wallRotCb = document.getElementById('f-wall-rotate');
@@ -2688,6 +2769,18 @@
       if (clockSecCb) clockSecCb.checked = state.settings.clockSeconds === true;
       const clockFontSel = document.getElementById('f-clockfont');
       if (clockFontSel) clockFontSel.value = CLOCK_FONTS.includes(state.settings.clockFont) ? state.settings.clockFont : 'modern';
+      const hideSearchCb = document.getElementById('f-hidesearch');
+      if (hideSearchCb) hideSearchCb.checked = state.settings.hideSearch === true;
+      const hideClockCb = document.getElementById('f-hideclock');
+      if (hideClockCb) hideClockCb.checked = state.settings.hideClock === true;
+      const iconSizeRg = document.getElementById('f-iconsize');
+      if (iconSizeRg) iconSizeRg.value = clampIcon(state.settings.iconSize, ICON_SIZE_MIN, ICON_SIZE_MAX, DEFAULT_SETTINGS.iconSize);
+      const iconRadiusRg = document.getElementById('f-iconradius');
+      if (iconRadiusRg) iconRadiusRg.value = clampIcon(state.settings.iconRadius, ICON_RADIUS_MIN, ICON_RADIUS_MAX, DEFAULT_SETTINGS.iconRadius);
+      const iconSizeVal = document.getElementById('f-iconsize-val');
+      if (iconSizeVal && iconSizeRg) iconSizeVal.textContent = iconSizeRg.value + 'px';
+      const iconRadiusVal = document.getElementById('f-iconradius-val');
+      if (iconRadiusVal && iconRadiusRg) iconRadiusVal.textContent = iconRadiusRg.value + '%';
       const wallSrcSel = document.getElementById('f-wall-src');
       if (wallSrcSel) wallSrcSel.value = wallLibSource;
       if (tab === 'wall' && wallLibImages === null) fetchWallLib(); // warm the pool (cached fallback when offline)
@@ -3324,6 +3417,24 @@
     return '<svg class="weather-fc-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
       (up ? '<polyline points="6 15 12 9 18 15"/>' : '<polyline points="6 9 12 15 18 9"/>') + '</svg>';
   }
+  // 7-day temperature trend sparkline (expanded forecast): two polylines (hi / lo) scaled into a
+  // w×h viewBox — no library. Padding keeps the first/last points off the edges; a flat week
+  // (hi === lo everywhere) parks both lines at mid-height instead of dividing by zero.
+  // Pure helper, exported to LT_PURE for the offline smoke checks.
+  function tempTrendPoints(daily, w, h) {
+    if (!Array.isArray(daily) || !daily.length) return null;
+    const pts = daily.filter(d => d && Number.isFinite(d.hi) && Number.isFinite(d.lo));
+    if (!pts.length) return null;
+    const pad = 4;
+    const min = Math.min(...pts.map(d => d.lo));
+    const max = Math.max(...pts.map(d => d.hi));
+    const span = max - min;
+    const x = (i) => pts.length === 1 ? w / 2 : pad + (w - 2 * pad) * i / (pts.length - 1);
+    const y = (v) => span === 0 ? h / 2 : pad + (h - 2 * pad) * (1 - (v - min) / span);
+    const fmt = (n) => Math.round(n * 10) / 10;
+    const line = (key) => pts.map((d, i) => fmt(x(i)) + ',' + fmt(y(d[key]))).join(' ');
+    return { hi: line('hi'), lo: line('lo') };
+  }
   // Forecast strip below the current conditions. Old caches carry no `daily` yet — the
   // Array.isArray guard renders no strip then, and the next refresh upgrades the data.
   function weatherForecastHtml(last) {
@@ -3341,7 +3452,14 @@
       return '<button type="button" class="weather-fc weather-mini" id="weather-fc-toggle" aria-expanded="false" aria-label="' +
         escapeHtml(t('weather.expand')) + '">' + cells + weatherCaret(false) + '</button>';
     }
-    // Expanded: the full week, one row per day, today first.
+    // Expanded: the full week — a hi/lo temperature trend sparkline first, then one row per day.
+    const trend = tempTrendPoints(daily, 280, 44);
+    const trendHtml = trend
+      ? '<svg class="weather-trend" viewBox="0 0 280 44" preserveAspectRatio="none" aria-hidden="true">' +
+        '<polyline class="weather-trend-lo" points="' + trend.lo + '"/>' +
+        '<polyline class="weather-trend-hi" points="' + trend.hi + '"/>' +
+        '</svg>'
+      : '';
     const rows = daily.map((d, i) =>
       '<div class="weather-fc-row">' +
         '<span class="weather-fc-date">' + escapeHtml(d.date.slice(5)) + '</span>' +
@@ -3349,7 +3467,7 @@
         '<span class="weather-fc-ico">' + weatherIcon(d.code) + '</span>' +
         '<span class="weather-fc-temp">' + d.lo + '° — ' + d.hi + '°</span>' +
       '</div>').join('');
-    return '<div class="weather-fc weather-forecast">' + rows +
+    return '<div class="weather-fc weather-forecast">' + trendHtml + rows +
       '<button type="button" class="weather-fc-toggle" id="weather-fc-toggle" aria-expanded="true" aria-label="' +
       escapeHtml(t('weather.collapse')) + '">' + weatherCaret(true) + '</button></div>';
   }
@@ -3814,6 +3932,8 @@
     renderTodos();
     renderCalendar();
     applyWidgets(); // a remote pull may have removed / restored left-column widgets
+    applySearchVis(); // ... or flipped the hide-search preference
+    applyIconSizing(); // ... or changed the icon tile geometry
     startClock(); // greeting/name may have been updated remotely
     renderAvatar(); // a remote pull may have brought a different name / avatar
     maybeAutoRotate(); // a remote settings flip may have just enabled the daily rotate
@@ -4087,16 +4207,19 @@
     applyWidgetPos();
     for (const id of WIDGETS) {
       const el = document.querySelector('.widget.' + id);
-      if (el) el.hidden = !vis[id];
+      // The hideClock preference (Settings → General) hides the clock card on top of the registry.
+      if (el) el.hidden = !vis[id] || (id === 'wclock' && state.settings.hideClock === true);
       const box = document.getElementById('f-w-' + id);
       if (box) box.checked = vis[id];
     }
     // All three gone → drop the column entirely so .right (flex:1) reclaims the full width.
-    // A clock lifted above the search box no longer counts towards keeping the column alive.
+    // A clock lifted above the search box no longer counts towards keeping the column alive,
+    // and neither does a clock hidden via the hideClock preference.
     const left = document.querySelector('.layout > .left');
     if (left) {
       left.hidden = !WIDGETS.some((id) =>
-        vis[id] && document.querySelector('.widget.' + id)?.closest('.left'));
+        vis[id] && !(id === 'wclock' && state.settings.hideClock === true) &&
+        document.querySelector('.widget.' + id)?.closest('.left'));
     }
     // In free-canvas mode the block coordinates are frozen: toggling a widget without a reflow
     // leaves a hole where it was — and a revived widget may have no coords at all and park at the
@@ -4150,6 +4273,33 @@
     // The clock renders a different date line per placement, and its tick only rewrites text when the
     // day rolls over — so force a redraw whenever the placement changes.
     if (clockTimer) startClock();
+  }
+  // ---------- Hide search bar / hide clock + icon tile sizing ----------
+  // Hiding removes the element from the layout entirely (the [hidden] attribute wins over any
+  // display rule, see style.css) — the remaining content just closes up. #search keeps living in
+  // the DOM, so every search code path (suggestions, Tab engine-cycling, the boot focus) stays
+  // valid: the listeners sit inside the hidden box and can never fire, and readers of #q still
+  // find the element. Clock visibility is computed in applyWidgets together with the registry.
+  function applySearchVis() {
+    const search = document.getElementById('search');
+    if (search) search.hidden = state.settings.hideSearch === true;
+    // In free-canvas mode removing a block leaves a hole in the frozen coordinates — re-measure
+    // (a no-op in flow layout, which reflows on its own).
+    window.LT_CANVAS.recaptureBlocksFromFlow(true);
+  }
+  // Slider bounds (Settings → General): keep them in one place so doImport clamps to the same range.
+  const ICON_SIZE_MIN = 48, ICON_SIZE_MAX = 80, ICON_RADIUS_MIN = 20, ICON_RADIUS_MAX = 50;
+  function clampIcon(v, lo, hi, dflt) {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
+  }
+  // Push settings.iconSize / iconRadius onto :root as --icon-size / --icon-radius; every tile
+  // consumer (.card .ico, folder mini-grids, the add tile) derives from those custom properties.
+  function applyIconSizing() {
+    const size = clampIcon(state.settings.iconSize, ICON_SIZE_MIN, ICON_SIZE_MAX, DEFAULT_SETTINGS.iconSize);
+    const radius = clampIcon(state.settings.iconRadius, ICON_RADIUS_MIN, ICON_RADIUS_MAX, DEFAULT_SETTINGS.iconRadius);
+    document.documentElement.style.setProperty('--icon-size', size + 'px');
+    document.documentElement.style.setProperty('--icon-radius', radius + '%');
   }
   // Remove one widget, with an undo toast — same affordance as deleting a shortcut card.
   function removeWidget(id) {
@@ -4232,7 +4382,9 @@
     // Focus the search box without scrolling: the HTML autofocus attribute makes the browser
     // scroll the input into view, which pushes the topbar off-screen on short/narrow windows.
     const qInput = document.getElementById('q');
-    if (qInput) qInput.focus({ preventScroll: true });
+    // Focusing a display:none input is a harmless no-op, but skip it explicitly when the search
+    // bar is hidden so no scroll/focus side effect can ever reach the hidden box.
+    if (qInput && state.settings.hideSearch !== true) qInput.focus({ preventScroll: true });
     // If migration changed the version, write back: schema plus every key the migration filled in or rewrote, keeping disk and memory consistent.
     if ((Number(raw.schema) || 1) !== SCHEMA_VERSION) {
       Store.set(K.schema, SCHEMA_VERSION);
@@ -4250,6 +4402,8 @@
     bindGroupBar();
     bindFolderGlobal();
     applyWidgets();
+    applySearchVis(); // hide-search preference (the clock side is folded into applyWidgets)
+    applyIconSizing(); // --icon-size / --icon-radius on :root
     bindWidgetControls();
     startClock();
     renderCalendar();
@@ -4404,7 +4558,7 @@
   // Exposed for the offline probe harness: it has to drive port fallback and timeout paths with a
   // stubbed fetch, which is impossible from the outside.
   window.LT_PROBE_WB = probeWorkBuddy;
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord, formatClock, calcEval, normalizeCalc, updateHistory, histMatches, nextHoliday, daysUntil, normalizeCountdown, pomoInitial, pomoAdvance };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord, formatClock, calcEval, normalizeCalc, updateHistory, histMatches, nextHoliday, daysUntil, normalizeCountdown, pomoInitial, pomoAdvance, tempTrendPoints };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

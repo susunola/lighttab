@@ -274,6 +274,9 @@
           <span data-i18n="site.url">URL</span>
           <input id="f-url" name="url" type="text" data-i18n-ph="site.url_ph" placeholder="https://github.com" required>
         </label>
+        <!-- Extension mode only: prefill from the browser's active tab (optional "tabs" permission,
+             requested on click). Hidden in the file:// preview and in edit mode (see openSiteModal). -->
+        <button type="button" class="btn ghost sm curtab-btn" id="f-curtab" data-i18n="site.add_current_tab" hidden>Add current tab</button>
         <label id="f-group-row" hidden>
           <span data-i18n="site.group">Group</span>
           <select id="f-group"></select>
@@ -413,6 +416,26 @@
               <option value="serif" data-i18n="clockfont.serif">Serif</option>
               <option value="mono" data-i18n="clockfont.mono">Mono</option>
             </select>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="f-hidesearch">
+            <span data-i18n="gen.hidesearch">Hide search bar</span>
+          </label>
+          <p class="form-tip" data-i18n="gen.hidesearch_tip">Removes the search bar from the layout; the icon grid moves up. Turn it back on any time.</p>
+          <label class="check-row">
+            <input type="checkbox" id="f-hideclock">
+            <span data-i18n="gen.hideclock">Hide clock</span>
+          </label>
+          <p class="form-tip" data-i18n="gen.hideclock_tip">Hides the clock card (left column or above the search box); turn it back on to restore.</p>
+          <label class="range-row">
+            <span data-i18n="gen.iconsize">Icon size</span>
+            <input type="range" id="f-iconsize" min="48" max="80" step="2" value="64">
+            <span class="range-val" id="f-iconsize-val">64px</span>
+          </label>
+          <label class="range-row">
+            <span data-i18n="gen.iconradius">Icon corner radius</span>
+            <input type="range" id="f-iconradius" min="20" max="50" step="1" value="28">
+            <span class="range-val" id="f-iconradius-val">28%</span>
           </label>
           <div class="wgt-zone">
             <span class="data-label" data-i18n="gen.widgets">Widgets</span>

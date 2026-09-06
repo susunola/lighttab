@@ -220,6 +220,7 @@
     'site.tip':    { zh: '知名站点自动匹配内置品牌图标；未收录站点显示首字图标。拖拽卡片可重新排序。', en: 'Known sites get brand icons automatically; others show an initial. Drag cards to reorder.' },
     'site.cancel': { zh: '取消', en: 'Cancel' },
     'site.save':   { zh: '保存', en: 'Save' },
+    'site.add_current_tab': { zh: '添加当前标签页', en: 'Add current tab' },
 
     // #50 custom per-card icon (shortcut modal)
     'icon.label':  { zh: '图标', en: 'Icon' },
@@ -283,6 +284,12 @@
     'clockfont.modern': { zh: '现代', en: 'Modern' },
     'clockfont.serif':  { zh: '衬线', en: 'Serif' },
     'clockfont.mono':   { zh: '等宽', en: 'Mono' },
+    'gen.hidesearch':     { zh: '隐藏搜索栏', en: 'Hide search bar' },
+    'gen.hidesearch_tip': { zh: '隐藏后搜索栏整体移除，图标区自动上移；可随时重新开启。', en: 'Removes the search bar from the layout; the icon grid moves up. Turn it back on any time.' },
+    'gen.hideclock':      { zh: '隐藏时钟', en: 'Hide clock' },
+    'gen.hideclock_tip':  { zh: '隐藏时钟卡片（无论在左侧栏还是顶部）；重新开启即恢复。', en: 'Hides the clock card (left column or above the search box); turn it back on to restore.' },
+    'gen.iconsize':       { zh: '图标大小', en: 'Icon size' },
+    'gen.iconradius':     { zh: '图标圆角', en: 'Icon corner radius' },
     'gen.data':     { zh: '数据管理', en: 'Data management' },
     'gen.export':   { zh: '导出数据', en: 'Export data' },
     'gen.import':   { zh: '导入数据', en: 'Import data' },
@@ -355,6 +362,7 @@
     'toast.import_done':       { zh: '导入完成：{items} 个快捷方式 · {todos} 条待办', en: 'Imported: {items} shortcuts · {todos} to-dos' },
     'toast.bookmarks_unavailable': { zh: '书签导入需在 Chrome 扩展中启用，当前预览模式不可用', en: 'Bookmark import requires the Chrome extension (unavailable in preview)' },
     'toast.bookmarks_denied':  { zh: '未授权书签权限，导入已取消', en: 'Bookmark permission denied, import canceled' },
+    'toast.tabs_denied':       { zh: '未授权标签页权限，已取消', en: 'Tabs permission denied, canceled' },
     'toast.bookmarks_empty':   { zh: '书签列表为空', en: 'No bookmarks' },
     'toast.bookmarks_dup':     { zh: '没有导入新书签（跳过 {n} 个重复）', en: 'No new bookmarks (skipped {n} duplicates)' },
     'toast.bookmarks_done':    { zh: '已导入 {n} 个书签', en: 'Imported {n} bookmarks' },

@@ -54,6 +54,12 @@
   --radius-md: 12px;
   --radius-lg: 18px;
   --radius-xl: 22px;
+  /* Icon tile geometry (shortcut cards / folder tiles / add tile). Driven by the two sliders in
+     Settings → General (settings.iconSize / iconRadius), applied to :root at boot and on change.
+     The radius is a percentage so it stays proportional at any tile size (28% ≈ the original
+     18px corner on a 64px tile). */
+  --icon-size: 64px;
+  --icon-radius: 28%;
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
   --font-num: "Inter", "SF Pro Display", "Segoe UI Variable Display",
@@ -991,6 +997,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .weather-fc-row .weather-fc-day { width: 34px; flex: none; font-size: 12px; color: var(--ink-2); }
 .weather-fc-row .weather-fc-ico { flex: none; }
 .weather-fc-row .weather-fc-temp { margin-left: auto; font-size: 12.5px; color: var(--ink); }
+/* 7-day temperature trend: a hand-rolled SVG sparkline above the expanded day rows — hi line in a
+ * warm tone, lo line in a cool tone (points come from tempTrendPoints in js/app.js). */
+.weather-trend { display: block; width: 100%; height: 44px; margin: 0 0 4px; }
+.weather-trend polyline { fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.weather-trend .weather-trend-hi { stroke: #fbbf24; }
+.weather-trend .weather-trend-lo { stroke: var(--accent); }
 .weather-fc-toggle {
   align-self: center;
   display: flex;
@@ -1417,13 +1429,14 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .card.dragging { opacity: 0.4; cursor: grabbing; transform: none; }
 .card.drag-over { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .card .ico {
-  width: 64px; height: 64px;
-  border-radius: 18px;
+  width: var(--icon-size); height: var(--icon-size);
+  border-radius: var(--icon-radius);
   display: flex; align-items: center; justify-content: center;
   background: rgba(255,255,255,0.92);
   color: #1f2937;
   font-weight: 600;
-  font-size: 20px;
+  /* The initial glyph scales with the tile (20px at the default 64px). */
+  font-size: calc(var(--icon-size) * 0.3125);
   overflow: hidden;
   position: relative;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
@@ -1494,28 +1507,30 @@ svg.logo-tx text { font-family: inherit; }
 .card-add:hover .ico { background: var(--glass-2); color: var(--ink); }
 
 /* ====== Shortcut folders (iOS style) ====== */
-/* Folder tile: same footprint as a shortcut card; the icon well turns into a glass 2x2 mini-grid. */
+/* Folder tile: same footprint as a shortcut card; the icon well turns into a glass 2x2 mini-grid.
+ * Padding / gap / mini radius all derive from --icon-size so the mini-grid scales proportionally
+ * with the icon-size slider (7px pad, 4px gap, 6px radius, 11px font at the default 64px). */
 .card-folder .folder-ico {
   background-color: var(--glass);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--line);
-  padding: 7px;
+  padding: calc(var(--icon-size) * 0.11);
 }
 .folder-mini-grid {
   width: 100%; height: 100%;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(2, 1fr);
-  gap: 4px;
+  gap: calc(var(--icon-size) * 0.0625);
 }
 .folder-mini {
   position: relative;
   display: flex; align-items: center; justify-content: center;
   min-width: 0; min-height: 0;
-  border-radius: 6px;
+  border-radius: calc(var(--icon-size) * 0.09);
   overflow: hidden;
-  font-size: 11px;
+  font-size: calc(var(--icon-size) * 0.17);
   font-weight: 600;
 }
 .folder-mini .logo { width: 60%; height: 60%; display: block; }
@@ -1956,6 +1971,38 @@ svg.logo-tx text { font-family: inherit; }
   transition: color .12s ease;
 }
 .modal-body .check-row:hover > span { color: var(--ink); }
+/* Range slider rows (icon size / corner radius, Settings → General): label · slider · live value. */
+.modal-body label.range-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.modal-body .range-row > span:first-child {
+  margin: 0;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.modal-body .range-row input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.modal-body .range-row .range-val {
+  flex: 0 0 44px;
+  margin: 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+/* Quiet "add current tab" button tucked under the URL field (shortcut modal, extension mode only). */
+.modal-body .curtab-btn { margin: -6px 0 14px; }
 .swatches {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

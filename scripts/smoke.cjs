@@ -1459,6 +1459,111 @@ for (const sel of ['.cal-badge', '.cal-next-holiday', '.count-card', '.count-off
   assert(cssSrc.includes(sel), `CSS defines ${sel}`);
 }
 
+// ---------- 23) personalization (hide search/clock, icon sizing, add-current-tab, temp trend) ----------
+console.log('[23] personalization');
+// --- 23a) hide search bar / hide clock ---
+assert(/hideSearch: false/.test(appSrc), 'DEFAULT_SETTINGS keeps the search bar visible by default (hideSearch: false)');
+assert(/hideClock: false/.test(appSrc), 'DEFAULT_SETTINGS keeps the clock visible by default (hideClock: false)');
+assert(!/'lt\.hidesearch|'lt\.hideclock/.test(appSrc), 'hide flags live inside lt.settings (no separate storage keys)');
+assert(/<input type="checkbox" id="f-hidesearch">/.test(html), 'settings page contains the #f-hidesearch checkbox');
+assert(/<input type="checkbox" id="f-hideclock">/.test(html), 'settings page contains the #f-hideclock checkbox');
+assert(/data-i18n="gen\.hidesearch"/.test(html) && /data-i18n="gen\.hidesearch_tip"/.test(html), 'hide-search label/tip entry hooks are complete');
+assert(/data-i18n="gen\.hideclock"/.test(html) && /data-i18n="gen\.hideclock_tip"/.test(html), 'hide-clock label/tip entry hooks are complete');
+assert(/getElementById\('f-hidesearch'\)/.test(appSrc) && /getElementById\('f-hideclock'\)/.test(appSrc), 'both hide toggles are bound');
+assert(/state\.settings\.hideSearch = state\.settings\.hideSearch === true/.test(appSrc)
+  && /state\.settings\.hideClock = state\.settings\.hideClock === true/.test(appSrc), 'doImport validates the hide flags');
+assert(/function applySearchVis/.test(appSrc) && /search\.hidden = state\.settings\.hideSearch === true/.test(appSrc),
+  'applySearchVis removes the search bar from the layout via [hidden] (display:none)');
+assert(/id === 'wclock' && state\.settings\.hideClock === true/.test(appSrc), 'applyWidgets folds the hideClock preference into clock visibility');
+assert(/\[hidden\] \{ display: none !important; \}/.test(cssSrc), 'CSS guarantees [hidden] is display:none, not just opacity');
+assert(/if \(qInput && state\.settings\.hideSearch !== true\) qInput\.focus/.test(appSrc),
+  'boot focus is guarded so a hidden #q is never focused');
+assert(/closeSuggest\(\); \/\/ a hidden box can hold no open dropdown/.test(appSrc),
+  'hiding the search bar closes the suggestions dropdown first');
+// --- 23b) icon size / corner radius sliders ---
+assert(/iconSize: 64/.test(appSrc) && /iconRadius: 28/.test(appSrc), 'DEFAULT_SETTINGS carries the shipped icon geometry (64px / 28%)');
+assert(/<input type="range" id="f-iconsize" min="48" max="80"/.test(html), 'settings page contains the #f-iconsize slider (48–80px)');
+assert(/<input type="range" id="f-iconradius" min="20" max="50"/.test(html), 'settings page contains the #f-iconradius slider (20–50%)');
+assert(/data-i18n="gen\.iconsize"/.test(html) && /data-i18n="gen\.iconradius"/.test(html), 'icon slider label entry hooks are complete');
+assert(/--icon-size: 64px;/.test(cssSrc) && /--icon-radius: 28%;/.test(cssSrc), ':root declares the --icon-size / --icon-radius custom properties');
+assert(/\.card \.ico \{[\s\S]{0,200}width: var\(--icon-size\); height: var\(--icon-size\);[\s\S]{0,200}border-radius: var\(--icon-radius\);/.test(cssSrc),
+  '.card .ico consumes both custom properties');
+assert(/\.folder-mini-grid \{[\s\S]{0,200}gap: calc\(var\(--icon-size\)/.test(cssSrc)
+  && /\.card-folder \.folder-ico \{[\s\S]{0,300}padding: calc\(var\(--icon-size\)/.test(cssSrc),
+  'folder mini-grids scale proportionally with --icon-size');
+assert(/function applyIconSizing/.test(appSrc)
+  && /setProperty\('--icon-size', size \+ 'px'\)/.test(appSrc) && /setProperty\('--icon-radius', radius \+ '%'\)/.test(appSrc),
+  'applyIconSizing writes both custom properties on :root');
+assert(/applyIconSizing\(\); \/\/ --icon-size/.test(appSrc), 'boot applies the icon geometry before first paint');
+// --- 23c) add current tab (optional "tabs" permission) ---
+assert(manifest && Array.isArray(manifest.optional_permissions) && manifest.optional_permissions.includes('tabs'),
+  'manifest optional_permissions contains tabs (mirroring bookmarks)');
+assert(/<button type="button" class="btn ghost sm curtab-btn" id="f-curtab"[^>]*hidden>/.test(html),
+  'shortcut dialog contains the #f-curtab button, hidden by default');
+assert(/data-i18n="site\.add_current_tab"/.test(html), 'the add-current-tab button carries its entry hook');
+assert(/curtabBtn\.hidden = !!id \|\| !\(window\.chrome && chrome\.permissions && chrome\.tabs\)/.test(appSrc),
+  'the button is gated on extension mode (no chrome.permissions/tabs under file://) and hidden in edit mode');
+assert(/chrome\.permissions\.request\(\{ permissions: \['tabs'\] \}\)/.test(appSrc),
+  'the tabs permission is requested on demand, inside the click gesture');
+assert(/chrome\.tabs\.query\(\{ active: true, currentWindow: true \}\)/.test(appSrc), 'the active tab is queried for title + url');
+// --- 23d) 7-day temperature trend (pure helper + SVG wiring) ---
+assert(/function tempTrendPoints\(daily, w, h\)/.test(appSrc), 'app.js defines tempTrendPoints(daily, w, h)');
+assert(/tempTrendPoints/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'tempTrendPoints is exported to LT_PURE');
+assert(/class="weather-trend" viewBox/.test(appSrc) && /weather-trend-hi/.test(appSrc) && /weather-trend-lo/.test(appSrc),
+  'the expanded forecast renders the trend SVG with hi/lo polylines');
+assert(/\.weather-trend \.weather-trend-hi \{ stroke: #fbbf24/.test(cssSrc) && /\.weather-trend \.weather-trend-lo \{ stroke: var\(--accent\)/.test(cssSrc),
+  'CSS paints the hi line warm and the lo line cool');
+{
+  // tempTrendPoints behaviour (sandboxed app.js, same convention as section 4b)
+  const noop5 = () => {};
+  const tsb = {
+    document: { readyState: 'loading', addEventListener: noop5, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
+    localStorage: { getItem: () => null, setItem: noop5, removeItem: noop5, key: () => null, length: 0 },
+    navigator: {}, structuredClone, URL, URLSearchParams,
+    setTimeout, clearTimeout, setInterval, clearInterval,
+    requestAnimationFrame: noop5, cancelAnimationFrame: noop5, console
+  };
+  tsb.window = tsb;
+  vm.createContext(tsb);
+  vm.runInContext(appSrc, tsb, { filename: 'app.js' });
+  const P5 = tsb.LT_PURE;
+  assert(!!P5 && typeof P5.tempTrendPoints === 'function', 'tempTrendPoints available in sandbox');
+  if (P5 && P5.tempTrendPoints) {
+    const week = [31, 30, 28, 27, 29, 32, 33].map((hi, i) => ({ date: '2026-09-0' + (i + 1), code: 2, hi, lo: hi - 8 }));
+    const tp = P5.tempTrendPoints(week, 280, 44);
+    assert(!!tp && typeof tp.hi === 'string' && typeof tp.lo === 'string', 'tempTrendPoints returns { hi, lo } point strings');
+    assert(tp.hi.split(' ').length === 7 && tp.lo.split(' ').length === 7, 'tempTrendPoints maps all 7 days', JSON.stringify(tp));
+    // min/max scaling: the coldest lo (19) sits at the bottom pad (h-4=40), the hottest hi (33) at the top pad (4)
+    const loPts = tp.lo.split(' ').map(p => p.split(',').map(Number));
+    const hiPts = tp.hi.split(' ').map(p => p.split(',').map(Number));
+    assert(Math.min(...hiPts.map(p => p[1])) === 4, 'the hottest hi touches the top pad', tp.hi);
+    assert(Math.max(...loPts.map(p => p[1])) === 40, 'the coldest lo touches the bottom pad', tp.lo);
+    assert(hiPts[0][0] === 4 && hiPts[6][0] === 276, 'the first/last points sit at the horizontal pads', tp.hi);
+    assert(hiPts.every((p, i) => p[1] <= loPts[i][1]), 'every hi point sits above its lo point on the chart');
+    // a flat week must not divide by zero: both lines park at mid-height
+    const flat = P5.tempTrendPoints(Array(7).fill({ date: '2026-09-01', code: 2, hi: 25, lo: 25 }), 280, 44);
+    assert(flat.hi.split(' ').every(p => p.endsWith(',22')) && flat.lo === flat.hi, 'flat week parks both lines at mid-height', JSON.stringify(flat));
+    assert(P5.tempTrendPoints(null, 280, 44) === null && P5.tempTrendPoints([], 280, 44) === null, 'tempTrendPoints rejects missing/empty data');
+    assert(P5.tempTrendPoints([{ date: 'x', code: 2 }], 280, 44) === null, 'tempTrendPoints drops rows without numeric hi/lo');
+  }
+}
+// --- 23e) i18n: every new entry exists in both languages and is non-empty (no key echo) ---
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  const pKeys = ['gen.hidesearch', 'gen.hidesearch_tip', 'gen.hideclock', 'gen.hideclock_tip',
+    'gen.iconsize', 'gen.iconradius', 'site.add_current_tab', 'toast.tabs_denied'];
+  I.setLang('zh');
+  assert(pKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'personalization entries translated in zh',
+    pKeys.filter(k => I.t(k) === k || !I.t(k)).join(' | '));
+  I.setLang('en');
+  assert(pKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'personalization entries translated in en',
+    pKeys.filter(k => I.t(k) === k || !I.t(k)).join(' | '));
+  I.setLang('zh');
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);
