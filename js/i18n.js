@@ -226,6 +226,15 @@
     'site.cancel': { zh: '取消', en: 'Cancel' },
     'site.save':   { zh: '保存', en: 'Save' },
     'site.add_current_tab': { zh: '添加当前标签页', en: 'Add current tab' },
+    'site.batch':        { zh: '批量添加', en: 'Bulk add' },
+    'site.batch_tip':    { zh: '每行一个：可直接贴网址，或「名称 + 网址」（用空格 / Tab / | 分隔）。会自动跳过已存在或本批重复的网址。', en: 'One per line: paste a URL, or "Name + URL" (space / Tab / |). URLs you already have (or repeats in the paste) are skipped automatically.' },
+    'site.batch_ph':     { zh: 'GitHub  https://github.com\nnotion.so\nMDN  https://developer.mozilla.org', en: 'GitHub  https://github.com\nnotion.so\nMDN  https://developer.mozilla.org' },
+    'site.batch_back':   { zh: '返回单个添加', en: 'Back to single add' },
+    'site.batch_go':     { zh: '添加', en: 'Add' },
+    'site.batch_count':  { zh: '将添加 {n} 个快捷方式', en: '{n} shortcuts will be added' },
+    'site.batch_preview':{ zh: '将添加 {n} 个，跳过 {d} 个（已存在或重复）', en: 'Adding {n}, skipping {d} (already saved or repeated)' },
+    'site.batch_dup_only': { zh: '这 {d} 个都已存在或重复，没有新内容', en: 'All {d} are already saved or repeated — nothing new' },
+    'toast.batch_done':  { zh: '已批量添加 {n} 个快捷方式', en: 'Added {n} shortcuts' },
 
     // #50 custom per-card icon (shortcut modal)
     'icon.label':  { zh: '图标', en: 'Icon' },

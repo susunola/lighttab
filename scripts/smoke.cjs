@@ -1939,6 +1939,13 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
     'extension CSP allowlists the JSONP suggestion hosts');
   assert(fs.existsSync(path.join(ROOT, 'tests/e2e/playwright.config.js')) && fs.existsSync(path.join(ROOT, 'tests/e2e/lighttab.spec.js')),
     'Playwright E2E scaffold files are in the repo');
+  assert(/id="btn-batch"/.test(html) && /id="batch-text"/.test(html) && /id="batch-panel"/.test(html)
+    && /id="batch-preview"/.test(html) && /function parseBatchText/.test(appSrc) && /BATCH_MAX = 60/.test(appSrc),
+    'bulk-add UI and parser exist');
+  for (const k of ['site.batch', 'site.batch_tip', 'site.batch_ph', 'site.batch_back', 'site.batch_go',
+    'site.batch_count', 'site.batch_preview', 'site.batch_dup_only', 'toast.batch_done']) {
+    assert(i18nSrc.includes(`'${k}'`), `bulk-add i18n key ${k} exists`);
+  }
 }
 
 console.log('');

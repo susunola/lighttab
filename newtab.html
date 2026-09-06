@@ -262,6 +262,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <span id="site-modal-title">Add shortcut</span>
+        <button type="button" class="btn ghost sm batch-btn" id="btn-batch" data-i18n="site.batch" hidden>Bulk add</button>
         <button class="icon-btn close-btn" data-close data-i18n-aria="set.close" aria-label="Close">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -300,6 +301,16 @@
           <button type="submit" class="btn primary" data-i18n="site.save">Save</button>
         </div>
       </form>
+      <!-- Bulk add: paste one shortcut per line ("Title  https://…", or just a URL). -->
+      <div id="batch-panel" class="modal-body" hidden>
+        <p class="form-tip" data-i18n="site.batch_tip">One per line — either a URL alone, or <b>Title</b> then the URL (space / tab / |). Names are auto-picked from titles or hosts.</p>
+        <textarea id="batch-text" rows="7" spellcheck="false" data-i18n-ph="site.batch_ph" placeholder="GitHub  https://github.com&#10;notion.so&#10;MDN  https://developer.mozilla.org"></textarea>
+        <p class="batch-preview" id="batch-preview" hidden></p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" id="btn-batch-back" data-i18n="site.batch_back">Back to single add</button>
+          <button type="button" class="btn primary" id="btn-batch-add" data-i18n="site.batch_go" disabled>Add</button>
+        </div>
+      </div>
     </div>
   </div>
 

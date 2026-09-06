@@ -2544,6 +2544,19 @@
     // simply do not exist under file://.
     const curtabBtn = document.getElementById('f-curtab');
     if (curtabBtn) curtabBtn.hidden = !!id || !(window.chrome && chrome.permissions && chrome.tabs);
+    // Bulk add only applies to new shortcuts (never to editing an existing one).
+    const batchBtn = document.getElementById('btn-batch');
+    if (batchBtn) batchBtn.hidden = !!id;
+    const batchPanel = document.getElementById('batch-panel');
+    const batchForm = document.getElementById('site-form');
+    if (batchPanel) batchPanel.hidden = true;
+    if (batchForm) batchForm.hidden = false;
+    const batchText = document.getElementById('batch-text');
+    if (batchText) batchText.value = '';
+    const batchPrev = document.getElementById('batch-preview');
+    if (batchPrev) { batchPrev.hidden = true; batchPrev.textContent = ''; }
+    const batchAddBtn = document.getElementById('btn-batch-add');
+    if (batchAddBtn) batchAddBtn.disabled = true;
     // Remember what opened the modal so closing returns focus there (a11y).
     if (document.activeElement && !modal.contains(document.activeElement)) modalReturnFocus = document.activeElement;
     modal.hidden = false;
@@ -2583,10 +2596,88 @@
     }
     if (rmBtn) rmBtn.hidden = true;
   }
+  // Bulk-add parser: one shortcut per line — a bare URL, or "Title <sep> URL" where the separator
+  // is a space / tab / " | ". Titles default to a humanised host. URLs already saved (or repeated
+  // inside the paste) are skipped and counted, never duplicated.
+  const BATCH_MAX = 60;
+  function batchHostTitle(url) {
+    const seg = (hostnameOf(url) || '').replace(/^www\./, '').split('.')[0] || 'site';
+    return seg.charAt(0).toUpperCase() + seg.slice(1);
+  }
+  function parseBatchText(text) {
+    const known = new Set();
+    const addKnown = (it) => { if (it && it.url) { const n = normalizeUrl(it.url); if (n) known.add(n); } };
+    for (const it of (state.items || [])) { if (isFolder(it)) (it.children || []).forEach(addKnown); else addKnown(it); }
+    const list = [];
+    const seen = new Set();
+    let dup = 0, bad = 0;
+    for (const raw of String(text || '').split(/\r?\n/)) {
+      if (list.length >= BATCH_MAX) { bad++; continue; }
+      const line = raw.trim();
+      if (!line) continue;
+      let title = '', urlRaw = line;
+      if (line.includes('\t')) { const i = line.indexOf('\t'); title = line.slice(0, i).trim(); urlRaw = line.slice(i + 1).trim(); }
+      else if (line.includes(' | ')) { const i = line.indexOf(' | '); title = line.slice(0, i).trim(); urlRaw = line.slice(i + 3).trim(); }
+      else if (!looksLikeUrl(line)) {
+        const parts = line.split(/\s+/);
+        const last = parts[parts.length - 1] || '';
+        if (looksLikeUrl(last)) { title = parts.slice(0, -1).join(' ').trim(); urlRaw = last; }
+      }
+      const url = normalizeUrl(urlRaw);
+      if (!url) { bad++; continue; }
+      if (known.has(url) || seen.has(url)) { dup++; continue; }
+      seen.add(url); known.add(url);
+      list.push({ url, title: String(title || '').trim() || batchHostTitle(url) });
+    }
+    return { list, dup, bad };
+  }
   function bindSiteForm() {
     const modal = document.getElementById('modal-site');
     modal.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => hideModal(modal)));
     modal.addEventListener('click', e => { if (e.target === modal) hideModal(modal); });
+    // ---------- Bulk add panel ----------
+    const batchToggle = document.getElementById('btn-batch');
+    const batchPanel = document.getElementById('batch-panel');
+    const batchText = document.getElementById('batch-text');
+    const batchPrev = document.getElementById('batch-preview');
+    const batchAdd = document.getElementById('btn-batch-add');
+    const batchBack = document.getElementById('btn-batch-back');
+    if (batchToggle && batchPanel && batchText && batchAdd && batchBack) {
+      const refreshBatch = () => {
+        const { list, dup, bad } = parseBatchText(batchText.value);
+        const txt = list.length
+          ? (dup ? t('site.batch_preview', { n: list.length, d: dup }) : t('site.batch_count', { n: list.length }))
+          : (dup ? t('site.batch_dup_only', { d: dup }) : '');
+        batchPrev.textContent = txt;
+        batchPrev.hidden = !txt;
+        batchAdd.disabled = !list.length;
+        return list;
+      };
+      batchToggle.addEventListener('click', () => {
+        const formEl = document.getElementById('site-form');
+        if (formEl) formEl.hidden = true;
+        batchPanel.hidden = false;
+        batchText.focus();
+        refreshBatch();
+      });
+      batchBack.addEventListener('click', () => {
+        batchPanel.hidden = true;
+        const formEl = document.getElementById('site-form');
+        if (formEl) formEl.hidden = false;
+      });
+      batchText.addEventListener('input', refreshBatch);
+      batchAdd.addEventListener('click', async () => {
+        const { list } = parseBatchText(batchText.value);
+        if (!list.length) return;
+        let group = '';
+        if (state.view !== VIEW_ALL && state.view !== VIEW_NONE) group = state.view;
+        state.items.push(...list.map(x => ({ id: nid(), title: [...x.title].slice(0, 32).join(''), url: x.url, group, icon: undefined })));
+        await Store.set(K.items, state.items);
+        hideModal(modal);
+        syncUI();
+        showToast(t('toast.batch_done', { n: list.length }));
+      });
+    }
     const form = document.getElementById('site-form');
     // Custom card icon: upload (square-crop + compress to a small PNG/JPG dataURL), live preview,
     // remove-to-revert. Nothing is persisted until Save; Cancel simply drops the pending icon.

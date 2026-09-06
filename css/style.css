@@ -2870,3 +2870,25 @@ input[type="file"]:focus-visible {
   color: var(--ink-3);
   letter-spacing: 0.01em;
 }
+
+/* Bulk-add panel (shortcut modal): textarea + live preview. */
+.modal-body textarea#batch-text {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 132px;
+  padding: 10px 12px;
+  background: var(--tint-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+}
+.modal-body textarea#batch-text:focus { border-color: rgba(125, 211, 252, 0.6); }
+.batch-preview {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.modal-head .batch-btn { margin-left: auto; margin-right: 8px; }
