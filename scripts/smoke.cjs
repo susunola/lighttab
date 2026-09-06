@@ -16,6 +16,8 @@
  *  6) #48 theme static structure: html default data-theme, #f-theme three options, theme entry hooks
  *  7) #49 wallpaper rotation static structure: #f-wall-rotate checkbox, entry hooks, K map contains walllib/rot
  *  8) #50 custom icon static structure: #f-icon upload, preview, remove, icon field import/render hooks
+ *  9) shortcut folders: folder data model (type:'folder' in lt.items, schema v4→v5), create/merge/
+ *     dissolve pure functions, i18n keys (zh+en), CSS for the folder tile / merge indicator / popup
  */
 'use strict';
 
@@ -559,7 +561,7 @@ assert(/relayoutBusy/.test(canvasSrc), 'self-healing has re-entry protection (av
 assert(/if \(!l \|\| l\.auto === false\) return; \/\/ a hand-dragged/.test(canvasSrc),
   'hand-dragged layouts are not overwritten by self-healing relayout');
 // schema migration: the old single clockPos must move smoothly into widgetPos
-assert(/const SCHEMA_VERSION = 4;/.test(appSrc), 'SCHEMA_VERSION bumped to 4');
+assert(/const SCHEMA_VERSION = 5;/.test(appSrc), 'SCHEMA_VERSION bumped to 5 (folders)');
 assert(/3: \(d\) => \{/.test(appSrc), 'MIGRATIONS contains v3→v4');
 assert(/delete st\.clockPos/.test(appSrc), 'old clockPos field is deleted after migration');
 assert(/state\.settings\.widgetPos = normalizeWidgetPos\(state\.settings\.widgetPos\)/.test(appSrc),
@@ -898,6 +900,120 @@ assert(/\.suggest-list li\.active/.test(cssSrc) || /\.suggest-list li:hover, \.s
   I.setLang('zh');
 }
 assert(/sent directly to your chosen search engine/.test(read('README.md')), 'README Privacy documents that suggestions go straight to the chosen engine');
+
+// ---------- 16) shortcut folders (iOS style: drag one tile onto another) ----------
+console.log('[16] shortcut folders');
+// Data model: a folder is an item in lt.items with type:'folder' + name + group + children[];
+// plain shortcut items carry no `type` and load unchanged (backward compat with schema 4 data).
+assert(/type: 'folder'/.test(appSrc), "folder items carry type:'folder'");
+assert(/4: \(d\) => \{/.test(appSrc), 'MIGRATIONS contains v4→v5 (folder normalization)');
+assert(/normalizeFolderRecord\(it, t\('folder\.default_name'\)\)/.test(appSrc), 'v4→v5 migration normalizes folder records');
+for (const fn of ['isFolder', 'makeFolder', 'folderMergeItems', 'folderRemoveChild', 'folderRename',
+  'normalizeFolderRecord', 'folderCardHtml', 'openFolderPopup', 'renderFolderPopup', 'closeFolderPopup', 'dissolveFolder']) {
+  assert(new RegExp('function ' + fn + '\\b').test(appSrc), `app.js defines ${fn}()`);
+}
+{
+  const ltPure = appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || '';
+  for (const fn of ['isFolder', 'makeFolder', 'folderMergeItems', 'folderRemoveChild', 'folderRename', 'normalizeFolderRecord']) {
+    assert(new RegExp('\\b' + fn + '\\b').test(ltPure), `${fn} is exported to LT_PURE`);
+  }
+}
+// Rendering / interaction hooks
+assert(/cardHtml\(it\) \{\n\s+if \(isFolder\(it\)\) return folderCardHtml\(it\);/.test(appSrc), 'cardHtml delegates folder items to folderCardHtml');
+assert(/class="card card-folder"/.test(appSrc), 'folder tiles render with .card.card-folder (same footprint as shortcut tiles)');
+assert(/folder-mini-grid/.test(appSrc), 'folder tile renders the 2x2 mini grid');
+assert(/document\.querySelectorAll\('#grid \.card:not\(\.card-add\)'\)/.test(appSrc), 'drag & drop covers folder tiles too (add tile excluded)');
+assert(/FOLDER_DWELL_MS = 550/.test(appSrc), 'folder merge is armed by a hover dwell');
+assert(/drag-merge/.test(appSrc), 'dwell-armed merge target gets the .drag-merge indicator');
+assert(/bindFolderGlobal\(\);/.test(appSrc), 'boot binds the folder popup/drop globals');
+assert(/id="folder-pop"/.test(html), 'newtab.html contains the #folder-pop popup');
+// doImport validates folder records (kids validated one by one, degenerate folders dissolve)
+assert(/if \(it && it\.type === 'folder'\)/.test(appSrc), 'doImport handles folder items');
+// Pure create / merge / dissolve behaviour (sandboxed app.js, same convention as section 4b)
+{
+  const noop = () => {};
+  const sandbox = {
+    document: { readyState: 'loading', addEventListener: noop, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop, key: () => null, length: 0 },
+    navigator: {},
+    structuredClone,
+    URL, URLSearchParams,
+    setTimeout, clearTimeout, setInterval, clearInterval,
+    requestAnimationFrame: noop, cancelAnimationFrame: noop,
+    console
+  };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(appSrc, sandbox, { filename: 'app.js' });
+  const P = sandbox.LT_PURE;
+  assert(!!P && typeof P.folderMergeItems === 'function', 'folder pure functions available in sandbox');
+  if (P) {
+    const s = (id, group) => ({ id, title: id.toUpperCase(), url: 'https://' + id + '.example.com', group: group || '' });
+    // create: drop b onto a -> one folder at a's slot holding [a, b]; the folder inherits a's group
+    let items = [s('a', 'g1'), s('b'), s('c')];
+    let next = P.folderMergeItems(items, 'b', 'a', 'Folder');
+    assert(next.length === 2 && P.isFolder(next[0]) && next[1].id === 'c', 'drop shortcut on shortcut creates a folder at the target slot');
+    assert(next[0].children.map(k => k.id).join(',') === 'a,b', 'new folder holds target first, dragged one last');
+    assert(next[0].group === 'g1' && !('group' in next[0].children[0]), 'folder inherits the target group; kids drop their own group');
+    assert(next[0].name === 'Folder', 'new folder gets the default name');
+    // merge: drop c onto the folder -> 3 kids
+    const fid = next[0].id;
+    next = P.folderMergeItems(next, 'c', fid, 'Folder');
+    assert(next.length === 1 && next[0].children.length === 3, 'drop shortcut onto a folder tile adds it to the folder');
+    // folder -> folder: kids merge
+    const pair = P.folderMergeItems([s('x'), s('y')], 'y', 'x', 'Folder');
+    next = P.folderMergeItems(next.concat(pair), pair[0].id, fid, 'Folder');
+    assert(next.length === 1 && next[0].children.length === 5, 'dropping a folder onto a folder merges the kids');
+    // folder -> shortcut: not a folder operation (stays a plain reorder)
+    assert(P.folderMergeItems([next[0], s('z')], fid, 'z', 'Folder') === null, 'folder onto shortcut is not a folder operation (no nesting)');
+    // remove one of 3 -> folder survives with 2
+    let res = P.folderRemoveChild(P.folderMergeItems([s('a'), s('b'), s('c')], 'b', 'a', 'Folder'), undefined, 'nope');
+    assert(res === null, 'folderRemoveChild with an unknown id returns null');
+    let base = P.folderMergeItems([s('a', 'g2'), s('b'), s('c')], 'b', 'a', 'Folder');
+    base = P.folderMergeItems(base, 'c', base[0].id, 'Folder');
+    res = P.folderRemoveChild(base, base[0].id, 'c');
+    assert(P.isFolder(res.items[0]) && res.items[0].children.length === 2 && res.child.id === 'c', 'removing one of 3 kids keeps the folder');
+    assert(res.child.group === 'g2', 'the removed kid inherits the folder group back');
+    // remove one of 2 -> the folder dissolves, the survivor returns to its slot
+    const two = P.folderMergeItems([s('a', 'g2'), s('b'), s('d')], 'b', 'a', 'Folder');
+    res = P.folderRemoveChild(two, two[0].id, 'b');
+    assert(!P.isFolder(res.items[0]) && res.items[0].id === 'a' && res.items[1].id === 'd' && res.items.length === 2,
+      'a folder below 2 kids auto-dissolves (survivor back at the folder slot)');
+    assert(res.items[0].group === 'g2' && res.child.group === 'g2', 'dissolve restores the folder group on both kids');
+    // rename
+    const renamed = P.folderRename(two, two[0].id, 'Tools');
+    assert(renamed[0].name === 'Tools', 'folderRename sets the name');
+    // normalizeFolderRecord: plain items pass through; degenerate folders dissolve
+    const plain = s('p');
+    assert(P.normalizeFolderRecord(plain, 'Folder')[0] === plain, 'normalization leaves plain shortcut items untouched (backward compat)');
+    const degen = P.normalizeFolderRecord({ id: 'f0', type: 'folder', name: '', group: 'g9', children: [s('solo')] }, 'Folder');
+    assert(degen.length === 1 && degen[0].id === 'solo' && degen[0].group === 'g9', 'a 1-kid folder record dissolves on read');
+    const foreign = P.normalizeFolderRecord({ id: 'f1', type: 'folder', children: [{ url: 'https://a.example.com' }, { bad: true }, s('k2')] }, 'Folder');
+    assert(foreign.length === 1 && foreign[0].children.length === 2 && foreign[0].name === 'Folder',
+      'foreign folder records get a default name and invalid kids dropped');
+  }
+}
+// i18n: folder entries exist in both languages and are non-empty (no key echo)
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  const fKeys = ['folder.default_name', 'folder.name_ph', 'folder.hint', 'toast.folder_created',
+    'ctx.open_folder', 'ctx.rename_folder', 'ctx.ungroup_folder'];
+  I.setLang('zh');
+  assert(fKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'folder entries translated in zh', fKeys.map(k => I.t(k)).join(' | '));
+  assert(I.t('folder.default_name') === '文件夹', "folder.default_name zh is 文件夹");
+  I.setLang('en');
+  assert(fKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'folder entries translated in en', fKeys.map(k => I.t(k)).join(' | '));
+  assert(I.t('folder.default_name') === 'Folder', "folder.default_name en is Folder");
+  I.setLang('zh');
+}
+// CSS: folder tile + mini grid + merge indicator + popup are all styled
+for (const sel of ['.card-folder', '.folder-ico', '.folder-mini-grid', '.folder-mini',
+  '.card.drag-merge', '.folder-pop', '.folder-pop-grid', '.folder-name-input', '.fcard', '.fcard-ico', '.folder-pop-hint']) {
+  assert(cssSrc.includes(sel), `CSS defines ${sel}`);
+}
 
 console.log('');
 if (failures) {

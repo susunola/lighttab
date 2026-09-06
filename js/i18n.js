@@ -140,6 +140,9 @@
     'ctx.copy':  { zh: '复制链接', en: 'Copy link' },
     'ctx.edit':  { zh: '编辑', en: 'Edit' },
     'ctx.del':   { zh: '删除', en: 'Delete' },
+    'ctx.open_folder':   { zh: '打开文件夹', en: 'Open folder' },
+    'ctx.rename_folder': { zh: '重命名文件夹', en: 'Rename folder' },
+    'ctx.ungroup_folder':{ zh: '解散文件夹', en: 'Dissolve folder' },
 
     // ---------- Grid empty states ----------
     'grid.empty':      { zh: '暂无快捷方式，点 ＋ 添加', en: 'No shortcuts yet — click ＋ to add' },
@@ -151,6 +154,12 @@
     'group.ungrouped': { zh: '未分组', en: 'Ungrouped' },
     'group.del':       { zh: '删除分组', en: 'Delete group' },
     'group.name_ph':   { zh: '分组名称', en: 'Group name' },
+
+    // ---------- Shortcut folders (drag one tile onto another, iOS style) ----------
+    'folder.default_name': { zh: '文件夹', en: 'Folder' },
+    'folder.name_ph':      { zh: '文件夹名称', en: 'Folder name' },
+    'folder.hint':         { zh: '把图标拖出窗口即可移出文件夹', en: 'Drag an icon out of the window to remove it from the folder' },
+    'toast.folder_created':{ zh: '已创建文件夹', en: 'Folder created' },
 
     // ---------- Shortcut modal ----------
     'site.add':    { zh: '添加快捷方式', en: 'Add shortcut' },

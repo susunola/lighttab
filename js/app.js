@@ -259,7 +259,7 @@
 
   // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
   // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
-  const SCHEMA_VERSION = 4;
+  const SCHEMA_VERSION = 5;
   const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema' };
   // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
   // to the content script across tabs without ever putting it in the URL.
@@ -1365,7 +1365,9 @@
     const L = 0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
     return L >= 60 ? hex : null;
   }
-  function cardHtml(it) {
+  // The icon well of a card: user-uploaded image > brand icon > brand-coloured letter tile.
+  // Shared by the main grid (cardHtml), folder tiles (the 2x2 mini grid) and the folder popup.
+  function cardIconParts(it) {
     const host = hostnameOf(it.url) || it.title;
     const icon = iconFor(it.url);
     const customIcon = sanitizeIconDataUrl(it.icon);
@@ -1375,7 +1377,7 @@
       // neutral (theme-aware) so uploaded logos — usually white-bg corporate marks or transparent
       // marks — read as the visual focus instead of competing with a saturated host colour. Users
       // can still set it.color (e.g. via import) for an explicit coloured frame.
-      customCls = ' has-custom-icon';
+      customCls = 'has-custom-icon';
       bg = safeColor(it.color);
       ico = `<img class="logo-img" src="${customIcon}" alt="" draggable="false">`;
     } else if (icon) {
@@ -1392,14 +1394,111 @@
       ico = `<span class="ini">${escapeHtml(letter)}</span>`;
     }
     ink = bg ? inkOn(bg) : '#1f2937';
+    return { bg, ink, ico, customCls };
+  }
+
+  // ---------- Shortcut folders (iOS style, schema v5) ----------
+  // A folder is an item in state.items: { id, type:'folder', name, group, children: [shortcut...] }.
+  // Children are plain shortcut objects nested inside the folder (the group lives on the folder);
+  // existing plain shortcut items carry no `type` and load unchanged.
+  function isFolder(it) { return !!it && it.type === 'folder'; }
+  // The folder that groups two shortcuts: it takes the drop target's slot and group, dragged one last.
+  function makeFolder(a, b, name) {
+    const strip = (c) => { const k = { ...c }; delete k.group; return k; };
+    return { id: nid(), type: 'folder', name: name || '', group: b.group || '', children: [strip(b), strip(a)] };
+  }
+  // Drop srcId onto targetId: shortcut+shortcut -> a new folder at the target's slot; anything ->
+  // folder -> src (or its kids) joins the target folder; folder -> shortcut -> null (folders cannot
+  // be nested, so that drop stays a plain reorder). Returns a new items array, or null when the
+  // drop is not a folder operation.
+  function folderMergeItems(items, srcId, targetId, defName) {
+    if (srcId === targetId) return null;
+    const srcIdx = items.findIndex(x => x.id === srcId);
+    const tgtIdx0 = items.findIndex(x => x.id === targetId);
+    if (srcIdx < 0 || tgtIdx0 < 0) return null;
+    const src = items[srcIdx];
+    const tgt = items[tgtIdx0];
+    if (!isFolder(tgt) && isFolder(src)) return null;
+    const next = items.slice();
+    next.splice(srcIdx, 1);
+    const ti = next.findIndex(x => x.id === targetId);
+    if (isFolder(tgt)) {
+      const kids = isFolder(src) ? (src.children || []) : [src];
+      next[ti] = { ...next[ti], children: [...(next[ti].children || []), ...kids] };
+      return next;
+    }
+    // Two shortcuts -> a fresh folder takes over the target's slot.
+    next.splice(ti, 1, makeFolder(src, tgt, defName));
+    return next;
+  }
+  // Take one child out of a folder. Returns { items, child }: the removed child (group restored,
+  // NOT yet re-inserted — the caller places it at the drop point) plus the new items array, in
+  // which a folder that fell below 2 kids has dissolved (its survivor returns to the folder's slot).
+  function folderRemoveChild(items, folderId, childId) {
+    const fi = items.findIndex(x => x.id === folderId);
+    if (fi < 0 || !isFolder(items[fi])) return null;
+    const folder = items[fi];
+    const kids = Array.isArray(folder.children) ? folder.children : [];
+    const ci = kids.findIndex(c => c.id === childId);
+    if (ci < 0) return null;
+    const back = (k) => ({ ...k, group: folder.group || '' });
+    const child = back(kids[ci]);
+    const rest = kids.filter((_, i) => i !== ci);
+    const next = items.slice();
+    if (rest.length < 2) {
+      // Auto-dissolve: the survivor returns to the grid at the folder's slot.
+      next.splice(fi, 1, ...rest.map(back));
+    } else {
+      next[fi] = { ...folder, children: rest };
+    }
+    return { items: next, child };
+  }
+  function folderRename(items, folderId, name) {
+    const fi = items.findIndex(x => x.id === folderId);
+    if (fi < 0 || !isFolder(items[fi])) return null;
+    const next = items.slice();
+    next[fi] = { ...next[fi], name: String(name || '').slice(0, 32) };
+    return next;
+  }
+  // Normalize one item record on read/migrate: plain shortcuts pass through untouched (backward
+  // compat); folders get fresh ids / a name / valid kids, and degenerate folders (< 2 kids)
+  // dissolve back into plain shortcuts inheriting the folder's group.
+  function normalizeFolderRecord(it, defName) {
+    if (!it || it.type !== 'folder') return it ? [it] : [];
+    const group = typeof it.group === 'string' ? it.group : '';
+    const kids = (Array.isArray(it.children) ? it.children : [])
+      .filter(c => c && typeof c.url === 'string')
+      .map(c => ({ id: c.id || nid(), title: String(c.title || '').slice(0, 32) || defName, url: c.url, icon: c.icon, color: c.color }));
+    if (kids.length < 2) return kids.map(k => ({ ...k, group }));
+    return [{ id: it.id || nid(), type: 'folder', name: String(it.name || '').slice(0, 32) || defName, group, children: kids }];
+  }
+
+  // Folder tile: same footprint as a shortcut card; the icon well shows a 2x2 mini grid of kids.
+  function folderCardHtml(it) {
+    const name = escapeHtml(it.name || t('folder.default_name'));
+    const minis = (it.children || []).slice(0, 4).map(c => {
+      const p = cardIconParts(c);
+      const bgStyle = p.bg ? `background:${p.bg};` : '';
+      return `<span class="folder-mini${p.customCls ? ' ' + p.customCls : ''}" style="${bgStyle}color:${p.ink}">${p.ico}</span>`;
+    }).join('');
+    return `
+      <div class="card card-folder" data-id="${escapeHtml(it.id)}" draggable="true" role="button" tabindex="0" title="${name}">
+        <div class="ico folder-ico"><div class="folder-mini-grid">${minis}</div></div>
+        <div class="title">${name}</div>
+      </div>
+    `;
+  }
+  function cardHtml(it) {
+    if (isFolder(it)) return folderCardHtml(it);
+    const p = cardIconParts(it);
     const safeTitle = escapeHtml(it.title);
-    const bgStyle = bg ? `background:${bg};` : '';
+    const bgStyle = p.bg ? `background:${p.bg};` : '';
     // Only http(s) links are renderable — an imported/synced record could otherwise carry a javascript: URL.
     const safeHref = /^https?:\/\//i.test(it.url || '') ? it.url : '#';
     return `
       <a class="card" href="${escapeHtml(safeHref)}" data-id="${escapeHtml(it.id)}" draggable="true" target="_blank" rel="noopener" title="${safeTitle}">
-        <div class="ico${customCls}" style="${bgStyle}color:${ink}">
-          ${ico}
+        <div class="ico${p.customCls ? ' ' + p.customCls : ''}" style="${bgStyle}color:${p.ink}">
+          ${p.ico}
         </div>
         <div class="title">${safeTitle}</div>
         <div class="card-actions">
@@ -1412,6 +1511,180 @@
         </div>
       </a>
     `;
+  }
+
+  // ---------- Folder popup + folder drag & drop state ----------
+  // Module-level because a drag spans several handlers (and the popup outlives grid re-renders).
+  const FOLDER_DWELL_MS = 550; // hover this long on a tile to arm "merge into folder" mode
+  let gridDragId = null;       // data-id of the grid card being dragged (shortcut or folder)
+  let folderDrag = null;       // { folderId, childId } while a child is dragged out of the popup
+  let mergeTimer = 0;          // dwell timer
+  let mergeCardId = null;      // card the dwell is currently armed on
+  let openFolderId = null;     // folder whose popup is open (session only)
+
+  function clearMergeArmed() {
+    clearTimeout(mergeTimer);
+    mergeTimer = 0;
+    mergeCardId = null;
+    document.querySelectorAll('.card.drag-merge').forEach(n => n.classList.remove('drag-merge'));
+  }
+  // Insert an item into the grid: next to refId (before/after), or at the end of the visible scope.
+  function insertIntoView(child, refId, before) {
+    if (refId) {
+      const idx = state.items.findIndex(x => x.id === refId);
+      if (idx >= 0) { state.items.splice(before ? idx : idx + 1, 0, child); return; }
+    }
+    if (state.view === VIEW_ALL) { state.items.push(child); return; }
+    let last = -1;
+    state.items.forEach((it, i) => { if (inView(it)) last = i; });
+    state.items.splice(last + 1, 0, child);
+  }
+  // Dissolve a folder outright (context menu): every kid returns to the grid at the folder's slot.
+  async function dissolveFolder(id) {
+    const fi = state.items.findIndex(x => x.id === id);
+    if (fi < 0 || !isFolder(state.items[fi])) return;
+    const folder = state.items[fi];
+    const kids = (folder.children || []).map(k => ({ ...k, group: folder.group || '' }));
+    state.items.splice(fi, 1, ...kids);
+    await Store.set(K.items, state.items);
+    closeFolderPopup();
+    syncUI();
+  }
+
+  function folderPopEl() { return document.getElementById('folder-pop'); }
+  function closeFolderPopup() {
+    openFolderId = null;
+    folderDrag = null;
+    const pop = folderPopEl();
+    if (pop) pop.hidden = true;
+  }
+  function openFolderPopup(id, opts) {
+    const o = opts || {};
+    openFolderId = id;
+    renderFolderPopup();
+    const pop = folderPopEl();
+    if (!openFolderId || !pop) return; // the folder vanished while rendering
+    // Anchor under the folder tile (above when space runs out), clamped into the viewport.
+    pop.style.left = '0px'; pop.style.top = '0px';
+    const tile = [...document.querySelectorAll('#grid .card-folder')].find(n => n.dataset.id === id);
+    const tr = tile ? tile.getBoundingClientRect() : { left: window.innerWidth / 2, right: window.innerWidth / 2, top: window.innerHeight / 2, bottom: window.innerHeight / 2, width: 0 };
+    const pr = pop.getBoundingClientRect();
+    const x = Math.max(8, Math.min(tr.left + (tr.width - pr.width) / 2, window.innerWidth - pr.width - 8));
+    const below = tr.bottom + 10;
+    const y = (below + pr.height + 8 <= window.innerHeight) ? below : Math.max(8, tr.top - pr.height - 10);
+    pop.style.left = x + 'px';
+    pop.style.top = y + 'px';
+    if (o.focusName) {
+      const input = pop.querySelector('.folder-name-input');
+      if (input) { input.focus(); input.select(); }
+    }
+  }
+  function renderFolderPopup() {
+    const pop = folderPopEl();
+    if (!pop) return;
+    const folder = state.items.find(x => x.id === openFolderId);
+    if (!folder || !isFolder(folder)) { closeFolderPopup(); return; }
+    const kids = Array.isArray(folder.children) ? folder.children : [];
+    pop.innerHTML = `
+      <input class="folder-name-input" value="${escapeHtml(folder.name || '')}" maxlength="32"
+        placeholder="${escapeHtml(t('folder.name_ph'))}" aria-label="${escapeHtml(t('folder.name_ph'))}">
+      <div class="folder-pop-grid">
+        ${kids.map(c => {
+          const p = cardIconParts(c);
+          const bgStyle = p.bg ? `background:${p.bg};` : '';
+          const safeTitle = escapeHtml(c.title);
+          const safeHref = /^https?:\/\//i.test(c.url || '') ? c.url : '#';
+          return `<a class="fcard" href="${escapeHtml(safeHref)}" data-id="${escapeHtml(c.id)}" draggable="true" target="_blank" rel="noopener" title="${safeTitle}">
+            <span class="fcard-ico${p.customCls ? ' ' + p.customCls : ''}" style="${bgStyle}color:${p.ink}">${p.ico}</span>
+            <span class="fcard-title">${safeTitle}</span>
+          </a>`;
+        }).join('')}
+      </div>
+      <div class="folder-pop-hint">${escapeHtml(t('folder.hint'))}</div>`;
+    pop.hidden = false;
+    // Rename: Enter/blur commits (empty falls back to the default name), Esc reverts.
+    const nameInput = pop.querySelector('.folder-name-input');
+    nameInput.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); nameInput.blur(); }
+      else if (e.key === 'Escape') { nameInput.value = folder.name || ''; nameInput.blur(); }
+    });
+    nameInput.addEventListener('blur', async () => {
+      const f = state.items.find(x => x.id === openFolderId);
+      if (!f) return;
+      const name = nameInput.value.trim().slice(0, 32) || t('folder.default_name');
+      if (name === (f.name || '')) return;
+      const next = folderRename(state.items, f.id, name);
+      if (!next) return;
+      state.items = next;
+      await Store.set(K.items, state.items);
+      renderGrid(); // the tile's label follows the rename
+    });
+    // Drag a child out: the drop lands on a grid card (insert/merge) or on empty grid space (append).
+    pop.querySelectorAll('.fcard').forEach(el => {
+      el.addEventListener('dragstart', e => {
+        folderDrag = { folderId: openFolderId, childId: el.dataset.id };
+        el.classList.add('dragging');
+        try { e.dataTransfer.setData('text/plain', el.dataset.id); e.dataTransfer.effectAllowed = 'move'; } catch {}
+      });
+      el.addEventListener('dragend', () => { el.classList.remove('dragging'); folderDrag = null; });
+    });
+  }
+  // Re-render the open popup after a mutation; closes itself when the folder is gone (dissolved).
+  function refreshFolderPopup() {
+    if (openFolderId) renderFolderPopup();
+  }
+  // Bound once at boot: #grid / #folder-pop are static elements and the outside-click / Esc
+  // closers are document-level — none of this may be rebound on every grid re-render.
+  function bindFolderGlobal() {
+    const pop = folderPopEl();
+    if (!pop) return;
+    // Drop a grid card into the open popup = add it to that folder.
+    pop.addEventListener('dragover', e => {
+      if (!gridDragId && !folderDrag) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+    pop.addEventListener('drop', async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (folderDrag) { folderDrag = null; return; } // dropped back inside its own folder: no-op
+      if (!gridDragId || !openFolderId) return;
+      clearMergeArmed();
+      const next = folderMergeItems(state.items, gridDragId, openFolderId, t('folder.default_name'));
+      if (!next) return;
+      state.items = next;
+      await Store.set(K.items, state.items);
+      syncUI();
+      renderFolderPopup();
+    });
+    // Empty grid space accepts a child dragged out of the popup (appended at the end of the view).
+    const grid = document.getElementById('grid');
+    grid.addEventListener('dragover', e => {
+      if (!folderDrag || e.target.closest('.card')) return; // card-level handlers take card drops
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+    grid.addEventListener('drop', async e => {
+      if (!folderDrag || e.target.closest('.card')) return;
+      e.preventDefault();
+      const fd = folderDrag;
+      folderDrag = null;
+      const res = folderRemoveChild(state.items, fd.folderId, fd.childId);
+      if (!res) return;
+      state.items = res.items;
+      insertIntoView(res.child, null, false);
+      await Store.set(K.items, state.items);
+      syncUI();
+      refreshFolderPopup();
+    });
+    // Close on outside click / Esc (mirrors the context menu's closers).
+    document.addEventListener('click', e => {
+      if (!openFolderId) return;
+      if (e.target.closest('#folder-pop') || e.target.closest('.card-folder')) return;
+      closeFolderPopup();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFolderPopup(); });
   }
 
   function bindCardEvents() {
@@ -1434,35 +1707,111 @@
         deleteItem(a.dataset.id);
       });
     });
-    // drag & drop
-    let dragId = null;
-    document.querySelectorAll('#grid a.card').forEach(a => {
+    // Folder tiles: click / Enter opens the popup; right-click offers folder actions.
+    document.querySelectorAll('#grid .card-folder').forEach(f => {
+      f.addEventListener('click', e => {
+        e.preventDefault();
+        if (openFolderId === f.dataset.id) { closeFolderPopup(); return; }
+        openFolderPopup(f.dataset.id);
+      });
+      f.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFolderPopup(f.dataset.id); }
+      });
+      f.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        const id = f.dataset.id;
+        openContextMenu(e.clientX, e.clientY, [
+          { label: t('ctx.open_folder'), action: () => openFolderPopup(id) },
+          { label: t('ctx.rename_folder'), action: () => openFolderPopup(id, { focusName: true }) },
+          { label: t('ctx.ungroup_folder'), action: () => dissolveFolder(id) },
+          { sep: true },
+          { label: t('ctx.del'), danger: true, action: () => deleteItem(id) }
+        ]);
+      });
+    });
+    // drag & drop (shortcuts and folder tiles alike; the add tile is excluded)
+    document.querySelectorAll('#grid .card:not(.card-add)').forEach(a => {
       a.addEventListener('dragstart', e => {
         // Dragging a link onto the address bar would open it, so suppress the default link-drag visuals.
         if (e.target.closest('.card-actions')) { e.preventDefault(); return; }
-        dragId = a.dataset.id;
+        gridDragId = a.dataset.id;
         a.classList.add('dragging');
-        try { e.dataTransfer.setData('text/plain', dragId); e.dataTransfer.effectAllowed = 'move'; } catch {}
+        try { e.dataTransfer.setData('text/plain', gridDragId); e.dataTransfer.effectAllowed = 'move'; } catch {}
       });
       a.addEventListener('dragend', () => {
         a.classList.remove('dragging');
         document.querySelectorAll('.card.drag-over').forEach(n => n.classList.remove('drag-over'));
-        dragId = null;
+        clearMergeArmed();
+        gridDragId = null;
       });
       a.addEventListener('dragover', e => {
-        if (!dragId || dragId === a.dataset.id) return;
+        if (!gridDragId && !folderDrag) return;
+        if (gridDragId && gridDragId === a.dataset.id) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         document.querySelectorAll('.card.drag-over').forEach(n => n.classList.remove('drag-over'));
         a.classList.add('drag-over');
+        // Hover dwell: lingering on a tile arms folder mode — a stronger highlight, and the
+        // drop merges instead of reordering. Moving on to another tile disarms it.
+        if (mergeCardId !== a.dataset.id) {
+          clearMergeArmed();
+          mergeCardId = a.dataset.id;
+          const el = a;
+          mergeTimer = setTimeout(() => { if (mergeCardId === el.dataset.id) el.classList.add('drag-merge'); }, FOLDER_DWELL_MS);
+        }
       });
       a.addEventListener('dragleave', () => a.classList.remove('drag-over'));
       a.addEventListener('drop', async e => {
         e.preventDefault();
-        if (!dragId || dragId === a.dataset.id) return;
+        e.stopPropagation(); // keep the grid-level folder-child drop handler out of card drops
+        const mergeArmed = a.classList.contains('drag-merge');
+        clearMergeArmed();
+        a.classList.remove('drag-over');
         const rect = a.getBoundingClientRect();
         // The grid flows horizontally across columns, so use the horizontal midpoint to pick insert-before vs insert-after.
         const before = (e.clientX - rect.left) < rect.width / 2;
+        // A child dragged out of the open folder popup lands here (insert, or dwell-merge onto the target).
+        if (folderDrag) {
+          const fd = folderDrag;
+          folderDrag = null;
+          const res = folderRemoveChild(state.items, fd.folderId, fd.childId);
+          if (res) {
+            state.items = res.items;
+            if (mergeArmed) {
+              const merged = folderMergeItems([...state.items, res.child], res.child.id, a.dataset.id, t('folder.default_name'));
+              if (merged) state.items = merged;
+            } else {
+              insertIntoView(res.child, a.dataset.id, before);
+            }
+            await Store.set(K.items, state.items);
+            syncUI();
+            refreshFolderPopup();
+          }
+          return;
+        }
+        if (!gridDragId || gridDragId === a.dataset.id) return;
+        // Dwell-armed drop: create a folder (two shortcuts), add to a folder, or merge two folders.
+        if (mergeArmed) {
+          const src = state.items.find(x => x.id === gridDragId);
+          const tgt = state.items.find(x => x.id === a.dataset.id);
+          const merged = folderMergeItems(state.items, gridDragId, a.dataset.id, t('folder.default_name'));
+          if (merged) {
+            const created = src && tgt && !isFolder(src) && !isFolder(tgt);
+            const dragId0 = gridDragId;
+            state.items = merged;
+            await Store.set(K.items, state.items);
+            syncUI();
+            if (created) {
+              showToast(t('toast.folder_created'));
+              // Like iOS: a freshly created folder opens right away so it can be renamed.
+              const f = state.items.find(x => isFolder(x) && (x.children || []).some(c => c.id === dragId0));
+              if (f) openFolderPopup(f.id);
+            }
+            return;
+          }
+          // Folders cannot nest into a new folder: fall through to a plain reorder.
+        }
+        const dragId = gridDragId;
         // Reordering only happens between cards visible in the current view, so reorder the visible subset first.
         const scope = state.items.filter(inView);
         const fromIdx = scope.findIndex(x => x.id === dragId);
@@ -1490,6 +1839,7 @@
     const idx = state.items.findIndex(x => x.id === id);
     if (idx < 0) return;
     const removed = state.items.splice(idx, 1)[0];
+    if (openFolderId === id) closeFolderPopup(); // deleting the open folder closes its popup
     await Store.set(K.items, state.items);
     syncUI();
     // Undo: each closure captures the item and index at deletion time, so repeated deletes each restore correctly.
@@ -1821,9 +2171,20 @@
     setLangOnly(state.settings.lang);
     const gids = new Set(state.settings.groups.map(g => g.id));
     state.items = Array.isArray(migrated.items)
-      ? migrated.items
-          .filter(it => it && typeof it.url === 'string')
-          .map(it => ({ id: it.id || nid(), title: String(it.title || '').slice(0, 32) || t('toast.unnamed'), url: it.url, group: gids.has(it.group) ? it.group : '', icon: sanitizeIconDataUrl(it.icon) || undefined }))
+      ? migrated.items.flatMap(it => {
+          // Folder records: validate kids one by one; degenerate folders (< 2 valid kids)
+          // dissolve into plain shortcuts inheriting the folder's group.
+          if (it && it.type === 'folder') {
+            const fgroup = gids.has(it.group) ? it.group : '';
+            const kids = (Array.isArray(it.children) ? it.children : [])
+              .filter(c => c && typeof c.url === 'string')
+              .map(c => ({ id: c.id || nid(), title: String(c.title || '').slice(0, 32) || t('toast.unnamed'), url: c.url, icon: sanitizeIconDataUrl(c.icon) || undefined, color: safeColor(c.color) || undefined }));
+            if (kids.length < 2) return kids.map(k => ({ ...k, group: fgroup }));
+            return [{ id: it.id || nid(), type: 'folder', name: String(it.name || '').slice(0, 32) || t('folder.default_name'), group: fgroup, children: kids }];
+          }
+          if (!it || typeof it.url !== 'string') return [];
+          return [{ id: it.id || nid(), title: String(it.title || '').slice(0, 32) || t('toast.unnamed'), url: it.url, group: gids.has(it.group) ? it.group : '', icon: sanitizeIconDataUrl(it.icon) || undefined }];
+        })
       : [];
     state.wallpaper = pickWallpaperFromData(migrated.wallpaper);
     state.todos = Array.isArray(migrated.todos)
@@ -2832,6 +3193,13 @@
     2: (d) => {
       if (d.prompts == null) d.prompts = DEFAULT_PROMPTS.map(p => ({ ...p, id: nid() }));
       return d;
+    },
+    // v4 -> v5: shortcut folders (an item with type:'folder' carrying a children[] array of plain
+    // shortcuts; the folder itself holds the group). Hand-edited / foreign folders are normalized;
+    // degenerate folders (< 2 valid kids) dissolve back into plain shortcuts.
+    4: (d) => {
+      d.items = (d.items || []).flatMap(it => normalizeFolderRecord(it, t('folder.default_name')));
+      return d;
     }
   };
   function migrateSchema(data) {
@@ -3282,6 +3650,7 @@
     renderEngineList();
     syncUI();
     bindGroupBar();
+    bindFolderGlobal();
     applyWidgets();
     bindWidgetControls();
     startClock();
@@ -3421,7 +3790,7 @@
   // Exposed for the offline probe harness: it has to drive port fallback and timeout paths with a
   // stubbed fetch, which is impossible from the outside.
   window.LT_PROBE_WB = probeWorkBuddy;
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
