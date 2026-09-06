@@ -2733,6 +2733,7 @@ html[data-theme="light"] .todo-item.done .t-check::after { background: #fff; }
 /* Suggestion dropdown: local shortcut/bookmark rows (the search box doubles as a launcher). */
 .suggest-list .sg-site { gap: 9px; }
 .suggest-list .sg-site .sg-site-ico {
+  position: relative;
   flex: none;
   width: 20px; height: 20px;
   display: inline-flex; align-items: center; justify-content: center;

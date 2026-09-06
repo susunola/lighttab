@@ -348,6 +348,12 @@ console.log('[4] pure functions');
         if ([...e.tx].length > 6) bad.push(`${host}: wordmark too long ${e.tx}`);
       } else if (e.d) {
         mono++;
+      } else if (e.img) {
+        // Raster entries (bundled data-URI, e.g. the 小鹅通 goose): must be a small local png
+        // data-URI with a sane hex tile colour — still zero network at runtime.
+        if (e.img.length > 9000 || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(e.img)) {
+          bad.push(`${host}: img must be a small bundled data:image/png;base64`);
+        }
       } else {
         bad.push(`${host}: matches none of the three shapes`);
       }

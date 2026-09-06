@@ -1738,6 +1738,11 @@
   //                          drawing them as text is more faithful than a hand-traced silhouette
   // ICONDB is static, authored data — never user input — so the markup below is not sanitised.
   function iconGlyphHtml(icon, glyphColor) {
+    // Raster entries (rare: brands like 小鹅通 ship only a raster mark; the data-URI is bundled,
+    // so this is still zero-network). Sized by the .logo-img / .eng-logo img / .icon-preview rules.
+    if (icon.img) {
+      return `<img class="logo-img" src="${icon.img}" alt="" draggable="false">`;
+    }
     if (icon.p) {
       const paths = icon.p.map((s) => `<path fill="${s.f}" d="${s.d}"/>`).join('');
       return `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
@@ -1774,8 +1779,15 @@
       bg = safeColor(it.color);
       ico = `<img class="logo-img" src="${customIcon}" alt="" draggable="false">`;
     } else if (icon) {
-      bg = icon.c;
-      ico = iconGlyphHtml(icon);
+      if (icon.img) {
+        // Raster brand mark (bundled data-URI): full-bleed tile in the brand colour, same visual
+        // language as the vector glyphs (the PNG ships its own rounded-square artwork).
+        bg = safeColor(icon.c) || '#1f2937';
+        ico = `<img class="logo-img" src="${icon.img}" alt="" draggable="false">`;
+      } else {
+        bg = icon.c;
+        ico = iconGlyphHtml(icon);
+      }
     } else {
       bg = safeColor(it.color) || pickColor(host);
       // Letter fallback: CJK titles use their first character, otherwise the first letter of the hostname, uppercased.
