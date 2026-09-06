@@ -148,6 +148,10 @@
     'grid.empty':      { zh: '暂无快捷方式，点 ＋ 添加', en: 'No shortcuts yet — click ＋ to add' },
     'grid.empty_view': { zh: '该视图暂无快捷方式，点 ＋ 添加', en: 'No shortcuts in this view — click ＋ to add' },
 
+    // ---------- First-run onboarding hint (one quiet card, dismissed forever) ----------
+    'onboard.hint':    { zh: '在这里搜索 · 点网格末尾的 ＋ 添加快捷方式 · 右键图标看更多选项', en: 'Search here · add shortcuts with the ＋ tile · right-click a tile for more options' },
+    'onboard.dismiss': { zh: '知道了', en: 'Got it' },
+
     // ---------- Groups ----------
     'group.new':       { zh: '＋ 新建分组', en: '＋ New group' },
     'group.all':       { zh: '全部', en: 'All' },
@@ -199,6 +203,8 @@
     'wall.got_cached':{ zh: '离线模式：显示上次缓存的 {n} 张壁纸（「获取最新」需联网）', en: 'Offline — showing {n} cached wallpapers (Get latest needs network)' },
     'wall.rotate':    { zh: '每日自动更换壁纸', en: 'Daily wallpaper auto-rotate' },
     'wall.rotate_tip':{ zh: '开启后，每个自然日自动应用一张壁纸库中的图片；当天手动选择的壁纸不会被自动覆盖。', en: 'When on, an image from the library is applied each calendar day. Manual picks are kept for the rest of that day.' },
+    'wall.fav':      { zh: '收藏这张壁纸', en: 'Favorite this wallpaper' },
+    'wall.fav_only': { zh: '只看收藏', en: 'Favorites only' },
     'wall.src':          { zh: '壁纸源', en: 'Source' },
     'wall.src_bing':     { zh: '必应 · 每日精选', en: 'Bing · Daily' },
     'wall.src_wallhaven':{ zh: 'Wallhaven · 4K 社区', en: 'Wallhaven · 4K' },
@@ -225,6 +231,8 @@
     'theme.dark':   { zh: '深色', en: 'Dark' },
     'theme.light':  { zh: '浅色', en: 'Light' },
     'theme.system': { zh: '跟随系统', en: 'Follow system' },
+    'gen.clock12h':     { zh: '12 小时制时钟', en: '12-hour clock' },
+    'gen.clock12h_tip': { zh: '开启后时钟按 12 小时制显示，带上午/下午小标。', en: 'Shows h:mm with a small AM/PM indicator (上午/下午 in Chinese).' },
     'gen.data':     { zh: '数据管理', en: 'Data management' },
     'gen.export':   { zh: '导出数据', en: 'Export data' },
     'gen.import':   { zh: '导入数据', en: 'Import data' },

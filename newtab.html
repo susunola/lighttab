@@ -55,6 +55,7 @@
         <div class="clock-row">
           <span class="clock-hhmm" id="clock-hhmm">--:--</span>
           <span class="clock-sec" id="clock-sec">--</span>
+          <span class="clock-ampm" id="clock-ampm" hidden></span>
         </div>
         <div class="clock-date" id="clock-date"></div>
         <div class="clock-lunar" id="clock-lunar"></div>
@@ -217,6 +218,13 @@
 
   <div id="context-menu" class="menu" hidden></div>
   <div id="folder-pop" class="folder-pop" role="dialog" hidden></div>
+  <!-- First-run onboarding hint: one quiet card under the search box, dismissed forever -->
+  <div id="onboard-tip" class="onboard-tip" role="note" hidden>
+    <span class="onboard-text" data-i18n="onboard.hint">Search here · add shortcuts with the ＋ tile · right-click a tile for more options</span>
+    <button type="button" class="onboard-close" id="onboard-close" data-i18n-aria="onboard.dismiss" aria-label="Got it">
+      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
   <div id="toast" class="toast" hidden></div>
   <div id="quote" class="quote" hidden aria-live="polite"></div>
 
@@ -294,6 +302,7 @@
                 <option value="unsplash" data-i18n="wall.src_unsplash" hidden>Unsplash · Photos</option>
               </select>
               <button type="button" class="btn ghost sm" id="btn-wall-fetch" data-i18n="wall.fetch">Get latest</button>
+              <button type="button" class="btn ghost sm" id="btn-wall-favs" data-i18n="wall.fav_only" aria-pressed="false" hidden>Favorites only</button>
             </div>
             <div class="wall-lib-grid" id="wall-lib-grid"></div>
             <p class="form-tip wall-lib-tip" id="wall-lib-tip" data-i18n="wall.lib_tip">Curated Bing daily wallpapers; click to apply. Requires network (see credits).</p>
@@ -359,6 +368,11 @@
               <option value="system" data-i18n="theme.system">Follow system</option>
             </select>
           </label>
+          <label class="check-row">
+            <input type="checkbox" id="f-clock12h">
+            <span data-i18n="gen.clock12h">12-hour clock</span>
+          </label>
+          <p class="form-tip" data-i18n="gen.clock12h_tip">Shows h:mm with a small AM/PM indicator.</p>
           <div class="wgt-zone">
             <span class="data-label" data-i18n="gen.widgets">Widgets</span>
             <div class="wgt-rows">

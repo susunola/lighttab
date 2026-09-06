@@ -69,6 +69,8 @@
     lang: 'zh',
     // Theme: 'dark' | 'light' | 'system' (follow the OS scheme).
     theme: 'dark',
+    // Clock format: false = 24h (default); true = 12h with a small AM/PM (上午/下午) indicator.
+    clock12h: false,
     wallpaper: { ...BUNDLED_WALL },
     // Daily Bing wallpaper auto-rotate: when on, one Bing daily image from the local pool is
     // applied per calendar day. Manual picks always win for the rest of that day.
@@ -374,9 +376,10 @@
   // The backend origin is shared with sync.js via window.LT_API_BASE (sync.js loads first and defines it);
   // the literal here is a defensive fallback in case the load order ever changes.
   const WALL_LIB_BASE = window.LT_API_BASE || 'https://lighttab.atomwangnus.com';
-  let wallLibImages = null;    // [{url,title,copyright}] of the current pool (null = not loaded yet)
+  let wallLibImages = null;    // [{url,title,copyright,fav?}] of the current pool (null = not loaded yet)
   let wallLibSavedAt = 0;      // ms epoch of the last successful fetch (drives the once-a-day silent refresh)
   let wallLibSource = 'bing';  // current wallpaper source: bing | wallhaven | unsplash
+  let wallFavOnly = false;     // library filter: favorites only (session-scoped, not persisted)
 
   // Preset swatch rendering (top level so bindSettings and the wallpaper library can both reuse it).
   function renderSwatches() {
@@ -425,6 +428,20 @@
     await localRawSet(K.walllib, { savedAt: wallLibSavedAt, images });
   }
 
+  // Favorites persist inside the same lt.walllib entries (a `fav` flag on each image). Unlike
+  // saveWallLibCache this keeps savedAt untouched — a favorite toggle is not a refetch.
+  async function persistWallLib() {
+    if (!Array.isArray(wallLibImages)) return;
+    try { await localRawSet(K.walllib, { savedAt: wallLibSavedAt, images: wallLibImages }); } catch { /* best effort */ }
+  }
+  function toggleWallFav(url) {
+    const im = (wallLibImages || []).find(x => x && x.url === url);
+    if (!im) return;
+    if (im.fav) delete im.fav; else im.fav = true;
+    persistWallLib();
+    renderWallLibGrid();
+  }
+
   async function fetchWallLib(opts) {
     const o = opts || {};
     const btn = document.getElementById('btn-wall-fetch');
@@ -464,11 +481,23 @@
   function renderWallLibGrid() {
     const grid = document.getElementById('wall-lib-grid');
     if (!grid) return;
-    if (!wallLibImages || !wallLibImages.length) { grid.innerHTML = ''; return; }
+    const pool = Array.isArray(wallLibImages) ? wallLibImages : [];
+    // The favorites filter toggle only makes sense once a pool exists.
+    const favsBtn = document.getElementById('btn-wall-favs');
+    if (favsBtn) {
+      favsBtn.hidden = !pool.length;
+      favsBtn.classList.toggle('on', wallFavOnly);
+      favsBtn.setAttribute('aria-pressed', String(wallFavOnly));
+    }
+    const list = pool.filter(im => !wallFavOnly || im.fav);
+    if (!list.length) { grid.innerHTML = ''; return; }
     const cur = state.wallpaper && state.wallpaper.type === 'image' ? state.wallpaper.value : '';
-    grid.innerHTML = wallLibImages.map(im => `
+    grid.innerHTML = list.map(im => `
       <div class="wall-thumb ${im.url === cur ? 'active' : ''}" data-url="${escapeHtml(im.url)}" title="${escapeHtml(im.copyright || im.title || '')}">
         <img src="${escapeHtml(im.url)}" alt="${escapeHtml(im.title || '')}" loading="lazy">
+        <button type="button" class="wall-fav${im.fav ? ' on' : ''}" data-url="${escapeHtml(im.url)}" title="${t('wall.fav')}" aria-label="${t('wall.fav')}" aria-pressed="${im.fav ? 'true' : 'false'}">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </button>
         <span class="wall-thumb-copy">${escapeHtml(im.title || im.copyright || '')}</span>
       </div>
     `).join('');
@@ -479,6 +508,12 @@
         renderSwatches();
         renderWallLibGrid();
         showToast(t('toast.wall_applied'));
+      });
+    });
+    grid.querySelectorAll('.wall-fav').forEach(el => {
+      el.addEventListener('click', e => {
+        e.stopPropagation(); // a favorite toggle must not apply the wallpaper
+        toggleWallFav(el.dataset.url);
       });
     });
   }
@@ -723,9 +758,18 @@
   }
 
   // ---------- Clock / greeting ----------
+  // 12h/24h rendering for the clock (pure — smoke-tested). 24h zero-pads and carries no meridiem;
+  // 12h shows h:mm plus a localized AM/PM label (上午/下午 in zh).
+  function formatClock(h, m, use12h, en) {
+    h = Number(h) || 0; m = Number(m) || 0;
+    if (!use12h) return { hhmm: `${pad2(h)}:${pad2(m)}`, ampm: '' };
+    const ampm = h < 12 ? (en ? 'AM' : '上午') : (en ? 'PM' : '下午');
+    return { hhmm: `${h % 12 || 12}:${pad2(m)}`, ampm };
+  }
   function startClock() {
     const hhmmEl = document.getElementById('clock-hhmm');
     const secEl = document.getElementById('clock-sec');
+    const ampmEl = document.getElementById('clock-ampm');
     const dateEl = document.getElementById('clock-date');
     const lunarEl = document.getElementById('clock-lunar');
     const greetEl = document.getElementById('clock-greet');
@@ -741,7 +785,9 @@
       secEl.textContent = ss;
       if (hh * 60 + mm !== lastMinute) {
         lastMinute = hh * 60 + mm;
-        hhmmEl.textContent = `${pad2(hh)}:${pad2(mm)}`;
+        const fc = formatClock(hh, mm, state.settings.clock12h === true, isEn());
+        hhmmEl.textContent = fc.hhmm;
+        if (ampmEl) { ampmEl.textContent = fc.ampm; ampmEl.hidden = !fc.ampm; }
       }
       if (hh !== lastHour) {
         lastHour = hh;
@@ -2157,6 +2203,7 @@
     state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
     state.settings.widgets = normalizeWidgets(state.settings.widgets);
     state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
+    state.settings.clock12h = state.settings.clock12h === true;
     // Imported engine lists get the same validation as the add form: customs must be well-formed
     // http(s) URLs carrying {q}; hidden ids must name real built-ins.
     state.settings.customEngines = Array.isArray(state.settings.customEngines)
@@ -2292,6 +2339,11 @@
       showToast(t('toast.wall_reset'));
     });
     document.getElementById('btn-wall-fetch').addEventListener('click', fetchWallLib);
+    const wallFavsBtn = document.getElementById('btn-wall-favs');
+    if (wallFavsBtn) wallFavsBtn.addEventListener('click', () => {
+      wallFavOnly = !wallFavOnly;
+      renderWallLibGrid();
+    });
     const wallSrcSel = document.getElementById('f-wall-src');
     if (wallSrcSel) wallSrcSel.addEventListener('change', () => {
       wallLibSource = wallSrcSel.value || 'bing';
@@ -2354,6 +2406,13 @@
       await Store.set(K.settings, state.settings);
       applyTheme(); // flips the whole page instantly — no toast needed
     });
+    // 12h/24h clock toggle (General). Older profiles lack the key, which reads as 24h.
+    const clock12hCb = document.getElementById('f-clock12h');
+    if (clock12hCb) clock12hCb.addEventListener('change', async () => {
+      state.settings.clock12h = !!clock12hCb.checked;
+      await Store.set(K.settings, state.settings);
+      startClock(); // force a redraw so the format flips immediately
+    });
     // Wallpaper daily auto-rotate toggle (Wallpaper pane). Turning it on clears today's marker so the
     // very first rotate applies immediately instead of being blocked by an earlier manual pick.
     const wallRotCb = document.getElementById('f-wall-rotate');
@@ -2384,6 +2443,8 @@
       if (wallRotCb) wallRotCb.checked = !!state.settings.wallRotate;
       const suggestCb = document.getElementById('f-suggest');
       if (suggestCb) suggestCb.checked = state.settings.suggest !== false;
+      const clock12hCb = document.getElementById('f-clock12h');
+      if (clock12hCb) clock12hCb.checked = state.settings.clock12h === true;
       const wallSrcSel = document.getElementById('f-wall-src');
       if (wallSrcSel) wallSrcSel.value = wallLibSource;
       if (tab === 'wall' && wallLibImages === null) fetchWallLib(); // warm the pool (cached fallback when offline)
@@ -3626,6 +3687,32 @@
   }
 
 
+  // ---------- First-run onboarding hint ----------
+  // One quiet tip card under the search box, shown only on a genuinely fresh profile (nothing
+  // ever persisted under lt.settings). Dismissed by the × button, a click on the card, or Esc;
+  // the dismissal lands in settings.onboarded, so it never comes back.
+  function maybeShowOnboarding(raw) {
+    const el = document.getElementById('onboard-tip');
+    if (!el || !el.hidden) return;
+    if (raw && raw.settings) return; // an existing profile is never first-run
+    if (state.settings.onboarded === true) return;
+    // Anchor just under the search box, centred on it (measured live, canvas layout included).
+    const sr = document.getElementById('search');
+    if (sr) {
+      const r = sr.getBoundingClientRect();
+      el.style.left = (r.left + r.width / 2) + 'px';
+      el.style.top = (r.bottom + 14) + 'px';
+    }
+    el.hidden = false;
+  }
+  async function dismissOnboarding() {
+    const el = document.getElementById('onboard-tip');
+    if (el) el.hidden = true;
+    if (state.settings.onboarded === true) return;
+    state.settings.onboarded = true;
+    await Store.set(K.settings, state.settings);
+  }
+
   // ---------- Boot ----------
   async function boot() {
     const { raw, data } = await loadDataIntoState();
@@ -3701,6 +3788,7 @@
         document.querySelectorAll('.modal').forEach(m => m.hidden = true);
         document.getElementById('engine-list').hidden = true;
         window.LT_PROMPTS.closePalette(false);
+        dismissOnboarding();
         if (activePrompt && isTypingTarget(document.activeElement)) {
           const qq = document.getElementById('q');
           if (document.activeElement === qq) window.LT_PROMPTS.clearActiveTemplate();
@@ -3750,6 +3838,13 @@
 
     // Free canvas layout (draggable blocks): initialised last, once every block has rendered.
     window.LT_CANVAS.initCanvasLayout();
+    // Onboarding hint, after the canvas settles so the search box has its final position.
+    const onboardEl = document.getElementById('onboard-tip');
+    if (onboardEl) {
+      onboardEl.addEventListener('click', dismissOnboarding);
+      document.getElementById('onboard-close').addEventListener('click', dismissOnboarding);
+    }
+    maybeShowOnboarding(raw);
     // Boot order note: applyWidgets() runs before the canvas exists, so its recapture is a no-op
     // there. If this profile arrived with widgets already removed (cloud sync, imported file, a
     // previous session), the frozen coordinates still describe the old three-widget page — fix
@@ -3790,7 +3885,7 @@
   // Exposed for the offline probe harness: it has to drive port fallback and timeout paths with a
   // stubbed fetch, which is impossible from the outside.
   window.LT_PROBE_WB = probeWorkBuddy;
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord, formatClock };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

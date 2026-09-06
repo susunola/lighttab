@@ -1015,6 +1015,146 @@ for (const sel of ['.card-folder', '.folder-ico', '.folder-mini-grid', '.folder-
   assert(cssSrc.includes(sel), `CSS defines ${sel}`);
 }
 
+// ---------- 17) first-run onboarding hint ----------
+console.log('[17] onboarding hint');
+// Static structure: one quiet tip card with an i18n'd text hook and a dismiss button
+assert(/id="onboard-tip" class="onboard-tip"[^>]*hidden/.test(html), 'newtab.html contains the #onboard-tip card (hidden by default)');
+assert(/data-i18n="onboard\.hint"/.test(html), 'onboarding text carries data-i18n="onboard.hint"');
+assert(/id="onboard-close"/.test(html) && /data-i18n-aria="onboard\.dismiss"/.test(html), 'onboarding dismiss button carries data-i18n-aria="onboard.dismiss"');
+// Data model: a flag inside lt.settings (no new storage key); existing profiles (saved settings) never see it
+assert(!/'lt\.onboard/.test(appSrc), 'onboarding flag lives inside lt.settings (no separate storage key)');
+assert(/state\.settings\.onboarded = true/.test(appSrc), 'dismissal persists settings.onboarded = true');
+assert(/if \(raw && raw\.settings\) return;/.test(appSrc), 'onboarding only shows when lt.settings was never persisted (genuine first run)');
+assert(/function maybeShowOnboarding/.test(appSrc) && /function dismissOnboarding/.test(appSrc), 'app.js defines maybeShowOnboarding / dismissOnboarding');
+assert(/maybeShowOnboarding\(raw\)/.test(appSrc), 'boot calls maybeShowOnboarding with the raw store snapshot');
+assert(/getElementById\('onboard-close'\)\.addEventListener\('click', dismissOnboarding\)/.test(appSrc), 'the × button dismisses the hint');
+assert(/onboardEl\.addEventListener\('click', dismissOnboarding\)/.test(appSrc), 'clicking the card dismisses the hint');
+assert(/e\.key === 'Escape'[\s\S]{0,300}dismissOnboarding\(\);/.test(appSrc), 'Esc dismisses the hint');
+// CSS: glass-consistent card + close button
+assert(/\.onboard-tip \{/.test(cssSrc) && /\.onboard-close/.test(cssSrc), 'CSS defines .onboard-tip / .onboard-close');
+// i18n: both languages, non-empty
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  const oKeys = ['onboard.hint', 'onboard.dismiss'];
+  I.setLang('zh');
+  assert(oKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'onboarding entries translated in zh', oKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('en');
+  assert(oKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'onboarding entries translated in en', oKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('zh');
+}
+
+// ---------- 18) motion polish ----------
+console.log('[18] motion polish');
+// The context menu was the only overlay without the shared pop-in animation
+assert(/\.menu \{[^}]*animation: pop \.14s ease/.test(cssSrc), 'context menu now pops in like the other overlays');
+// Settings pane switches fade in
+assert(/\.tab-pane \{ animation: fade \.16s ease/.test(cssSrc), 'settings pane switches fade in');
+// Widget cards lift on hover (top-stack widgets excluded — they have no card chrome)
+assert(/\.widget \{[^}]*transition: transform \.18s ease/.test(cssSrc), 'widget cards carry a transform transition');
+assert(/\.widget:not\(\.w-top\):hover \{[^}]*transform: translateY\(-2px\)/.test(cssSrc), 'widget cards lift 2px on hover');
+// Wallpaper swatches / library thumbs: lift + slow image zoom
+assert(/\.swatch:hover \{ transform: translateY\(-2px\)/.test(cssSrc), 'swatches lift 2px on hover');
+assert(/\.wall-thumb:hover img \{ transform: scale\(1\.05\)/.test(cssSrc), 'library thumbs zoom their image on hover');
+assert(/\.wall-thumb img \{[^}]*transition: transform \.25s ease/.test(cssSrc), 'thumb zoom is eased over 250ms');
+// Onboarding card pops in
+assert(/\.onboard-tip \{[^}]*animation: pop \.18s ease/.test(cssSrc), 'onboarding card pops in');
+// Every animation/transition is disabled under prefers-reduced-motion (blanket rule, covers all of the above)
+assert(/@media \(prefers-reduced-motion: reduce\) \{\s*\* \{ animation: none !important; transition: none !important; \}\s*\}/.test(cssSrc),
+  'prefers-reduced-motion media query disables all animations/transitions');
+
+// ---------- 19) 12/24-hour clock ----------
+console.log('[19] 12/24-hour clock');
+// Data model: a boolean inside lt.settings (no new storage key), default off (24h)
+assert(/clock12h: false/.test(appSrc), 'DEFAULT_SETTINGS keeps the 24h default (clock12h: false)');
+assert(!/'lt\.clock/.test(appSrc), 'clock format lives inside lt.settings (no separate storage key)');
+// Static structure: the General-pane toggle + the meridiem span in the clock row
+assert(/<input type="checkbox" id="f-clock12h">/.test(html), 'settings page contains the #f-clock12h checkbox');
+assert(/data-i18n="gen\.clock12h"/.test(html) && /data-i18n="gen\.clock12h_tip"/.test(html), 'clock format label/tip entry hooks are complete');
+assert(/<span class="clock-ampm" id="clock-ampm" hidden><\/span>/.test(html), 'clock row contains the hidden #clock-ampm meridiem span');
+// JS: pure formatter exported + tick + settings wiring + import validation
+assert(/function formatClock/.test(appSrc), 'app.js defines formatClock()');
+assert(/formatClock/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'formatClock is exported to LT_PURE');
+assert(/formatClock\(hh, mm, state\.settings\.clock12h === true, isEn\(\)\)/.test(appSrc), 'clock tick renders via formatClock()');
+assert(/getElementById\('f-clock12h'\)/.test(appSrc), 'settings toggle is bound');
+assert(/state\.settings\.clock12h = state\.settings\.clock12h === true/.test(appSrc), 'doImport validates clock12h');
+// CSS: meridiem styles for both placements
+assert(/\.wclock \.clock-ampm \{/.test(cssSrc), 'CSS defines .clock-ampm');
+assert(/\.widget\.wclock\.w-top \.clock-ampm/.test(cssSrc), 'top-state clock has a dedicated meridiem size');
+// i18n: both languages, non-empty
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  const cKeys = ['gen.clock12h', 'gen.clock12h_tip'];
+  I.setLang('zh');
+  assert(cKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'clock format entries translated in zh', cKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('en');
+  assert(cKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'clock format entries translated in en', cKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('zh');
+}
+// formatClock behaviour (sandboxed app.js, same convention as section 4b)
+{
+  const noop = () => {};
+  const sandbox = {
+    document: { readyState: 'loading', addEventListener: noop, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop, key: () => null, length: 0 },
+    navigator: {},
+    structuredClone,
+    URL, URLSearchParams,
+    setTimeout, clearTimeout, setInterval, clearInterval,
+    requestAnimationFrame: noop, cancelAnimationFrame: noop,
+    console
+  };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(appSrc, sandbox, { filename: 'app.js' });
+  const P = sandbox.LT_PURE;
+  assert(!!P && typeof P.formatClock === 'function', 'formatClock available in sandbox');
+  if (P && P.formatClock) {
+    assert(P.formatClock(8, 49, false, false).hhmm === '08:49' && P.formatClock(8, 49, false, false).ampm === '', '24h: zero-padded, no meridiem');
+    assert(P.formatClock(23, 5, false, true).hhmm === '23:05', '24h keeps 23:05');
+    assert(P.formatClock(8, 49, true, false).hhmm === '8:49' && P.formatClock(8, 49, true, false).ampm === '上午', '12h zh morning: 8:49 上午');
+    assert(P.formatClock(13, 5, true, true).hhmm === '1:05' && P.formatClock(13, 5, true, true).ampm === 'PM', '12h en afternoon: 1:05 PM');
+    assert(P.formatClock(0, 0, true, true).hhmm === '12:00' && P.formatClock(0, 0, true, true).ampm === 'AM', 'midnight is 12:00 AM');
+    assert(P.formatClock(12, 0, true, false).hhmm === '12:00' && P.formatClock(12, 0, true, false).ampm === '下午', 'noon is 12:00 下午');
+  }
+}
+
+// ---------- 20) wallpaper library favorites ----------
+console.log('[20] wallpaper favorites');
+// Data model: a `fav` flag on the existing lt.walllib entries (no new storage key)
+assert(!/'lt\.wallfav/.test(appSrc) && !/lt\.fav/.test(appSrc), 'favorites live inside lt.walllib entries (no separate storage key)');
+assert(/im\.fav = true/.test(appSrc) && /delete im\.fav/.test(appSrc), 'favorite toggle sets/clears a fav flag on the image entry');
+assert(/function persistWallLib/.test(appSrc) && /savedAt: wallLibSavedAt, images: wallLibImages/.test(appSrc),
+  'persistWallLib writes the pool back without touching savedAt');
+assert(/function toggleWallFav/.test(appSrc), 'app.js defines toggleWallFav()');
+// Static structure: heart buttons on thumbs + a favorites-only filter toggle in the library header
+assert(/id="btn-wall-favs"/.test(html) && /data-i18n="wall\.fav_only"/.test(html), 'library header contains the favorites-only filter toggle');
+assert(/class="wall-fav/.test(appSrc) && /aria-pressed/.test(appSrc), 'library thumbs render a wall-fav heart button with aria-pressed');
+assert(/e\.stopPropagation\(\); \/\/ a favorite toggle must not apply the wallpaper/.test(appSrc), 'favorite clicks never apply the wallpaper');
+assert(/wallFavOnly = !wallFavOnly/.test(appSrc), 'filter toggle flips wallFavOnly');
+assert(/pool\.filter\(im => !wallFavOnly \|\| im\.fav\)/.test(appSrc), 'favorites-only filter narrows the grid');
+// CSS: heart button states + filter toggle active state
+assert(/\.wall-fav \{/.test(cssSrc) && /\.wall-fav\.on/.test(cssSrc), 'CSS defines .wall-fav / .wall-fav.on');
+assert(/#btn-wall-favs\.on/.test(cssSrc), 'CSS defines the filter toggle active state');
+// i18n: both languages, non-empty
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  const fKeys = ['wall.fav', 'wall.fav_only'];
+  I.setLang('zh');
+  assert(fKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'wallpaper favorite entries translated in zh', fKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('en');
+  assert(fKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'wallpaper favorite entries translated in en', fKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('zh');
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);
