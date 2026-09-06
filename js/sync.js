@@ -357,6 +357,21 @@
     };
   }
 
+  // ---------- Data-management placeholders (Settings → Sync) ----------
+  // Clearing the LOCAL sync bookkeeping (dirty flags / revs / last sync time) is fully supported:
+  // nothing user-visible is lost, and the next sync re-uploads from local. DELETING server-side
+  // data needs a backend endpoint that does not exist yet, so this reports a clear "not available"
+  // instead of guessing a request that could be destructive.
+  async function resetLocalSyncState() {
+    S.meta = { lastServerTime: 0, docs: {} };
+    await saveMeta();
+    emit();
+    return { ok: true };
+  }
+  function deleteRemoteData() {
+    return Promise.resolve({ ok: false, error: 'sync.err.backend_delete' });
+  }
+
   window.LT_SYNC = {
     configure(opts) {
       if (opts && typeof opts.remoteApply === 'function') S.remoteApply = opts.remoteApply;
@@ -372,7 +387,7 @@
       }
     },
     onLocalWrite,
-    login, register, resend, logout, syncNow,
+    login, register, resend, logout, syncNow, resetLocalSyncState, deleteRemoteData,
     getState,
     isLoggedIn() { return !!(S.auth && S.auth.token); },
     // Test-only hook (mirrors app.js's window.LT_PURE): lets the offline smoke suite drive the

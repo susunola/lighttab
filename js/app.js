@@ -3476,6 +3476,13 @@
         <div class="sync-actions">
           <button type="button" class="btn ghost sm" data-sync="now">${t('sync.now')}</button>
           <button type="button" class="btn ghost sm" data-sync="logout">${t('sync.logout')}</button>
+        </div>
+        <div class="sync-data">
+          <span class="data-label">${t('sync.data_mgmt')}</span>
+          <div class="sync-actions">
+            <button type="button" class="btn ghost sm" data-sync="wipe-local">${t('sync.wipe_local')}</button>
+            <button type="button" class="btn ghost sm danger" data-sync="wipe-remote">${t('sync.wipe_remote')}</button>
+          </div>
         </div>`;
     }
     renderAvatar(); // the avatar menu mirrors the login state, keep it in step
@@ -3527,6 +3534,13 @@
         showToast(t('sync.logged_out'));
       } else if (action === 'now') {
         window.LT_SYNC.syncNow(false);
+      } else if (action === 'wipe-local') {
+        const r = await window.LT_SYNC.resetLocalSyncState();
+        if (r && r.ok) showToast(t('sync.wipe_local_done'));
+      } else if (action === 'wipe-remote') {
+        if (!confirm(t('sync.wipe_remote_confirm'))) return;
+        const r = await window.LT_SYNC.deleteRemoteData();
+        if (!r || !r.ok) showToast(r && r.error ? t(r.error) : t('sync.status.error'));
       }
       renderSyncPanel();
     });
@@ -3951,7 +3965,13 @@
     { y: 2023, zh: '奥本海默', en: 'Oppenheimer', rate: 8.8, genre: '剧情 / 传记', blurb: '我成了死神，世界的毁灭者。' },
     { y: 2023, zh: '长安三万里', en: 'Chang An', rate: 8.3, genre: '动画 / 历史', blurb: '诗在，长安就在。' },
     { y: 2024, zh: '飞驰人生2', en: 'Pegasus 2', rate: 7.7, genre: '喜剧 / 运动', blurb: '人到中年，也要再飞一次。' },
-    { y: 2024, zh: '第二十条', en: 'Article 20', rate: 7.6, genre: '剧情 / 喜剧', blurb: '法，不能向不法让步。' }
+    { y: 2024, zh: '第二十条', en: 'Article 20', rate: 7.6, genre: '剧情 / 喜剧', blurb: '法，不能向不法让步。' },
+    { y: 1957, zh: '十二怒汉', en: '12 Angry Men', rate: 9.4, genre: '剧情 / 悬疑', blurb: '一间陪审室里，十二个人如何决定一个少年的生死。' },
+    { y: 1961, zh: '大闹天宫', en: 'Havoc in Heaven', rate: 9.4, genre: '动画 / 奇幻', blurb: '中国动画的巅峰一笔，齐天大圣的一腔孤勇。' },
+    { y: 1994, zh: '活着', en: 'To Live', rate: 9.3, genre: '剧情 / 历史', blurb: '人是为了活着本身而活着，而不是为了活着之外的任何事物。' },
+    { y: 2008, zh: '入殓师', en: 'Departures', rate: 8.8, genre: '剧情 / 音乐', blurb: '温柔对待每一个告别，让死者有尊严地启程。' },
+    { y: 2010, zh: '怦然心动', en: 'Flipped', rate: 9.1, genre: '剧情 / 爱情', blurb: '斯人若彩虹，遇上方知有。' },
+    { y: 2021, zh: '雄狮少年', en: 'I Am What I Am', rate: 8.3, genre: '动画 / 运动', blurb: '不认命的人，连狮子也会为他抬头。' }
   ];
   // Local cursor: -1 = follow the deterministic daily pick; otherwise a manual index into the pool.
   let movieCursor = -1;

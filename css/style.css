@@ -2952,3 +2952,11 @@ input[type="file"]:focus-visible {
   will-change: transform;
   cursor: grabbing;
 }
+
+/* Sync panel data-management subsection. */
+.sync-data {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.sync-data .data-label { display: block; margin-bottom: 6px; }

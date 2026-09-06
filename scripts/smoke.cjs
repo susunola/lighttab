@@ -1962,6 +1962,19 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(/\.card\.t-dragging/.test(cssSrc), 'dragged card has a distinct visual state');
 }
 
+// ---------- 31) cloud data mgmt (non-destructive placeholder) + movie pool ----------
+{
+  const syncNowSrc = read('js/sync.js');
+  assert(/resetLocalSyncState/.test(syncNowSrc) && /deleteRemoteData/.test(syncNowSrc),
+    'sync exposes a local-state reset and an explicit not-available remote delete');
+  assert(/data-sync="wipe-local"/.test(appSrc) && /data-sync="wipe-remote"/.test(appSrc),
+    'Sync panel shows local / remote data-management actions');
+  assert(/十二怒汉/.test(appSrc) && /雄狮少年/.test(appSrc), 'movie pool extended (+6 classics)');
+  for (const k of ['sync.data_mgmt', 'sync.wipe_local', 'sync.wipe_remote', 'sync.err.backend_delete']) {
+    assert(i18nSrc.includes(`'${k}'`), `sync data-mgmt i18n ${k}`);
+  }
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);
