@@ -1986,6 +1986,14 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(appSrc.includes(`{ id: 'city-1'`) && appSrc.includes(`{ id: 'forest-2'`), 'WALLPAPERS lists the curated set');
 }
 
+// ---------- 33) wallpaper shuffle ----------
+{
+  assert(/id="btn-wall-shuffle"/.test(html) && /const WALL_SHUFFLE_MAX = 40;/.test(appSrc)
+    && /fetchWallLib\(\{ shuffle: true \}\)/.test(appSrc) && /function collectFavUrls/.test(appSrc),
+    'wallpaper "shuffle" (random idx batch) is wired');
+  assert(/wall\.shuffle/.test(i18nSrc), 'wallpaper shuffle has an i18n label');
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);

@@ -495,6 +495,16 @@
     renderWallLibGrid();
   }
 
+  // "Shuffle" jumps the pool index to a random offset so the backend returns a different batch
+  // ("获取最新" keeps showing the head of the feed). Favorites are preserved across batches.
+  const WALL_SHUFFLE_MAX = 40;
+  async function collectFavUrls() {
+    const favs = new Set();
+    const merge = (arr) => { for (const im of (arr || [])) if (im && im.fav && im.url) favs.add(im.url); };
+    merge(wallLibImages);
+    merge(await loadWallLibCache().catch(() => null));
+    return favs;
+  }
   async function fetchWallLib(opts) {
     const o = opts || {};
     const btn = document.getElementById('btn-wall-fetch');
@@ -506,13 +516,22 @@
     if (!o.silent && tip) tip.textContent = t('wall.loading');
     try {
       const src = wallLibSource || 'bing';
-      const params = new URLSearchParams({ source: src, idx: '0', n: '8' });
+      const params = new URLSearchParams({
+        source: src,
+        idx: o.shuffle ? String(Math.floor(Math.random() * WALL_SHUFFLE_MAX)) : '0',
+        n: '8'
+      });
       if (src === 'bing') params.set('mkt', isEn() ? 'en-US' : 'zh-CN');
       const res = await fetch(WALL_LIB_BASE + '/v1/wallpapers?' + params.toString());
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       wallLibImages = (data.images || []).filter(im => im && sanitizeWallpaperUrl(im.url));
-      if (wallLibImages.length) await saveWallLibCache(wallLibImages);
+      if (wallLibImages.length) {
+        // Re-apply favorites that were set on an earlier batch / cache (flagged by URL).
+        const favs = await collectFavUrls();
+        for (const im of wallLibImages) if (favs.has(im.url)) im.fav = true;
+        await saveWallLibCache(wallLibImages);
+      }
       renderWallLibGrid();
       if (!o.silent && tip) tip.textContent = t('wall.got', { n: wallLibImages.length });
     } catch (e) {
@@ -2409,7 +2428,9 @@
       touchDrag = null;
     };
     grid.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0 && e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+      const ptr = e.pointerType || '';
+      if (ptr !== 'touch' && ptr !== 'pen') return; // mouse keeps the native HTML5 drag
+      if (e.button !== 0) return;
       if (!isFlowGrid()) return; // canvas mode already pointer-drags cards
       if (e.target.closest('.card-actions')) return;
       const card = e.target.closest('.card:not(.card-add)');
@@ -3221,6 +3242,8 @@
       showToast(t('toast.wall_reset'));
     });
     document.getElementById('btn-wall-fetch').addEventListener('click', fetchWallLib);
+    const shuffleBtn = document.getElementById('btn-wall-shuffle');
+    if (shuffleBtn) shuffleBtn.addEventListener('click', () => fetchWallLib({ shuffle: true }));
     const wallFavsBtn = document.getElementById('btn-wall-favs');
     if (wallFavsBtn) wallFavsBtn.addEventListener('click', () => {
       wallFavOnly = !wallFavOnly;
@@ -5406,6 +5429,7 @@
       }
       // "?" opens / closes the shortcut help; "t" focuses the to-do input (when the widget is on).
       if (e.key === '?' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (document.querySelector('.modal:not([hidden])')) return; // never open behind a dialog
         e.preventDefault();
         toggleShortcutHelp();
         return;

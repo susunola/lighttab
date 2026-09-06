@@ -271,6 +271,7 @@
     // ---------- Wallpaper tab ----------
     'wall.lib_title': { zh: '壁纸库', en: 'Wallpaper library' },
     'wall.fetch':     { zh: '获取最新', en: 'Get latest' },
+    'wall.shuffle':   { zh: '换一批', en: 'Shuffle' },
     'wall.lib_tip':   { zh: '精选超高清壁纸（4K+），点击即可应用；需联网获取（图片来源见版权信息）。', en: 'Curated ultra-HD (4K+) wallpapers; click to apply. Requires network (see credits).' },
     'wall.upload':    { zh: '上传自定义图片', en: 'Upload custom image' },
     'wall.reset':     { zh: '重置为默认壁纸', en: 'Reset to default wallpaper' },
