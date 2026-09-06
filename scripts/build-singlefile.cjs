@@ -13,6 +13,9 @@ let html = read('newtab.html');
 
 // Inline the stylesheet.
 const css = read('css/style.css');
+if (/^\s*\(\(\)\s*=>/m.test(css) || !css.includes(':root') || !css.includes('display:')) {
+  throw new Error('Invalid stylesheet: css/style.css must contain CSS, not JavaScript.');
+}
 html = html.replace(
   /<link rel="stylesheet" href="css\/style\.css">/,
   () => '<style>\n' + css + '\n</style>'
@@ -26,6 +29,8 @@ html = html.replace(/<script src="(js\/[^"]+)"><\/script>/g, (m, src) => {
 
 // Inline the bundled wallpaper so the single file stays truly self-contained
 // (the split-file extension loads it as a relative asset; dist cannot).
+const plum = fs.readFileSync(path.join(ROOT, 'assets/wallpaper-blue-hour-plum.jpg'));
+html = html.replaceAll('assets/wallpaper-blue-hour-plum.jpg', 'data:image/jpeg;base64,' + plum.toString('base64'));
 const wall = fs.readFileSync(path.join(ROOT, 'assets/wallpaper-dusk.jpg'));
 html = html.replaceAll('assets/wallpaper-dusk.jpg', 'data:image/jpeg;base64,' + wall.toString('base64'));
 

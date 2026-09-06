@@ -28,7 +28,7 @@
     return BLOCK_DEFS.map(b => ({ ...b, el: document.querySelector(b.sel) })).filter(b => b.el);
   }
   function canvasRoot() { return document.querySelector('.layout'); }
-  function canvasEligible() { return window.innerWidth > CANVAS_MIN_W; }
+  function canvasEligible() { return window.innerWidth > CANVAS_MIN_W && !canvasRoot()?.classList.contains('movie-grid'); }
   function getLayout() {
     const l = A().state.settings && A().state.settings.layout;
     return (l && typeof l === 'object') ? l : null;
@@ -128,8 +128,9 @@
   // ---------- Canvas mode: free card dragging with snap-to-grid ----------
   // In canvas mode cards are absolutely positioned; their (col, row) grid coordinates live in layout.cards[id].
   // Cell size is derived from the #grid container width, matching the CSS repeat(auto-fill, minmax(118px, 1fr)).
-  const CARD_MIN_W = 118;
-  const CARD_GAP = 13;
+  const CARD_MIN_W = 92;
+  function cardMinWidth() { return Math.max(CARD_MIN_W, parseFloat(getComputedStyle(document.getElementById('grid')).getPropertyValue('--tile-track-width')) || 0, parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--icon-size')) + 24); }
+  const CARD_GAP = 16;
   const CARD_GRID_PADDING = 0; // #grid itself has no padding
 
   function getCardLayout() {
@@ -144,12 +145,12 @@
 
   // Max column count the grid can hold, matching CSS auto-fill: floor((W + gap) / (minW + gap)).
   function getCardCols(gridW) {
-    return Math.max(1, Math.floor((gridW + CARD_GAP) / (CARD_MIN_W + CARD_GAP)));
+    return Math.max(1, Math.floor((gridW + CARD_GAP) / (cardMinWidth() + CARD_GAP)));
   }
   // Single track width (under auto-fill, 1fr splits the remaining space evenly) - matches the real CSS column width.
   function getCardTrackW(gridW) {
     const cols = getCardCols(gridW);
-    return (gridW - (cols - 1) * CARD_GAP) / cols;
+    return cardMinWidth();
   }
 
   // Cell size: column width is derived from the container width, because once cards are absolutely positioned
@@ -160,7 +161,7 @@
     const gridW = grid.clientWidth;
     if (!gridW) return null;
     const first = grid.querySelector('.card');
-    const cardH = first ? first.offsetHeight : 0;
+    const cardH = first ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--icon-size')) + 14 + (parseFloat(getComputedStyle(grid).getPropertyValue('--tile-label-height')) || 20) : 0;
     if (!cardH) return null;
     const cardW = getCardTrackW(gridW);
     return { cardW, cardH, stepX: cardW + CARD_GAP, stepY: cardH + CARD_GAP };
@@ -194,63 +195,54 @@
     const visible = Array.from(grid.querySelectorAll('.card'));
     const cols = getCardCols(grid.clientWidth);
     const map = getCardLayout();
-    delete map.__add__; // The add action is derived from visible shortcuts, never pinned.
-    // Garbage-collect coordinates whose card is gone. Without this their cells stay marked occupied
-    // forever, so freshly added cards get pushed into later rows and the grid looks scrambled
-    // (a short first row above a full one). Keyed on the whole state.items set rather than the
-    // currently rendered subset, so switching groups never discards a coordinate. The grid's
-    // trailing add tile is positioned after the last visible shortcut below.
-    const alive = new Set([...(A().state.items || []).map((it) => it.id), '__add__']);
-    let pruned = 0;
-    for (const id in map) if (!alive.has(id)) { delete map[id]; pruned++; }
+    const alive = new Set([...(A().state.items || []).map(it => it.id), '__add__']);
+    let pruned = false;
+    for (const id in map) if (!alive.has(id)) { delete map[id]; pruned = true; }
     if (pruned) {
-      // A deleted card must not leave a hole: compact the survivors into contiguous cells,
-      // preserving their reading order (row-major). Cards in other groups are compacted along
-      // with the visible ones so the map stays globally consistent.
-      const entries = Object.entries(map)
-        .filter(([, p]) => p && typeof p.col === 'number' && typeof p.row === 'number')
-        .sort((a, b) => (a[1].row - b[1].row) || (a[1].col - b[1].col));
-      entries.forEach(([id], i) => { map[id] = { col: i % cols, row: Math.floor(i / cols) }; });
-      // map is the live layout.cards object, so persist once when something was actually dropped -
-      // otherwise every deleted shortcut would leave a coordinate behind on disk forever.
+      for (const c of visible) delete map[c.dataset.id];
       setCardLayoutMap(map);
-      A().Store.set(A().K.settings, A().state.settings);
     }
-    // Existing coordinates are marked occupied; missing ones take the first free cell, scanning column by column then row by row.
     const occupied = new Set();
-    for (const id in map) {
-      const p = map[id];
-      if (p && typeof p.col === 'number' && typeof p.row === 'number') {
-        occupied.add(p.col + ',' + p.row);
-      }
+    const span = c => { const parts = (c.dataset.size || '1x1').split('x').map(Number); return [Math.min(parts[0], cols), parts[1]]; };
+    function free(col, row, w, h) {
+      if (col < 0 || col + w > cols) return false;
+      for (let y=row;y<row+h;y++) for(let x=col;x<col+w;x++) if(occupied.has(x+','+y)) return false;
+      return true;
     }
-    function nextFree(fromCol, fromRow) {
-      let col = fromCol, row = fromRow;
-      while (occupied.has(col + ',' + row)) {
-        col++;
-        if (col >= cols) { col = 0; row++; }
-      }
-      return { col, row };
-    }
-    let cur = { col: 0, row: 0 };
+    let last = -1;
     for (const c of visible) {
-      const id = c.dataset.id;
-      if (id === '__add__') continue;
-      if (map[id] && typeof map[id].col === 'number' && typeof map[id].row === 'number') continue;
-      cur = nextFree(cur.col, cur.row);
-      map[id] = { col: cur.col, row: cur.row };
-      occupied.add(cur.col + ',' + cur.row);
+      if (c.dataset.id === '__add__') continue;
+      const [w,h] = span(c); const old = map[c.dataset.id];
+      let col = old?.col || 0, row = old?.row || 0;
+      if (!free(col,row,w,h)) { col=0; row=0; while(!free(col,row,w,h)) { if(++col>=cols) {col=0;row++;} } }
+      map[c.dataset.id] = {col,row};
+      for(let y=row;y<row+h;y++) for(let x=col;x<col+w;x++) occupied.add(x+','+y);
+      last=Math.max(last,(row+h-1)*cols+col+w-1);
     }
-    const last = visible.filter(c => c.dataset.id !== '__add__').reduce((last, c) => {
-      const p = map[c.dataset.id];
-      return p ? Math.max(last, p.row * cols + p.col) : last;
-    }, -1);
-    map.__add__ = { col: (last + 1) % cols, row: Math.floor((last + 1) / cols) };
+    map.__add__={col:(last+1)%cols,row:Math.floor((last+1)/cols)};
     return map;
   }
 
   // Apply layout.cards to the DOM (only for cards visible in canvas mode).
   function applyCardCanvas() {
+    const labelGrid = document.getElementById('grid');
+    if (labelGrid) {
+      const iconSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--icon-size')) || 88;
+      const labels = Array.from(labelGrid.querySelectorAll('.card .title'));
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const widest = Math.max(0, ...labels.map(el => {
+        const style = getComputedStyle(el);
+        ctx.font = style.font || `${style.fontSize} ${style.fontFamily}`;
+        return ctx.measureText(el.textContent).width;
+      }));
+      labelGrid.style.setProperty('--tile-track-width', Math.ceil(Math.max(92, iconSize + 24, widest + 12)) + 'px');
+      labelGrid.style.setProperty('--tile-label-height', '20px');
+    }
+    if (!canvasEligible() || !canvasRoot()?.classList.contains('canvas')) {
+      clearCardCanvas();
+      return;
+    }
     const grid = document.getElementById('grid');
     if (!grid) return;
     const cell = getCardCellSize();
@@ -261,7 +253,8 @@
       const id = c.dataset.id;
       const p = map[id];
       if (!p) continue;
-      c.style.width = cell.cardW + 'px';
+      const span = Math.min(Number((c.dataset.size || '1x1').split('x')[0]), getCardCols(grid.clientWidth));
+      c.style.width = (span * cell.stepX - CARD_GAP) + 'px';
       c.style.left = (p.col * cell.stepX) + 'px';
       c.style.top = (p.row * cell.stepY) + 'px';
       // Disable HTML5 drag in canvas mode: it fights pointer dragging and could open the link via the address bar.
@@ -654,7 +647,7 @@
       if (!canvasEligible()) { leaveCanvas(); return; }
       if (getLayout()) {
         if (!canvasRoot().classList.contains('canvas')) applyCanvas();
-        else refreshCanvasHeight();
+        else applyCardCanvas();
       }
     });
 

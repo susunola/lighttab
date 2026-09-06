@@ -114,6 +114,7 @@ console.log('[4] pure functions');
     document: { readyState: 'loading', addEventListener: noop, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
     localStorage: { getItem: () => null, setItem: noop, removeItem: noop, key: () => null, length: 0 },
     navigator: {},
+    addEventListener: noop,
     structuredClone,
     URL, URLSearchParams,
     setTimeout, clearTimeout, setInterval, clearInterval,
@@ -151,8 +152,8 @@ console.log('[4] pure functions');
       assert(P.sanitizeWallpaperUrl(name) === null, `reject unlisted asset ${name}`);
     }
     assert(fs.existsSync(path.join(ROOT, 'assets/wallpaper-dusk.jpg')), 'assets/wallpaper-dusk.jpg exists');
-    assert(/BUNDLED_WALL = \{ type: 'image', value: 'assets\/wallpaper-dusk\.jpg'/.test(appSrc), 'factory default wallpaper is the bundled image');
-    assert(/WALLPAPERS = \[[\s\S]{0,200}id: 'dusk',\s+name: 'Dusk Mountain', img: 'assets\/wallpaper-dusk\.jpg'/.test(appSrc), 'bundled wallpaper is the first preset swatch');
+    assert(/BUNDLED_WALL = \{ type: 'image', value: 'assets\/wallpaper-blue-hour-plum\.jpg'/.test(appSrc), 'factory default wallpaper is the bundled image');
+    assert(/WALLPAPERS = \[[\s\S]{0,200}id: 'blue-hour-plum',\s+name: '暮蓝梅花', img: 'assets\/wallpaper-blue-hour-plum\.jpg'/.test(appSrc), 'bundled wallpaper is the first preset swatch');
     assert(/'wp\.dusk':\s*\{\s*zh: '暮山', en: 'Dusk Mountain' \}/.test(i18nSrc), 'wp.dusk has both zh/en entries');
     assert(/replaceAll\('assets\/wallpaper-dusk\.jpg', 'data:image\/jpeg;base64,/.test(read('scripts/build-singlefile.cjs')),
       'single-file build inlines the bundled wallpaper as a dataURL');
@@ -203,14 +204,13 @@ console.log('[4] pure functions');
     const fsOf = (s) => Number(/font-size="([\d.]+)"/.exec(P.iconGlyphHtml({ tx: s, c: '#fff', f: '#000' }))[1]);
     assert(fsOf('O') > fsOf('文档') && fsOf('文档') > fsOf('小鹅通') && fsOf('小鹅通') > fsOf('51CTO'),
       'iconGlyphHtml wordmark font size shrinks as length grows');
-    // #60 normalizeWidgets: missing/dirty data always falls back to DEFAULT_SETTINGS — the four legacy
-    // widgets default to visible; the weather widget (opt-in) defaults off; only explicit booleans override defaults
+    // #60 Missing/dirty data uses the simple defaults; explicit booleans preserve user choices.
     const NW = P.normalizeWidgets;
-    const W_DEFAULTS = { wclock: true, wcal: true, wtodo: true, wmovie: true, wweather: false, wcount: false, wpomodoro: false };
+    const W_DEFAULTS = { wclock: true, wcal: false, wtodo: false, wmovie: true, wweather: false, wcount: false, wpomodoro: false };
     assert(JSON.stringify(NW(undefined)) === JSON.stringify(W_DEFAULTS),
-      'normalizeWidgets(undefined) → four visible by default, weather/countdown/pomodoro off');
+      'normalizeWidgets(undefined) → clock/movie visible by default, optional widgets off');
     assert(JSON.stringify(NW(null)) === JSON.stringify(W_DEFAULTS),
-      'normalizeWidgets(null) → four visible by default, weather/countdown/pomodoro off');
+      'normalizeWidgets(null) → clock/movie visible by default, optional widgets off');
     assert(NW({ wcal: false }).wcal === false && NW({ wcal: false }).wclock === true && NW({ wcal: false }).wweather === false,
       'normalizeWidgets partial object → missing keys get defaults');
     assert(NW({ wweather: true }).wweather === true && NW({ wweather: true }).wmovie === true,
@@ -368,11 +368,11 @@ console.log('[4] pure functions');
       } else if (e.d) {
         mono++;
       } else if (e.img) {
-        // Raster entries (bundled data-URI, e.g. the 小鹅通 goose): must be a local png
+        // Raster entries (bundled data-URI, e.g. the 小鹅通 goose): must be a local PNG or SVG
         // data-URI with a sane hex tile colour — still zero network at runtime. High-definition
         // 256px art is allowed, so the cap is generous (keeps accidental megabytes out).
-        if (e.img.length > 80000 || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(e.img)) {
-          bad.push(`${host}: img must be a bundled data:image/png;base64 (<=80k chars)`);
+        if (e.img.length > 300000 || !/^data:image\/(?:png|jpeg|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(e.img)) {
+          bad.push(`${host}: img must be a bundled PNG/JPEG/SVG data URI (<=300k chars)`);
         }
       } else {
         bad.push(`${host}: matches none of the three shapes`);
@@ -572,10 +572,10 @@ for (const k of ['engm.title','engm.name_ph','engm.url_ph','engm.add','engm.rest
 {
   const manifest = JSON.parse(read('manifest.json'));
   assert(Array.isArray(manifest.host_permissions), 'manifest declares host_permissions for the suggestion providers');
-  for (const host of ['https://suggestion.baidu.com/*', 'https://suggestqueries.google.com/*', 'https://api.bing.com/*']) {
+  for (const host of ['https://suggestion.baidu.com/*', 'https://suggestqueries.google.com/*', 'https://api.bing.com/*', 'https://movie.douban.com/*']) {
     assert(manifest.host_permissions.includes(host), `manifest host_permissions includes ${host}`);
   }
-  assert(manifest.host_permissions.length === 3, 'manifest host_permissions is scoped to exactly the three suggestion hosts');
+  assert(manifest.host_permissions.length === 4, 'manifest host_permissions is scoped to the three suggestion hosts and Douban');
 }
 for (const k of ['wb.running', 'wb.not_running', 'wb.not_detected', 'wb.get']) {
   assert(i18nSrc.includes(`'${k}'`), `i18n contains ${k}`);
@@ -663,9 +663,7 @@ assert(/state\.settings\.widgetPos = normalizeWidgetPos\(state\.settings\.widget
 // Card coordinate GC: grid slots of deleted cards must be reclaimed, otherwise new cards get pushed to the back
 assert(/for \(const id in map\) if \(!alive\.has\(id\)\)/.test(canvasSrc), 'assignInitialCardLayout reclaims stale card coordinates');
 assert(/if \(pruned\) \{/.test(canvasSrc) && /setCardLayoutMap\(map\)/.test(canvasSrc), 'coordinates are persisted once after reclamation');
-// Deleting a card must not leave a hole: survivors are compacted into consecutive slots in reading order
-assert(/a\[1\]\.row - b\[1\]\.row/.test(canvasSrc) && /col: i % cols, row: Math\.floor\(i \/ cols\)/.test(canvasSrc),
-  'remaining card coordinates are compacted in reading order after reclamation');
+assert(/for \(const c of visible\) delete map\[c.dataset.id\]/.test(canvasSrc), 'deletion reflows visible cards');
 
 
 // ---------- 11) glassmorphism tokens ----------
@@ -690,7 +688,7 @@ assert(/background-image: var\(--frost-sheen\);/.test(cssSrc), 'sheen is layered
 // Shortcut cards are not glass: at rest they sit directly on the wallpaper (iTab style); the glass pill only appears on hover
 assert(!/\.widget,\s*\n\.card,/.test(cssSrc), 'cards are not in the shared frosted-layer rule');
 assert(/\.card \{[^}]*background: none/.test(cssSrc), 'cards have no background at rest (sit directly on the wallpaper)');
-assert(/\.card:hover \{[^}]*backdrop-filter/.test(cssSrc), 'the glass pill only appears on card hover');
+assert(/\.card:hover \{[^}]*background-color[^}]*transform: none/.test(cssSrc), 'card hover uses a quiet highlight without lifting');
 assert(/\.card \.title \{[^}]*text-shadow/.test(cssSrc), 'card titles carry a text shadow (readable on wallpapers)');
 // Add tile: the last cell of the grid (iTab convention); no more floating button in the bottom-right corner
 assert(!/add-float/.test(html) && !/add-float/.test(cssSrc) && !/add-float/.test(appSrc), 'bottom-right floating add button has been removed');
@@ -909,7 +907,7 @@ assert(/const QUOTES = \[/.test(appSrc), 'app.js defines the QUOTES inspirationa
 assert(/function pickQuoteIndex/.test(appSrc), 'app.js defines pickQuoteIndex()');
 assert(/function showQuote/.test(appSrc), 'app.js defines showQuote()');
 assert(/function rotateWallpaperAndQuote/.test(appSrc), 'app.js defines rotateWallpaperAndQuote()');
-assert(/getElementById\('btn-plum'\)\.addEventListener\('click', rotateWallpaperAndQuote\)/.test(appSrc), 'boot binds the plum click');
+assert(/bindPlumSecret\(\)/.test(appSrc), 'boot binds the plum click');
 assert(/pickRotateCandidate\(pool, cur\)/.test(appSrc), 'plum reuses pickRotateCandidate (same source as daily rotation)');
 assert(/markManualPickToday\(\)/.test(appSrc), 'plum click marks the day as a manual pick');
 assert(/pickQuoteIndex/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'pickQuoteIndex is exported to LT_PURE');
@@ -918,7 +916,7 @@ assert((appSrc.match(/zh: '[^']*', en: '/g) || []).length >= 10, `quote pool is 
 // CSS: plum button + quote overlay styles are complete
 assert(/\.plum-float/.test(cssSrc) && /@keyframes plum-spin/.test(cssSrc), 'CSS defines .plum-float and its spin animation');
 // Plum petal burst: canvas overlay, corner origin, reduced-motion guard, self-cleanup
-assert(/function petalBurst\(\)/.test(appSrc), 'app.js defines petalBurst()');
+assert(/function petalBurst\(/.test(appSrc), 'app.js defines petalBurst()');
 assert(/petalBurst\(\);/.test(appSrc), 'plum click triggers the petal burst');
 assert(/prefers-reduced-motion/.test(appSrc), 'petal burst respects prefers-reduced-motion');
 assert(/function drawPetal\(ctx, s\)/.test(appSrc), 'petal path drawn with bezier curves');
@@ -974,7 +972,7 @@ assert(/host_permissions/.test(read('manifest.json')), 'manifest declares host_p
 assert(/e\.key === 'ArrowDown' \|\| e\.key === 'ArrowUp'/.test(appSrc), 'ArrowDown/ArrowUp move the highlight');
 assert(/e\.key === 'Enter'\) \{\s*const row = suggestNav\[suggestHl\];\s*if \(suggestHl >= 0 && row\)/.test(appSrc), 'Enter opens the highlighted row');
 assert(/e\.key === 'Escape'/.test(appSrc) && /closeSuggest\(\);/.test(appSrc), 'Escape closes the dropdown');
-assert(/if \(!q\) \{ suggestItems = \[\]; renderSuggest\(\); return; \}/.test(appSrc) && /if \(looksLikeUrl\(q\)\) \{ closeSuggest\(\); return; \}/.test(appSrc),
+assert(/if \(!q\) \{ closeSuggest\(\); return; \}/.test(appSrc) && /if \(looksLikeUrl\(q\)\) \{ closeSuggest\(\); return; \}/.test(appSrc),
   'empty input shows history instead of suggestions, and URLs never trigger suggestions');
 assert(/setTimeout\(closeSuggest, 150\)/.test(appSrc), 'the dropdown closes 150ms after blur');
 assert(/function resetSuggest\(\)/.test(appSrc) && /suggestCache\.clear\(\)/.test(appSrc), 'engine switch closes the dropdown and clears the cache');
@@ -1256,7 +1254,7 @@ assert(/#btn-wall-favs\.on/.test(cssSrc), 'CSS defines the filter toggle active 
 // ---------- 21) Tab engine cycling + inline calculator + search history ----------
 console.log('[21] search box interactions (Tab cycle / calc / history)');
 // Tab cycling: hijacked only in the search input, wraps around, quiet cue, no toast
-assert(/e\.key === 'Tab' && document\.activeElement === qEl/.test(appSrc), 'Tab is hijacked only while #q is focused');
+assert(/e\.key === 'F2' && document\.activeElement === qEl/.test(appSrc), 'F2 switches engines only while #q is focused');
 assert(/e\.preventDefault\(\);\s*\n\s*cycleEngine\(e\.shiftKey \? -1 : 1\)/.test(appSrc), 'Tab / Shift+Tab cycle forwards / backwards with preventDefault');
 assert(/function cycleEngine\(dir\)/.test(appSrc) && /\(idx \+ dir \+ engines\.length\) % engines\.length/.test(appSrc), 'cycleEngine wraps around allEngines()');
 assert(/state\.settings\.engine = next\.id/.test(appSrc) && /Store\.set\(K\.settings, state\.settings\)/.test(appSrc), 'Tab cycling persists the engine setting');
@@ -1576,8 +1574,8 @@ assert(/if \(qInput && state\.settings\.hideSearch !== true\) qInput\.focus/.tes
 assert(/closeSuggest\(\); \/\/ a hidden box can hold no open dropdown/.test(appSrc),
   'hiding the search bar closes the suggestions dropdown first');
 // --- 23b) icon size / corner radius sliders ---
-assert(/iconSize: 64/.test(appSrc) && /iconRadius: 28/.test(appSrc), 'DEFAULT_SETTINGS carries the shipped icon geometry (64px / 28%)');
-assert(/<input type="range" id="f-iconsize" min="48" max="80"/.test(html), 'settings page contains the #f-iconsize slider (48–80px)');
+assert(/iconSize: 88/.test(appSrc) && /iconRadius: 28/.test(appSrc), 'DEFAULT_SETTINGS carries the shipped icon geometry (88px / 28%)');
+assert(/<input type="range" id="f-iconsize" min="48" max="112"/.test(html), 'settings page contains the #f-iconsize slider (48–112px)');
 assert(/<input type="range" id="f-iconradius" min="20" max="50"/.test(html), 'settings page contains the #f-iconradius slider (20–50%)');
 assert(/data-i18n="gen\.iconsize"/.test(html) && /data-i18n="gen\.iconradius"/.test(html), 'icon slider label entry hooks are complete');
 assert(/--icon-size: 64px;/.test(cssSrc) && /--icon-radius: 28%;/.test(cssSrc), ':root declares the --icon-size / --icon-radius custom properties');
@@ -1741,8 +1739,8 @@ assert(/:focus-visible \{ outline: 2px solid var\(--accent-2\); outline-offset: 
   'CSS ships a visible global keyboard focus ring (covers cards and controls alike)');
 assert(/function bindModalTrap\(\)/ .test(appSrc) && /bindModalTrap\(\);/.test(appSrc),
   'an open modal traps Tab / Shift+Tab inside it (a11y)');
-assert(/!isEn\(\) \? '<p class="movie-blurb">'/.test(appSrc),
-  'the zh-only movie blurb is hidden in the English UI');
+assert(appSrc.includes('class="movie-blurb" lang="zh-CN"'),
+  'Chinese film note remains available with explicit language');
 assert(/!isEn\(\) \? '<div class="movie-genre">'/.test(appSrc),
   'the zh-only movie genre is hidden in the English UI');
 assert(/let suggestBusy = false;/.test(appSrc) && /<li class="sg-loading" role="presentation" aria-hidden="true">/.test(appSrc)
@@ -1859,15 +1857,15 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(/wall\.shuffle/.test(i18nSrc), 'wallpaper shuffle has an i18n label');
 }
 
-// ---------- 34) store-prep artifacts + v1.20.0 features ----------
+// ---------- 34) store-prep artifacts + v1.21.0 features ----------
 {
-  assert(/id="movie-prev"/.test(appSrc) && /id="movie-rand"/.test(appSrc) && /movieCursor = \(i - 1 \+ len\) % len/.test(appSrc),
-    'movie widget has Previous/Random controls');
+  assert(/id="movie-next"/.test(appSrc) && !/id="movie-prev"/.test(appSrc) && !/id="movie-rand"/.test(appSrc),
+    'movie widget retains one next-movie action');
   assert(/id="todo-clear-done"/.test(html) && /todo-clear-done/.test(appSrc), 'to-dos can clear completed items');
   assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
   assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
   assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
-  assert(JSON.parse(read('manifest.json')).version === '1.20.0', 'manifest version is 1.20.0');
+  assert(JSON.parse(read('manifest.json')).version === '1.21.0', 'manifest version is 1.21.0');
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 

@@ -178,7 +178,7 @@
     'eng.baidu':    { zh: '百度', en: 'Baidu' },
     'eng.bing':     { zh: '必应', en: 'Bing' },
     'eng.google':   { zh: '谷歌', en: 'Google' },
-    'eng.sogou':    { zh: '搜狗', en: 'Sogou' },
+    'eng.deepseek': { zh: 'DeepSeek', en: 'DeepSeek' },
     'eng.github':   { zh: 'GitHub', en: 'GitHub' },
     'eng.bilibili': { zh: 'B 站', en: 'Bilibili' },
     'eng.doubao':   { zh: '豆包 AI', en: 'Doubao AI' },
@@ -344,7 +344,7 @@
     'gen.data_tip': { zh: '备份/恢复全部数据（快捷方式、待办、设置、壁纸）。导出文件可跨浏览器迁移。', en: 'Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.' },
     'gen.reset':    { zh: '恢复默认数据', en: 'Reset to defaults' },
     'gen.done':     { zh: '完成', en: 'Done' },
-    'gen.version':  { zh: 'LightTab v1.20.0 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.20.0 · Minimal new tab · Local-first, optional cloud sync' },
+    'gen.version':  { zh: 'LightTab v1.21.0 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.21.0 · Minimal new tab · Local-first, optional cloud sync' },
 
     // ---------- Templates tab ----------
     'prompt.title':  { zh: 'Prompt 模板 · AI 发射台', en: 'Prompt templates · AI launcher' },

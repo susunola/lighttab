@@ -60,6 +60,9 @@
     <p>Opening the wallpaper tab contacts <code>lighttab.atomwangnus.com</code> to discover available sources and fetch library metadata. Selecting or rotating online wallpapers may fetch image URLs from their hosts. Enabled daily rotation can refresh the library automatically. Available sources may include Bing, Wallhaven and Unsplash.</p>
     <p>Wallpaper images and their titles/copyright notices belong to their respective rights holders; LightTab displays the attribution provided by the source and stores the chosen image only as the user's local background preference.</p>
 
+    <h2>Daily movies</h2>
+    <p>When the daily movie widget is enabled, LightTab requests the public hot-movie list from movie.douban.com and caches it locally for 24 hours. Posters load from doubanio.com without a referrer. These requests expose normal network information such as your IP address to the provider; no account, search history or shortcut data is sent. Cached and bundled movies are used when requests fail.</p>
+
     <h2>Content script</h2>
     <p>The extension injects a content script on supported pages of <code>www.doubao.com</code>, <code>www.dola.com</code> and <code>chatgpt.com</code>. On a prompt launch it reads a temporary local prompt entry, locates the page's input and send controls, fills the prompt and attempts to submit it. Submission sends your prompt to the selected AI provider. If automatic entry fails, the extension attempts to copy the prompt and displays a notice. It does not collect your conversation history or cookies.</p>
 

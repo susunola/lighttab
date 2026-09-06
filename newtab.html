@@ -10,7 +10,6 @@
   <div id="wallpaper" aria-hidden="true"><div class="wp-layer wp-overlay"></div><div class="wp-layer wp-grain"></div></div>
 
   <header id="topbar">
-    <div id="date-chip" class="chip"></div>
     <nav class="top-actions" aria-label="actions">
       <button class="icon-btn" id="btn-wall" data-i18n-title="top.wallpaper" data-i18n-aria="top.wallpaper" title="Wallpaper" aria-label="Wallpaper">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="m21 17-5-5-9 9"/></svg>
@@ -196,12 +195,15 @@
         </div>
       </div>
 
+
       <div id="grid-wrap">
         <div id="group-bar" class="group-bar" hidden></div>
         <div id="grid" class="grid"></div>
       </div>
     </section>
   </main>
+  <button id="ai-side-toggle" aria-controls="ai-launcher" aria-expanded="false" aria-label="打开 AI 助手">AI</button>
+  <aside id="ai-launcher" aria-label="AI 助手" hidden></aside>
 
   <button class="plum-float" id="btn-plum" data-i18n-title="plum.tip" data-i18n-aria="plum.tip" title="New wallpaper · a quote" aria-label="New wallpaper · a quote">
     <svg viewBox="0 0 64 64" width="62" height="62" aria-hidden="true">
@@ -237,6 +239,8 @@
       <path d="M4,60 C16,52 24,46 32,36 C40,26 47,19 58,8" stroke="#6d4a38" stroke-width="1.1" fill="none" stroke-linecap="round" transform="translate(-0.7,-0.7)"/>
       <path d="M30,39.5 C36,36.5 41,35.5 47,36.5" stroke="#3f2a20" stroke-width="2.2" fill="none" stroke-linecap="round"/>
       <path d="M20,51 C22,46 24.5,42.5 24.5,37.5" stroke="#3f2a20" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <!-- A tiny signature follows the branch grain; counter-mirrored with the SVG. -->
+      <text x="0" y="0" transform="translate(18 51) rotate(-46) scale(-1 1)" font-family="serif" font-size="2.4" letter-spacing=".25" fill="#b18a6b" opacity=".6">esmehan</text>
       <!-- buds on the twig tips -->
       <circle cx="47.5" cy="36.5" r="2.5" fill="#ec4899"/>
       <circle cx="24.5" cy="36" r="2.1" fill="#f472b6"/>
@@ -273,6 +277,7 @@
         <label>
           <span data-i18n="site.name">Name</span>
           <input id="f-title" name="title" type="text" maxlength="32" data-i18n-ph="site.name_ph" placeholder="e.g. GitHub" required>
+          <input name="shortTitle" type="text" maxlength="16" placeholder="短显示名 / Short label（可选）" aria-label="短显示名 / Short label">
         </label>
         <label>
           <span data-i18n="site.url">URL</span>
@@ -365,11 +370,22 @@
           <p class="form-tip" data-i18n="wall.format_tip">Supports JPG / PNG / WebP / GIF; max 4MB; stored locally only.</p>
         </div>
         <div class="tab-pane" data-pane="gen" hidden>
+
+          <label class="range-row">
+            <span data-i18n="gen.iconsize">Icon size</span>
+            <input type="range" id="f-iconsize" min="48" max="112" step="2" value="88">
+            <span class="range-val" id="f-iconsize-val">88px</span>
+          </label>
+          <label class="range-row">
+            <span data-i18n="gen.iconradius">Icon corner radius</span>
+            <input type="range" id="f-iconradius" min="20" max="50" step="1" value="28">
+            <span class="range-val" id="f-iconradius-val">28%</span>
+          </label>
+<details class="settings-more"><summary data-i18n="gen.avatar">Avatar</summary>
           <label>
             <span data-i18n="gen.name">Display name (used in greeting)</span>
             <input id="f-name" type="text" maxlength="20" data-i18n-ph="gen.name_ph" placeholder="Leave empty to hide the name">
           </label>
-<details class="settings-more"><summary data-i18n="gen.avatar">Avatar</summary>
           <div class="avatar-zone">
             <span class="field-label" data-i18n="gen.avatar">Avatar</span>
             <div class="avatar-row">
@@ -456,21 +472,12 @@
             <input type="checkbox" id="f-hideclock">
             <span data-i18n="gen.hideclock">Hide clock</span>
           </label>
-          <label class="range-row">
-            <span data-i18n="gen.iconsize">Icon size</span>
-            <input type="range" id="f-iconsize" min="48" max="80" step="2" value="64">
-            <span class="range-val" id="f-iconsize-val">64px</span>
-          </label>
-          <label class="range-row">
-            <span data-i18n="gen.iconradius">Icon corner radius</span>
-            <input type="range" id="f-iconradius" min="20" max="50" step="1" value="28">
-            <span class="range-val" id="f-iconradius-val">28%</span>
-          </label>
 </details>
           <details class="settings-more"><summary data-i18n="gen.widgets">Widgets</summary>
           <div class="wgt-zone">
             <span class="data-label" data-i18n="gen.widgets">Widgets</span>
             <div class="wgt-rows">
+              <label class="wgt-row"><input type="checkbox" id="f-ai-enabled" checked><span class="wgt-name">AI 工具台 / AI assistant</span></label>
               <label class="wgt-row">
                 <input type="checkbox" id="f-w-wclock" checked>
                 <span class="wgt-name" data-i18n="widget.clock">Clock</span>
@@ -551,12 +558,14 @@
               <span data-i18n="gen.backup_remind">Remind me to export a backup</span>
               <input type="number" id="f-backup-days" min="1" max="90" step="1" value="14" data-i18n-title="gen.backup_days" title="Every N days">
             </label>
+            <details class="settings-more"><summary data-i18n="gen.diag">Local diagnostics</summary>
             <label class="check-row diag-row">
               <input type="checkbox" id="f-diag">
               <span data-i18n="gen.diag">Record errors locally (off by default)</span>
             </label>
             <p class="form-tip" data-i18n="gen.diag_tip">When on, error messages are stored on this device only (no URLs, no stacks, no network).</p>
             <button type="button" class="btn ghost sm" id="btn-diag-export" data-i18n="gen.diag_export" hidden>Export diagnostics</button>
+            </details>
             <p class="storage-use" id="storage-use" data-i18n-aria="store.used" hidden></p>
           </div>
 </details>
@@ -564,7 +573,7 @@
             <button type="button" class="btn ghost" id="btn-reset-all" data-i18n="gen.reset">Reset to defaults</button>
             <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
           </div>
-          <p class="form-tip ver-line" data-i18n="gen.version">LightTab v1.20.0 · Minimal new tab · Local-first, optional cloud sync</p>
+          <p class="form-tip ver-line" data-i18n="gen.version">LightTab v1.21.0 · Minimal new tab · Local-first, optional cloud sync</p>
         </div>
         <div class="tab-pane" data-pane="prompt" hidden>
           <div class="ptoolbar">
@@ -594,6 +603,8 @@
   <script src="js/sync.js"></script>
   <script src="js/canvas.js"></script>
   <script src="js/prompts.js"></script>
+  <script src="js/movie-data.js"></script>
+  <script src="js/movie-hot.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

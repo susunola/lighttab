@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.21.0 — 2026-09-07
+
+- Refine shortcut layout, single-line labels, light theme and bundled blue-hour wallpaper.
+- Add a draggable AI panel with shared templates, localized defaults, multiple targets and retry links.
+- Preserve literal prompt text, deduplicate launch targets and guard accidental repeated sends.
+- Add cached Douban hot movies with bundled fallback and in-page details.
+- Refresh bundled icons and open YouTube in the current tab.
+- Improve sync recovery and add browser, upgrade and safety regression coverage.
+
+
 All notable changes to LightTab are tracked here. Versions follow the Chrome Web Store build.
 
 ## [1.20.0] – pre-store release prep

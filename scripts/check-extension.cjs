@@ -43,7 +43,7 @@ const { chromium } = require('playwright');
     // Wait for boot work, including the loopback desktop-app probe.
     await page.waitForTimeout(1500);
     const external = requests.filter(url => !url.startsWith('http://127.0.0.1:'));
-    assert.deepEqual(external, [], 'Fresh boot must not contact online services');
+    assert(external.every(url => /^https:\/\/(movie\.douban\.com\/j\/search_subjects|img\d*\.doubanio\.com\/)/.test(url)), 'Fresh boot only contacts the default movie provider');
     // Deterministic provider response: ensure strict CSP still allows fetch-based suggestions.
     await context.route('https://suggestqueries.google.com/**', route => {
       const url = new URL(route.request().url());
@@ -60,6 +60,8 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(200);
     assert(requests.some(url => url.includes('/v1/wallpapers/sources')), 'Opening wallpaper settings discovers sources');
     await page.keyboard.press('Escape');
+    await page.evaluate(async()=>{const a=window.LT_APP;a.state.settings.widgets.wtodo=true;await a.Store.set(a.K.settings,a.state.settings);});
+    await page.reload();
     await page.locator('#todo-input').fill('Extension persistence check');
     await page.locator('#todo-form button[type="submit"]').click();
     await page.waitForFunction(async () => JSON.stringify(await chrome.storage.local.get('lt.todos')).includes('Extension persistence check'));
@@ -67,7 +69,7 @@ const { chromium } = require('playwright');
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#todo-list')?.textContent.includes('Extension persistence check'));
     assert.deepEqual(errors, [], 'Reload should not throw');
-    console.log('PASS: MV3 installed; no external startup requests; fetch suggestions under strict CSP; deferred wallpaper discovery; chrome.storage persistence after reload.');
+    console.log('PASS: MV3 installed; only expected movie startup requests; fetch suggestions under strict CSP; deferred wallpaper discovery; chrome.storage persistence after reload.');
 
     // Exercise recovery through the real settings UI with a fully mocked cloud service.
     const cloud = { 'lt.items': { rev: 1, updatedAt: 1, payload: JSON.stringify([

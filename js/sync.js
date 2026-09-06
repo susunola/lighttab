@@ -201,7 +201,8 @@
     S.status = 'syncing'; S.lastError = ''; emit();
     let changed = false;
     try {
-      const since = S.meta.initial ? 0 : S.meta.lastServerTime || 0;
+      // Only five documents: full snapshots avoid the legacy timestamp cursor race.
+      const since = 0;
       changed = await applyPull(await request('/v1/sync?since=' + since));
       await pushDirty();
       S.lastSyncAt = Date.now();
@@ -230,25 +231,27 @@
   function reportError(error) { S.lastError = error.message; S.status = 'error'; emit(); }
   function writeLocal(key, value) {
     // Clone at invocation, before another UI edit can mutate the object while it is queued.
-    const copy = clone(value);
+    const copy = typeof value === 'function' ? value : clone(value);
     const baseRev = S.meta.docs[key]?.rev || 0;
     return exclusive(async () => {
       const old = (await sGet([key]))[key];
-      if (encode(old) === encode(copy)) return;
+      const next = typeof copy === 'function' ? copy(clone(old)) : copy;
+      if (encode(old) === encode(next)) return clone(old);
       if (S.auth?.token && SYNC_KEYS.includes(key)) {
-        if (baseRev !== (S.meta.docs[key]?.rev || 0)) {
+        if (typeof copy !== 'function' && baseRev !== (S.meta.docs[key]?.rev || 0)) {
           // The editor was based on data from before an in-flight cloud update.
           // Preserve that update and require a choice instead of silently uploading stale UI state.
           await backup('before-local');
-          conflict(key, { rev: S.meta.docs[key]?.rev || 0, payload: encode(old) }, copy);
+          conflict(key, { rev: S.meta.docs[key]?.rev || 0, payload: encode(old) }, next);
         }
         S.meta.docs[key] = { rev: S.meta.docs[key]?.rev || 0, dirtyAt: Date.now() || 1 };
-        if (S.meta.conflicts[key]) S.meta.conflicts[key].local = encode(copy);
+        if (S.meta.conflicts[key]) S.meta.conflicts[key].local = encode(next);
         // Mark dirty before content is saved. A failed save may cause a harmless extra sync.
         await saveMeta();
       }
-      await sSet({ [key]: copy });
+      await sSet({ [key]: next });
       if (S.auth?.token && SYNC_KEYS.includes(key)) { S.status = settledStatus(); scheduleSync(); emit(); }
+      return clone(next);
     });
   }
   function login(email, password) {
@@ -299,11 +302,16 @@
   function logout() {
     return exclusive(async () => {
       clearTimeout(S.timer);
-      // Attempt revocation first; local sign-out still works offline.
-      if (S.auth?.token) { try { await request('/auth/logout', { method: 'POST' }); } catch (_) {} }
+      // Capture the old token; revoke after local sign-out without blocking writes.
+      const token = S.auth?.token;
       S.auth = null; S.meta = freshMeta(); S.pendingVerifyEmail = '';
       await sSet({ [AUTH_KEY]: null, [META_KEY]: S.meta });
       S.status = 'idle'; S.lastError = ''; S.lastSyncAt = 0; emit();
+      if (token) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        fetch(SYNC_BASE + '/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, signal: controller.signal }).catch(() => {}).finally(() => clearTimeout(timer));
+      }
     });
   }
   function resolveConflict(key, choice, expectedRev, expectedLocal) {

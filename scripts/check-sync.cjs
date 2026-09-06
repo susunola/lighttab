@@ -283,6 +283,22 @@ test('account deletion keeps local data and signs out only on server success', a
   assert.deepEqual(c.store['lt.items'], item('keep-local'));
 });
 
+test('full pulls do not skip documents behind a previously returned time cursor', async () => {
+  const api=server(), c=client(api); await login(c);
+  await c.sync.syncNow(); api.put('lt.todos', [{id:'late',text:'Late write'}]);
+  await c.sync.syncNow();
+  assert.equal(c.store['lt.todos'][0].id, 'late');
+  assert(api.calls.filter(x=>x.method==='GET').every(x=>x.url.endsWith('since=0')));
+});
+test('logout completes and local writes continue while revocation is pending', async () => {
+  const api=server(), c=client(api); await login(c);
+  const previous=api.fetch;
+  api.fetch=(url,opts)=>url.endsWith('/auth/logout') ? new Promise(()=>{}) : previous(url,opts);
+  await c.sync.logout(); assert.equal(c.sync.getState().loggedIn,false);
+  await c.sync.writeLocal('lt.todos', raw=>[...(raw||[]),{id:'after-logout'}]);
+  assert.equal(c.store['lt.todos'][0].id,'after-logout');
+});
+
 (async () => {
   for (const { name, fn } of tests) { await fn(); console.log('PASS', name); }
   console.log(`Sync safety: ${tests.length} checks passed`);

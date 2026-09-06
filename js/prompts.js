@@ -15,7 +15,7 @@
     if (chip) chip.hidden = true;
     A().setEngine(A().getCurrentEngine().id); // restore the default placeholder text
     const q = document.getElementById('q');
-    if (q) q.value = '';
+    // Cancelling a template preserves the user input.
   }
   function renderTemplateChip(p) {
     const chip = document.getElementById('tpl-chip');
@@ -37,15 +37,14 @@
   function chooseTemplate(p) {
     if (!p) return;
     closePalette(false);
-    // No {q} slot = fixed-command template: it fires on selection, no further input needed.
-    if (p.tmpl.indexOf('{q}') === -1) { A().launchPrompt(p, ''); return; }
     A().setActivePrompt(p);
     renderTemplateChip(p);
     const q = document.getElementById('q');
     q.placeholder = p.hint || A().t('tpl.enter_hint');
-    q.value = '';
+    if (q.value === '/') q.value = '';
     q.focus();
   }
+
   // Palette: opened with "/", supports filtering and keyboard selection.
   let palItems = [], palIdx = 0;
   function paletteRows() {

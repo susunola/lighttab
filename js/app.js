@@ -18,7 +18,6 @@
     { id: 'baidu',    name: 'Baidu',  url: 'https://www.baidu.com/s?wd={q}',                            color: '#2932e1' },
     { id: 'bing',     name: 'Bing',   url: 'https://www.bing.com/search?q={q}',                          color: '#008373' },
     { id: 'google',   name: 'Google', url: 'https://www.google.com/search?q={q}',                        color: '#4285F4' },
-    { id: 'sogou',    name: 'Sogou',  url: 'https://www.sogou.com/web?query={q}',                        color: '#fb6f19' },
     { id: 'github',   name: 'GitHub', url: 'https://github.com/search?q={q}&type=repositories',          color: '#1f2937' },
     { id: 'bilibili', name: 'B 站',   url: 'https://search.bilibili.com/all?keyword={q}',                color: '#fb7299' },
     // AI chats: Doubao / ChatGPT are auto-filled and submitted by the content script (js/inject-ai.js).
@@ -26,14 +25,15 @@
     // (the URL only carries lt_auto=1&lt_k=<nonce>); preview mode falls back to a plaintext ?q=.
     { id: 'doubao',   name: 'Doubao AI', url: 'https://www.doubao.com/chat/',                      color: '#3d8cff', ai: true, injected: true },
     { id: 'openai',   name: 'ChatGPT', url: 'https://chatgpt.com/',                               color: '#10a37f', ai: true, injected: true },
-    // WorkBuddy uses the official task deep link (workbuddy://task?action=start&prompt=...):
-    // it launches the desktop client and pre-fills the prompt into a new task draft.
-    { id: 'wbai',     name: 'WorkBuddy', url: 'workbuddy://task?action=start&prompt={q}',        color: '#22d3ee', ai: true, deeplink: true }
+    { id: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', color: '#4d6bfe', ai: true, copyOnly: true },
+    // WorkBuddy desktop: open a new task draft through its deep link.
+    { id: 'wbai',     name: 'WorkBuddy', url: 'workbuddy://task?action=start&prompt={q}', color: '#22d3ee', ai: true, deeplink: true }
   ];
 
   const WALLPAPERS = [
     // The factory default is a bundled render (procedurally generated, zero licensing surface);
     // entries with `img` are bundled files, entries with `css` are gradients.
+    { id: 'blue-hour-plum', name: '暮蓝梅花', img: 'assets/wallpaper-blue-hour-plum.jpg' },
     { id: 'dusk',     name: 'Dusk Mountain', img: 'assets/wallpaper-dusk.jpg' },
     // Store builds bundle only self-generated art; the online library serves curated wallpapers.
     { id: 'midnight', name: 'Dusk Blue',    css: 'linear-gradient(135deg,#0b1426 0%,#152a4f 45%,#1c3d6e 100%)' },
@@ -44,18 +44,31 @@
     { id: 'rose',     name: 'Dusk Red',     css: 'linear-gradient(135deg,#1a0f1a 0%,#3d1b2e 50%,#5a2540 100%)' }
   ];
   // What a fresh profile (or an unreadable saved wallpaper) gets.
-  const BUNDLED_WALL = { type: 'image', value: 'assets/wallpaper-dusk.jpg', light: false };
+  const BUNDLED_WALL = { type: 'image', value: 'assets/wallpaper-blue-hour-plum.jpg', light: false };
 
   const DEFAULT_SITES = [
-    { id: nid(), title: 'GitHub',         url: 'https://github.com',            color: '#181717' },
-    { id: nid(), title: 'ChatGPT',    url: 'https://chatgpt.com',        color: '#10a37f' },
-    { id: nid(), title: 'Gmail',      url: 'https://mail.google.com',    color: '#EA4335' },
-    { id: nid(), title: 'X',              url: 'https://x.com',                 color: '#000000' },
-    { id: nid(), title: 'Reddit',         url: 'https://www.reddit.com',        color: '#FF4500' },
-    { id: nid(), title: 'Wikipedia',      url: 'https://en.wikipedia.org',      color: '#000000' },
-    { id: nid(), title: 'Notion',         url: 'https://www.notion.so',         color: '#000000' },
-    { id: nid(), title: 'Figma',          url: 'https://www.figma.com',         color: '#F24E1E' },
-    { id: nid(), title: 'Stack Overflow', url: 'https://stackoverflow.com',     color: '#F58025' }
+    { id: nid(), title: "豆包", url: "https://www.doubao.com/", color: "#7655ef" },
+    { id: nid(), title: "Gmail", url: "https://mail.google.com/", color: "#EA4335" },
+    { id: nid(), title: "Hotmail", url: "https://outlook.live.com/", color: "#0078D4" },
+    { id: nid(), title: "YouTube", url: "https://www.youtube.com/", color: "#FF0000" },
+    { id: nid(), title: "Bilibili", url: "https://www.bilibili.com/", color: "#00A1D6" },
+    { id: nid(), title: "腾讯视频", url: "https://v.qq.com/", color: "#FFFFFF" },
+    { id: nid(), title: "爱奇艺", url: "https://www.iqiyi.com/", color: "#FFFFFF" },
+    { id: nid(), title: "优酷视频", url: "https://www.youku.com/", color: "#FFFFFF" },
+    { id: nid(), title: "慕课网", url: "https://www.imooc.com/", color: "#F01414" },
+    { id: nid(), title: "腾讯文档", url: "https://docs.qq.com/", color: "#2878FF" },
+    { id: nid(), title: "微信读书", url: "https://weread.qq.com/", color: "#2878FF" },
+    { id: nid(), title: "小鹅通", url: "https://www.xiaoe-tech.com/", color: "#2878FF" },
+    { id: nid(), title: "Tencent Cloud", url: "https://www.tencentcloud.com/", color: "#FFFFFF" },
+    { id: nid(), title: "腾讯云", url: "https://cloud.tencent.com/", color: "#FFFFFF" },
+    { id: nid(), title: "AWS", url: "https://aws.amazon.com/", color: "#FFFFFF" },
+    { id: nid(), title: "Huawei Cloud", url: "https://www.huaweicloud.com/", color: "#FFFFFF" },
+    { id: nid(), title: "Google Cloud", url: "https://cloud.google.com/", color: "#FFFFFF" },
+    { id: nid(), title: "阿里云", url: "https://www.aliyun.com/", color: "#FF6A00" },
+    { id: nid(), title: "KodeKloud", url: "https://kodekloud.com/", color: "#102030" },
+    { id: nid(), title: "极客时间", url: "https://time.geekbang.org/", color: "#FFFFFF" },
+    { id: nid(), title: "51CTO", url: "https://www.51cto.com/", color: "#FFFFFF" },
+    { id: nid(), title: "GitHub", url: "https://github.com/", color: "#181717" }
   ];
 
   const DEFAULT_SETTINGS = {
@@ -88,7 +101,7 @@
     hideClock: false,
     // Icon tile geometry, driven by the Settings → General sliders onto the --icon-size /
     // --icon-radius CSS custom properties. 64px tiles with a 28% corner radius are the shipped look.
-    iconSize: 64,
+    iconSize: 88,
     iconRadius: 28,
     wallpaper: { ...BUNDLED_WALL },
     // Daily Bing wallpaper auto-rotate: when on, one Bing daily image from the local pool is
@@ -108,7 +121,7 @@
     // Left-column widgets the user kept. Removing one hides it in both the flow and canvas layouts;
     // removing all three collapses the whole left column so the icon grid spans the full width.
     // Lives inside settings on purpose — it then rides along with export / import / cloud sync for free.
-    widgets: { wclock: true, wcal: true, wtodo: true, wmovie: true, wweather: false, wcount: false, wpomodoro: false },
+    widgets: { wclock: true, wcal: false, wtodo: false, wmovie: true, wweather: false, wcount: false, wpomodoro: false },
     // Per-widget placement: 'left' keeps the widget as a left-column card, 'top' lifts it into the
     // stack above the search box (centred, card chrome dropped — the phone-launcher look).
     // Only the clock rides up top by default — that slot wants a glanceable time + date line, not a
@@ -139,8 +152,30 @@
     { id: nid(), name: 'Explain code', tmpl: 'Explain what the code below does, section by section. Call out potential bugs and concrete improvements:\n\n{q}', hint: 'Paste code…', targets: ['doubao', 'openai'] },
     { id: nid(), name: 'Weekly report', tmpl: 'Turn the raw work log below into a structured weekly report with four sections: Done / In progress / Risks / Next week:\n\n{q}', hint: 'Paste your work log for the week…', targets: ['doubao', 'openai'] },
     { id: nid(), name: 'Summarize', tmpl: 'Condense the content below into a bullet list — one point per line, ordered by importance:\n\n{q}', hint: 'Paste a long article or meeting notes…', targets: ['doubao', 'openai'] },
-    { id: nid(), name: 'WorkBuddy task', tmpl: 'Help me complete the following task. First outline a plan, then execute it step by step; cite evidence for any external facts:\n\n{q}', hint: 'Describe the task for WorkBuddy…', targets: ['wbai'] }
   ];
+
+  const PROMPTS_ZH = [
+    ['翻译成英文','请将以下内容翻译成自然、流畅的英文，保留原文语气和格式：','粘贴需要翻译的内容…'],
+    ['翻译成中文','请将以下内容翻译成自然、流畅的中文，保留原文语气和格式：','粘贴需要翻译的内容…'],
+    ['润色文字','你是一位资深编辑。请润色以下内容，使表达更简洁、清晰，并简要列出主要修改：','粘贴需要润色的内容…'],
+    ['解释代码','请逐段解释以下代码的作用，指出潜在问题，并提出具体的改进建议：','粘贴代码…'],
+    ['生成周报','请将以下工作记录整理成周报，分为已完成、进行中、风险和下周计划四部分：','粘贴本周工作记录…'],
+    ['总结内容','请将以下内容提炼为要点列表，每行一个要点，按重要程度排序：','粘贴文章或会议记录…'],
+  ].map(([name,tmpl,hint])=>({name,tmpl:tmpl+'\n\n{q}',hint}));
+  function localizeBuiltinPrompts() {
+    // Retire the former built-in task from saved libraries as well as new installs.
+    const retired = {
+      'WorkBuddy task': 'Help me complete the following task. First outline a plan, then execute it step by step; cite evidence for any external facts:\n\n{q}',
+      'WorkBuddy 任务': '请帮我完成以下任务。先列出计划，再逐步执行；涉及外部事实时，请注明依据：\n\n{q}'
+    };
+    state.prompts = (state.prompts || []).filter(p => retired[p.name] !== p.tmpl);
+    for (const p of state.prompts || []) {
+      const i=DEFAULT_PROMPTS.findIndex((en,i)=>[en,PROMPTS_ZH[i]].some(v=>p.name===v.name && p.tmpl===v.tmpl && p.hint===v.hint));
+      if(i<0)continue; // Never overwrite user-authored or edited content.
+      const v=isEn()?DEFAULT_PROMPTS[i]:PROMPTS_ZH[i];
+      Object.assign(p,{name:v.name,tmpl:v.tmpl,hint:v.hint});
+    }
+  }
 
   // ---------- Utilities ----------
   function nid() { return 's_' + Math.random().toString(36).slice(2, 10); }
@@ -221,14 +256,6 @@
     if (h >= 18 && h < 23) return t('greet.evening');
     return t('greet.night');
   }
-  function chipFor(d) {
-    const h = d.getHours();
-    if (h >= 5 && h < 11) return t('chip.morning');
-    if (h >= 11 && h < 13) return t('chip.noon');
-    if (h >= 13 && h < 18) return t('chip.afternoon');
-    if (h >= 18 && h < 23) return t('chip.evening');
-    return t('chip.night');
-  }
   const EN_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const EN_MONTHS_S = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const EN_WEEKS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -257,10 +284,6 @@
     const lu = window.LT_LUNAR.toLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
     if (!lu) return base;
     return `${base} ${window.LT_LUNAR.monthName(lu.month, lu.isLeap)}${window.LT_LUNAR.dayName(lu.day)}`;
-  }
-  function chipDate(d) {
-    if (isEn()) return `${EN_MONTHS_S[d.getMonth()]} ${d.getDate()}`;
-    return `${d.getMonth() + 1}月${d.getDate()}日`;
   }
   // Chinese lunar date (needs window.LT_LUNAR from js/lunar.js; degrades silently to '' when absent).
   function lunarLine(d) {
@@ -397,6 +420,25 @@
       || (wp.type === 'image' && !sanitizeWallpaperUrl(wp.value))
       || (wp.type === 'gradient' && !wp.value)) wp = BUNDLED_WALL;
     el.classList.toggle('bg-light', !!(wp.type === 'image' && wp.light));
+    document.documentElement.dataset.wallTone = wp.light ? 'light' : 'dark';
+    const toneSource = wp.type === 'image' ? sanitizeWallpaperUrl(wp.value) : '';
+    el.dataset.toneSource = toneSource;
+    if (toneSource) {
+      const probe = new Image(); probe.crossOrigin = 'anonymous';
+      probe.onload = () => {
+        if (el.dataset.toneSource !== toneSource) return;
+        try {
+          const canvas = document.createElement('canvas'); canvas.width=24; canvas.height=16;
+          const ctx = canvas.getContext('2d'); ctx.drawImage(probe,0,0,24,16);
+          const pixels = ctx.getImageData(0,0,24,16).data;
+          let brightness=0;
+          for(let i=0;i<pixels.length;i+=4) brightness+=.2126*pixels[i]+.7152*pixels[i+1]+.0722*pixels[i+2];
+          document.documentElement.dataset.wallTone = brightness/(24*16)>150 ? 'light' : 'dark';
+        } catch (_) { /* Cross-origin sources retain their declared tone. */ }
+      };
+      probe.src=toneSource;
+    }
+
     if (wp.type === 'image') {
       el.style.background = `center/cover no-repeat url("${sanitizeWallpaperUrl(wp.value)}")`;
     } else {
@@ -728,7 +770,7 @@
     ctx.bezierCurveTo(-s * 0.72, s * 0.6, -s * 0.95, -s * 0.55, 0, -s);
     ctx.fill();
   }
-  function petalBurst() {
+  function petalBurst(launch = false) {
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (!petalCanvas) {
       petalCanvas = document.createElement('canvas');
@@ -745,18 +787,18 @@
     const ctx = petalCanvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Origin: the plum button's centre (bottom-right corner).
-    const btn = document.getElementById('btn-plum');
+    const btn = document.getElementById(launch ? 'search' : 'btn-plum');
     const br = btn ? btn.getBoundingClientRect() : { left: W, top: H, width: 0, height: 0 };
     const ox = br.left + br.width / 2, oy = br.top + br.height / 2;
     const now = performance.now();
     const petals = [];
-    for (let i = 0; i < 46; i++) {
+    for (let i = 0; i < (launch ? 100 : 46); i++) {
       // Fan up-and-left out of the corner, speeds in px/s.
-      const ang = (-160 + Math.random() * 95) * Math.PI / 180;
+      const ang = (launch ? -180 + Math.random() * 180 : -160 + Math.random() * 95) * Math.PI / 180;
       const spd = 260 + Math.random() * 560;
       petals.push({
-        x: ox + (Math.random() - 0.5) * 30,
-        y: oy + (Math.random() - 0.5) * 20,
+        x: launch && i > 35 ? Math.random() * W : ox + (Math.random() - 0.5) * 30,
+        y: launch && i > 35 ? -Math.random() * H * .6 : oy + (Math.random() - 0.5) * 20,
         vx: Math.cos(ang) * spd,
         vy: Math.sin(ang) * spd - 140,
         rot: Math.random() * Math.PI * 2,
@@ -807,6 +849,64 @@
     }
     petalRaf = requestAnimationFrame(frame);
   }
+  function bindPlumSecret() {
+    const btn = document.getElementById('btn-plum');
+    const note = document.createElement('div');
+    note.id = 'plum-secret'; note.hidden = true; note.setAttribute('role','status');
+    note.innerHTML = '<div class="secret-aura" aria-hidden="true"></div><div class="secret-orbit" aria-hidden="true">' + Array.from({length:64},(_,i)=>{const angle=i*2.39996;const radius=170+(i%7)*13;return '<i style="--i:'+i+';--x:'+Math.round(Math.cos(angle)*radius)+'px;--y:'+Math.round(Math.sin(angle)*radius*.7)+'px;--dx:'+Math.round(Math.cos(angle)*900)+'px;--dy:'+Math.round(Math.sin(angle)*700)+'px;--r:'+Math.round(angle*180/Math.PI)+'deg;--delay:'+(i%11)*.045+'s"></i>';}).join('') + '</div><div class="secret-message"><small>有些名字，藏在花开处</small><strong aria-label="esmehan">' + [...'esmehan'].map((c,i)=>'<b aria-hidden="true" style="--i:'+i+'">'+c+'</b>').join('') + '<div class="secret-line" aria-hidden="true"></div><span>原来，你一直在这里。</span><em>花开有时，念念不忘。</em></div><button type="button" class="secret-close" aria-label="关闭彩蛋">×</button><div class="secret-exit">轻点空白处，回到此刻</div>';
+    document.body.appendChild(note);
+    let holdTimer, armTimer, hideTimer, armed = false, typed = '', suppressClick = false;
+    function reset() {
+      clearTimeout(holdTimer); clearTimeout(armTimer);
+      armed = false; typed = ''; btn.removeAttribute('data-secret-step');
+    }
+    function closeSecret() { clearTimeout(hideTimer); note.hidden=true; reset(); suppressClick=false; }
+    note.querySelector('.secret-close').addEventListener('click', closeSecret);
+    note.addEventListener('click', e => { if (!e.target.closest('.secret-message')) closeSecret(); });
+    document.addEventListener('keydown', e => { if(e.key==='Escape' && !note.hidden){e.preventDefault();closeSecret();} });
+    function startHold() {
+      if (armed) return;
+      clearTimeout(holdTimer);
+      holdTimer = setTimeout(() => {
+        armed = true; typed = ''; suppressClick = true;
+        btn.dataset.secretStep = '0';
+        armTimer = setTimeout(reset, 8000);
+      }, 3000);
+    }
+    btn.addEventListener('pointerdown', e => { if(e.button===0) startHold(); });
+    btn.addEventListener('pointerup', () => clearTimeout(holdTimer));
+    btn.addEventListener('pointerleave', () => clearTimeout(holdTimer));
+    btn.addEventListener('pointercancel', () => { reset(); suppressClick=false; });
+    btn.addEventListener('contextmenu', e => { if(armed){e.preventDefault();} });
+    btn.addEventListener('keydown', e => {
+      if((e.key===' ' || e.key==='Enter') && !e.repeat) { e.preventDefault(); startHold(); }
+      else if(e.key===' ' || e.key==='Enter') e.preventDefault();
+      if(e.key==='Escape'){reset();note.hidden=true;}
+    });
+    btn.addEventListener('keyup', e => { if(e.key===' '||e.key==='Enter'){e.preventDefault();clearTimeout(holdTimer);btn.click();} });
+    btn.addEventListener('click', () => {
+      if(suppressClick){suppressClick=false;return;}
+      if(!armed){rotateWallpaperAndQuote();return;}
+      // Once armed, the name must be typed; further clicks do not unlock it.
+    });
+    document.addEventListener('keydown', e => {
+      if (!armed || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key.length !== 1) { if(e.key==='Escape') reset(); return; }
+      e.preventDefault(); e.stopImmediatePropagation();
+      const key = e.key.toLowerCase();
+      if (key !== 'esmehan'[typed.length]) { reset(); return; }
+      typed += key;
+      if (typed === 'esmehan') {
+        reset(); note.hidden=true; void note.offsetWidth; note.hidden=false;
+        clearTimeout(hideTimer); hideTimer=setTimeout(()=>{note.hidden=true;},12000);
+      }
+    }, true);
+    document.addEventListener('pointerdown', e => {
+      if(!btn.contains(e.target) && !note.contains(e.target)){note.hidden=true;reset();suppressClick=false;}
+    });
+    window.addEventListener('blur',()=>{reset();suppressClick=false;});
+  }
+
   async function rotateWallpaperAndQuote() {
     const btn = document.getElementById('btn-plum');
     if (btn) { btn.classList.remove('spin'); void btn.offsetWidth; btn.classList.add('spin'); }
@@ -881,7 +981,6 @@
     const dateEl = document.getElementById('clock-date');
     const lunarEl = document.getElementById('clock-lunar');
     const greetEl = document.getElementById('clock-greet');
-    const chipEl = document.getElementById('date-chip');
     let lastMinute = -1, lastHour = -1, lastDay = '';
 
     function tick() {
@@ -890,7 +989,7 @@
       const mm = d.getMinutes();
       const ss = pad2(d.getSeconds());
       // Seconds display is opt-in (settings.clockSeconds): the span is hidden otherwise.
-      // The 1s tick cadence is kept either way — the greeting / date-chip rollovers share this tick.
+      // The 1s tick cadence is kept either way for greeting and date rollovers.
       const showSec = state.settings.clockSeconds === true;
       secEl.hidden = !showSec;
       if (showSec) secEl.textContent = ss;
@@ -906,7 +1005,6 @@
         const sep = isEn() ? ', ' : '，';
         const nm = state.settings.name ? `${sep}${state.settings.name}` : '';
         greetEl.textContent = `${greetingFor(d)}${nm}`;
-        chipEl.textContent = `${chipDate(d)} · ${chipFor(d)}`;
       }
       const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}|${clockIsTop() ? 't' : 'l'}|${clockWeatherText()}`;
       if (dayKey !== lastDay) {
@@ -1358,6 +1456,7 @@
   function renderSuggest() {
     const list = suggestListEl();
     if (!list) return;
+    if (!document.getElementById('q').value.trim()) { list.hidden = true; return; }
     const calc = currentCalc();
     const hist = currentHistRows();
     const sites = buildSuggestNav();
@@ -1435,7 +1534,7 @@
       if (seq === suggestFetchSeq) { suggestBusy = false; renderSuggest(); }
     }
   }
-  // Tab / Shift+Tab in the search box cycles the engine instead of moving focus.
+  // F2 / Shift+F2 in the search box cycles the engine instead of moving focus.
   function cycleEngine(dir) {
     const engines = allEngines();
     if (engines.length < 2) return;
@@ -1466,15 +1565,15 @@
       if (q) dismissOnboarding();
       suggestTyped = qEl.value;
       suggestHl = -1;
-      // Empty input: show the history view. URLs never suggest (and can never be calc expressions).
-      if (!q) { suggestItems = []; renderSuggest(); return; }
+      // Empty input: keep the dropdown closed. URLs never suggest (and can never be calc expressions).
+      if (!q) { closeSuggest(); return; }
       if (looksLikeUrl(q)) { closeSuggest(); return; }
       renderSuggest(); // calc row + history matches render instantly, network rows join when they land
       suggestTimer = setTimeout(() => fetchSuggest(q), SUGGEST_DEBOUNCE_MS);
     });
     qEl.addEventListener('keydown', (e) => {
-      // Tab / Shift+Tab: cycle engines, only while the search input itself is focused.
-      if (e.key === 'Tab' && document.activeElement === qEl) {
+      // F2 / Shift+F2: cycle engines, only while the search input itself is focused.
+      if (e.key === 'F2' && document.activeElement === qEl) {
         e.preventDefault();
         cycleEngine(e.shiftKey ? -1 : 1);
         return;
@@ -1512,8 +1611,8 @@
     });
     qEl.addEventListener('focus', () => {
       clearTimeout(suggestBlurTimer);
-      // Reopening on an empty input shows the history view (renderSuggest hides the list when empty).
-      if (!qEl.value.trim()) renderSuggest();
+      // Focusing an empty input must not expose history.
+      if (!qEl.value.trim()) closeSuggest();
     });
     // mousedown (not click): it fires before the input blurs, so the row is still there to be hit.
     list.addEventListener('mousedown', (e) => {
@@ -1552,8 +1651,7 @@
         submitSearch(picked, e);
       }
     });
-    // The input is auto-focused on boot (no focus event fires): show the history view right away.
-    if (document.activeElement === qEl && !qEl.value.trim()) renderSuggest();
+    // No suggestions on boot until the user enters a query.
   }
   // Open the result page: navigate in the current tab by default (no stray blank tabs); hold Cmd/Ctrl for a new tab.
   function openResult(url, ev) {
@@ -1582,19 +1680,86 @@
     for (const it of (state.items || [])) { if (isFolder(it)) (it.children || []).forEach(consider); else consider(it); }
     return hits.size === 1 ? [...hits][0] : null;
   }
+  let launchFeedbackTimer;
+  function launchFeedback() {
+    const panel = document.getElementById('ai-launcher');
+    const bar = panel && !panel.hidden ? panel : document.getElementById('search');
+    if (!bar) return;
+    clearTimeout(launchFeedbackTimer);
+    bar.classList.remove('is-launching');
+    void bar.offsetWidth;
+    bar.classList.add('is-launching');
+    launchFeedbackTimer = setTimeout(() => bar.classList.remove('is-launching'), 600);
+  }
+
+  let launcherTargets = ['doubao'];
+  let launcherTemplate = null;
+  let launcherDraft = '';
+  function applyAiPosition() {
+    const panel=document.getElementById('ai-launcher');
+    const pos=state.settings.aiPanelPosition;
+    if (!panel || panel.hidden || !pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return;
+    panel.style.left=Math.max(8,Math.min(pos.x,innerWidth-panel.offsetWidth-8))+'px';
+    panel.style.top=Math.max(8,Math.min(pos.y,innerHeight-panel.offsetHeight-8))+'px';
+    panel.style.right='auto';
+  }
+  function bindAiDrag(root) {
+    const head=root.querySelector('.launch-heading');
+    head.onpointerdown=e=>{
+      if(e.button!==0 || e.target.closest('button'))return;
+      const rect=root.getBoundingClientRect(),sx=e.clientX,sy=e.clientY;
+      head.setPointerCapture(e.pointerId);
+      head.onpointermove=ev=>{
+        const x=Math.max(8,Math.min(rect.left+ev.clientX-sx,innerWidth-root.offsetWidth-8));
+        const y=Math.max(8,Math.min(rect.top+ev.clientY-sy,innerHeight-root.offsetHeight-8));
+        root.style.left=x+'px';root.style.top=y+'px';root.style.right='auto';
+      };
+      const end=()=>{
+        head.onpointermove=null;head.onpointerup=null;head.onpointercancel=null;
+        const r=root.getBoundingClientRect();state.settings.aiPanelPosition={x:r.left,y:r.top};
+        Store.set(K.settings,state.settings);
+      };
+      head.onpointerup=end;head.onpointercancel=end;
+    };
+  }
+  function renderLauncher() {
+    const root=document.getElementById('ai-launcher');
+    if(!root)return;
+    const enabled=state.settings.aiEnabled !== false;
+    document.getElementById('ai-side-toggle').hidden=!enabled;
+    if(!enabled)root.hidden=true;
+    const en=isEn();
+    const names={'Translate to English':'翻译成英文','Translate to Chinese':'翻译成中文','Polish writing':'润色','Explain code':'解释代码','Weekly report':'周报','Summarize':'总结'};
+    root.innerHTML=`<div class="launch-heading"><strong>${en?'AI assistant':'AI 助手'}</strong><button data-close-ai aria-label="${en?'Close':'关闭'}">×</button></div>
+      <textarea id="ai-draft" aria-label="${en?'Task':'任务内容'}" placeholder="${en?'Ask a question or paste content…':'输入问题或粘贴内容…'}"></textarea>
+      <div class="launch-options">${ENGINES.filter(e=>e.ai).map(e=>`<button data-target="${e.id}" aria-pressed="${launcherTargets.includes(e.id)}">${escapeHtml(engName(e))}<small>${e.copyOnly?(en?'Manual paste':'手动粘贴'):e.deeplink?(en?'Desktop':'桌面启动'):(en?'Extension auto-send':'扩展内自动发送')}</small></button>`).join('')}</div>
+      <label class="launch-template-label">${en?'Template':'模板'}<select id="ai-template"><option value="">${en?'Direct question':'直接提问'}</option>${state.prompts.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(en?p.name:names[p.name]||p.name)}</option>`).join('')}</select></label>
+      <button id="ai-send">${en?'Launch':'发射'} ↗</button><p class="launch-hint">${en?'Multiple targets · Ctrl / ⌘ + Enter to launch':'支持多选目标 · Ctrl / ⌘ + Enter 发射'}</p>`;
+    bindAiDrag(root);
+    applyAiPosition();
+    const input=root.querySelector('#ai-draft');input.value=launcherDraft;input.oninput=()=>launcherDraft=input.value;
+    const select=root.querySelector('#ai-template');select.value=launcherTemplate?.id||'';select.onchange=()=>launcherTemplate=state.prompts.find(p=>p.id===select.value)||null;
+    let lastSendAt = 0;
+    function send(e){if(Date.now()-lastSendAt<1200)return;const text=input.value.trim();if(!launcherTargets.length)return showToast(en?'Choose an AI':'请先选择 AI');if(!text&&(!launcherTemplate||launcherTemplate.tmpl.includes('{q}')))return showToast(en?'Enter content':'请先输入内容');lastSendAt=Date.now();launchPrompt({...launcherTemplate,tmpl:launcherTemplate?.tmpl||'{q}',targets:launcherTargets},text,e);}
+    input.onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();send(e);}};
+    root.onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.hasAttribute('data-close-ai')){root.hidden=true;document.getElementById('ai-side-toggle').setAttribute('aria-expanded','false');document.getElementById('ai-side-toggle').focus();return;}if(b.dataset.target){const id=b.dataset.target;launcherTargets=launcherTargets.includes(id)?launcherTargets.filter(x=>x!==id):[...launcherTargets,id];renderLauncher();return;}if(b.id==='ai-send')send(e);};
+    const toggle=document.getElementById('ai-side-toggle');toggle.onclick=()=>{root.hidden=!root.hidden;toggle.setAttribute('aria-expanded',String(!root.hidden));if(!root.hidden){renderLauncher();root.querySelector('textarea').focus();}};
+    root.onkeydown=e=>{if(e.key==='Escape'){root.hidden=true;toggle.setAttribute('aria-expanded','false');toggle.focus();}};
+  }
+
   function submitSearch(rawQuery, ev) {
     closeSuggest();
-    const q = (rawQuery || '').trim();
-    // A template is active: the typed text launches to the template targets instead of running a plain search.
-    if (activePrompt) {
-      if (!q) { showToast(t('ai.enter'), null, null, 3000); document.getElementById('q').focus(); return; }
-      launchPrompt(activePrompt, q, ev);
-      return;
+    let q = (rawQuery || '').trim();
+    const template = activePrompt;
+    if (template) {
+      const pattern = String(template.tmpl || '');
+      if (pattern.includes('{q}') && !q) { showToast(t('ai.enter')); document.getElementById('q').focus(); return; }
+      q = pattern.includes('{q}') ? pattern.replace(/\{q\}/g, () => q) : pattern;
     }
     if (!q) return;
     // Launcher behaviour on a web engine: an exact, unique site name opens the site directly
     // (URL jumps excluded from history, exactly like typing a URL).
-    if (!currentEngine.ai && !looksLikeUrl(q)) {
+    if (!template && !currentEngine.ai && !looksLikeUrl(q)) {
       const direct = exactSiteHit(q);
       if (direct) { openResult(direct, ev); return; }
     }
@@ -1603,6 +1768,7 @@
 
     // AI engines: WorkBuddy opens via deep link with a pre-filled draft; Doubao / ChatGPT auto-send through the nonce channel.
     if (currentEngine.ai) {
+      if (!currentEngine.injected) launchFeedback();
       if (currentEngine.deeplink) {
         window.open(deepLinkUrl(currentEngine, q, null), '_blank');
         showToast(t('ai.wb_launched'), null, null, 3600);
@@ -1612,6 +1778,7 @@
         launchPrompt(null, q, ev); // single engine: keep the same-tab navigation semantics
         return;
       }
+      if (currentEngine.copyOnly) openResult(currentEngine.url, {ctrlKey: true});
       if (!currentEngine.copyOnly) {
         const u = currentEngine.url.replace('{q}', encodeURIComponent(q));
         if (u && u !== currentEngine.url) openResult(u, ev);
@@ -1621,7 +1788,7 @@
       return;
     }
 
-    if (looksLikeUrl(q)) {
+    if (!template && looksLikeUrl(q)) {
       const url = normalizeUrl(q);
       if (url) { openResult(url, ev); return; }
     }
@@ -1713,7 +1880,7 @@
     let text;
     if (tpl) {
       const tmpl = typeof tpl.tmpl === 'string' ? tpl.tmpl : '';
-      text = tmpl.indexOf('{q}') !== -1 ? tmpl.replace(/\{q\}/g, content || '') : tmpl;
+      text = tmpl.indexOf('{q}') !== -1 ? tmpl.replace(/\{q\}/g, () => content || '') : tmpl;
     } else {
       text = content || '';
     }
@@ -1721,37 +1888,45 @@
     let targetIds = tpl ? (tpl.targets || []) : [currentEngine.id];
     // Only AI engines can receive a prompt (injected chat or deep link); a plain search engine
     // would get a malformed URL with a literal "{q}".
-    targetIds = targetIds.filter(id => allEngines().some(x => x.id === id && x.ai));
+    targetIds = [...new Set(targetIds)].filter(id => allEngines().some(x => x.id === id && x.ai));
     if (!targetIds.length) {
       // A template with no targets configured falls back to the current engine (AI engines only);
       // a template whose targets are all invalid/removed gets the explicit no-target toast.
       if (tpl && !(tpl.targets || []).length && currentEngine.ai) targetIds = [currentEngine.id];
       if (!targetIds.length) return showToast(t('ai.no_target'));
     }
+    launchFeedback();
     const engs = targetIds.map(id => allEngines().find(x => x.id === id)).filter(Boolean);
     const deeplinks = engs.filter(x => x.deeplink);
     const webs = engs.filter(x => !x.deeplink);
+    if (!hasChromeStorage || webs.some(x=>x.copyOnly)) copyText(text);
     let dlN = 0, webN = 0, blocked = false;
     for (const e of deeplinks) { try { window.open(deepLinkUrl(e, text, tpl && tpl.wb), '_blank'); dlN++; } catch (_) {} }
-    if (webs.length) {
-      const nonce = hasChromeStorage ? await putPending(text) : null;
-      if (webs.length === 1) {
-        // Single target: keep openResult semantics (same tab, or new tab with Cmd/Ctrl).
-        const u = injectedUrl(webs[0], text, nonce);
-        if (u) { openResult(u, ev); webN++; }
-      } else {
-        const useTabs = !!(nonce && window.chrome && chrome.tabs);
-        for (let i = 0; i < webs.length; i++) {
-          const u = injectedUrl(webs[i], text, nonce);
-          if (!u) continue;
-          if (useTabs) {
-            try { chrome.tabs.create({ url: u, active: dlN === 0 && i === 0 }); webN++; } catch (_) {}
-          } else {
-            try { const w = window.open(u, '_blank', 'noopener'); if (!w) blocked = true; else webN++; } catch (_) { blocked = true; }
-          }
-        }
-      }
+    // Preview windows must be reserved during the click, before any storage await.
+    const useTabs = !!(hasChromeStorage && window.chrome?.tabs?.create);
+    const reserved = !useTabs ? webs.map(() => {
+      try { const w=window.open('about:blank','_blank'); if(w)w.opener=null; return w; } catch (_) { return null; }
+    }) : [];
+    const nonce = hasChromeStorage && webs.some(x=>x.injected) ? await putPending(text) : null;
+    if (hasChromeStorage && webs.some(x=>x.injected) && !nonce) copyText(text);
+    let results = document.getElementById('ai-launch-results');
+    if (!results) { results=document.createElement('div'); results.id='ai-launch-results'; document.getElementById('ai-launcher').appendChild(results); }
+    results.replaceChildren();
+    for (let i=0;i<webs.length;i++) {
+      const e=webs[i];
+      const u=e.injected && nonce ? injectedUrl(e,text,nonce) : e.url;
+      let opened=false;
+      if(useTabs){try{await chrome.tabs.create({url:u,active:false});opened=true;}catch(_){}}
+      else if(reserved[i]){try{reserved[i].location.replace(u);opened=true;}catch(_){}}
+      if(opened)webN++;else blocked=true;
+      const row=document.createElement('div');
+      const link=document.createElement('a');link.href=u;link.target='_blank';link.rel='noopener';link.textContent=engName(e)+' ↗';
+      row.append(link,document.createTextNode(opened?(isEn()?' · Opened':' · 已打开'):(isEn()?' · Blocked — click to open':' · 未打开，点击重试')));
+      if(e.copyOnly||!hasChromeStorage||(e.injected&&!nonce))row.append(document.createTextNode(isEn()?' · Paste the copied prompt':' · 请粘贴已复制内容'));
+      results.append(row);
     }
+    const panel=document.getElementById('ai-launcher');
+    if(blocked && panel){panel.hidden=false;document.getElementById('ai-side-toggle')?.setAttribute('aria-expanded','true');}
     if (!webN && !dlN) return showToast(t('ai.fail'));
     const names = engs.map(x => engName(x)).join(' · ');
     if (webN && !hasChromeStorage) {
@@ -1769,33 +1944,8 @@
     // link most likely went nowhere - say so instead of leaving a false "launched".
     if (dlN) verifyWorkBuddyLaunch();
     if (tpl) { tpl.lastUsedAt = Date.now(); window.LT_PROMPTS.savePrompts(); }
-    sparkFx();
     sweepPending();
     window.LT_PROMPTS.clearActiveTemplate();
-  }
-
-  // ---------- Launch animation signature: scattering sparks (the LightTab visual signature) ----------
-  function sparkFx() {
-    const anchor = document.getElementById('search');
-    if (!anchor) return;
-    const r = anchor.getBoundingClientRect();
-    const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
-    const colors = ['#a78bfa', '#c4b5fd', '#22d3ee', '#7dd3fc', '#f0abfc'];
-    for (let i = 0; i < 14; i++) {
-      const s = document.createElement('span');
-      s.className = 'spark';
-      const ang = Math.random() * Math.PI * 2;
-      const dist = 42 + Math.random() * 120;
-      s.style.setProperty('--dx', `${Math.cos(ang) * dist}px`);
-      s.style.setProperty('--dy', `${Math.sin(ang) * dist}px`);
-      s.style.color = colors[i % colors.length];
-      s.style.left = `${cx}px`;
-      s.style.top = `${cy}px`;
-      document.body.appendChild(s);
-      s.addEventListener('animationend', () => s.remove());
-      setTimeout(() => s.remove(), 950);
-    }
   }
 
   // Prompt template UI lives in js/prompts.js (window.LT_PROMPTS; loaded before this file).
@@ -1809,6 +1959,8 @@
   }
   function renderGrid() {
     const grid = document.getElementById('grid');
+    const movieTile = grid.querySelector('.wmovie');
+    if (movieTile) movieTile.remove();
     const list = state.view === VIEW_ALL ? state.items : state.items.filter(inView);
     // The grid's last cell is always the add tile (iTab convention) — a button, not an <a>, so
     // the card context-menu / HTML5-reorder bindings (which only touch `#grid a.card`) skip it.
@@ -1823,13 +1975,13 @@
     } else {
       grid.innerHTML = list.map(it => cardHtml(it)).join('') + addTile;
     }
+    if (movieTile) grid.prepend(movieTile);
     bindCardEvents();
     grid.querySelector('.card-add').addEventListener('click', () => openSiteModal(null));
     // Canvas mode: right after rendering, apply (col, row) to the cards and assign coordinates to any new ones.
     const C = window.LT_CANVAS;
-    if (C.canvasRoot() && C.canvasRoot().classList.contains('canvas') && C.canvasEligible()) {
-      C.applyCardCanvas();
-    }
+    C.applyCardCanvas();
+    requestAnimationFrame(() => C.applyCardCanvas());
   }
   // ---------- Icon rendering (fully local, zero network requests) ----------
   // Match chain: full host -> host without "www." -> known brand apex-domain suffix
@@ -1906,6 +2058,8 @@
         // Raster brand mark (bundled data-URI): full-bleed tile in the brand colour, same visual
         // language as the vector glyphs (the PNG ships its own rounded-square artwork).
         bg = safeColor(icon.c) || '#1f2937';
+        // Standalone vector marks need breathing room; app artwork already includes its own inset.
+        if (icon.img.startsWith('data:image/svg+xml')) customCls = 'brand-vector-mark';
         ico = `<img class="logo-img" src="${icon.img}" alt="" draggable="false">`;
       } else {
         bg = icon.c;
@@ -2027,6 +2181,7 @@
       </div>
     `;
   }
+  function tileSize(value) { return ["1x1", "2x1", "1x2", "2x2", "4x2"].includes(value) ? value : "1x1"; }
   function cardHtml(it) {
     if (isFolder(it)) return folderCardHtml(it);
     const p = cardIconParts(it);
@@ -2035,11 +2190,11 @@
     // Only http(s) links are renderable — an imported/synced record could otherwise carry a javascript: URL.
     const safeHref = /^https?:\/\//i.test(it.url || '') ? it.url : '#';
     return `
-      <a class="card" href="${escapeHtml(safeHref)}" data-id="${escapeHtml(it.id)}" draggable="true" target="_blank" rel="noopener" title="${safeTitle}">
+      <a class="card" data-size="${tileSize(it.tileSize)}" style="--tile-cols:${tileSize(it.tileSize).split('x')[0]};--tile-rows:${tileSize(it.tileSize).split('x')[1]}" href="${escapeHtml(safeHref)}" data-id="${escapeHtml(it.id)}" draggable="true" target="${/^https:\/\/(www\.)?youtube\.com(?:\/|$)/i.test(safeHref) ? '_self' : '_blank'}" rel="noopener" title="${safeTitle}">
         <div class="ico${p.customCls ? ' ' + p.customCls : ''}" style="${bgStyle}color:${p.ink}">
           ${p.ico}
         </div>
-        <div class="title">${safeTitle}</div>
+        <div class="title">${escapeHtml(it.shortTitle || it.title)}</div>
         <div class="card-actions">
           <span class="mini edit" data-act="edit" title="${t('card.edit')}">
             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -2162,7 +2317,7 @@
           const bgStyle = p.bg ? `background:${p.bg};` : '';
           const safeTitle = escapeHtml(c.title);
           const safeHref = /^https?:\/\//i.test(c.url || '') ? c.url : '#';
-          return `<a class="fcard" href="${escapeHtml(safeHref)}" data-id="${escapeHtml(c.id)}" draggable="true" target="_blank" rel="noopener" title="${safeTitle}">
+          return `<a class="fcard" href="${escapeHtml(safeHref)}" data-id="${escapeHtml(c.id)}" draggable="true" target="${/^https:\/\/(www\.)?youtube\.com(?:\/|$)/i.test(safeHref) ? '_self' : '_blank'}" rel="noopener" title="${safeTitle}">
             <span class="fcard-ico${p.customCls ? ' ' + p.customCls : ''}" style="${bgStyle}color:${p.ink}">${p.ico}</span>
             <span class="fcard-title">${safeTitle}</span>
           </a>`;
@@ -2261,6 +2416,7 @@
         openContextMenu(e.clientX, e.clientY, [
           { label: t('ctx.open'), action: () => window.open(a.href, '_blank', 'noopener') },
           { label: t('ctx.copy'), action: () => copyToClipboard(a.href) },
+          { sizes: true, id: a.dataset.id },
           { sep: true },
           { label: t('ctx.edit'), action: () => openSiteModal(a.dataset.id) },
           { label: t('ctx.del'), danger: true, action: () => deleteItem(a.dataset.id) }
@@ -2527,13 +2683,26 @@
     if (openFolderId === id) closeFolderPopup(); // deleting the open folder closes its popup
     await Store.set(K.items, state.items);
     syncUI();
-    // Undo: each closure captures the item and index at deletion time, so repeated deletes each restore correctly.
-    showToast(t('toast.deleted'), t('toast.undo'), async () => {
-      state.items.splice(Math.min(idx, state.items.length), 0, removed);
+    deletedItems.push({removed, idx});
+    if (deletedItems.length > 50) deletedItems.shift();
+    showToast(t('toast.deleted'), t('toast.undo'), undoDeletedItem, 10000);
+  }
+  const deletedItems = [];
+  async function undoDeletedItem() {
+    const entry = deletedItems.pop();
+    if (!entry) return;
+    if (!state.items.some(x => x.id === entry.removed.id)) {
+      state.items.splice(Math.min(entry.idx, state.items.length), 0, entry.removed);
       await Store.set(K.items, state.items);
       syncUI();
-    }, 5000);
+    }
+    if (deletedItems.length) showToast(isEn() ? 'More deletions can be undone' : '还可以撤销之前的删除', t('toast.undo'), undoDeletedItem, 10000);
   }
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !isTypingTarget(e.target) && deletedItems.length) {
+      e.preventDefault(); undoDeletedItem();
+    }
+  });
 
   // ---------- Context menu ----------
   let menuEl;
@@ -2551,7 +2720,7 @@
       modalReturnFocus = null;
     }
   }
-  // Focus trap: while a .modal is open, Tab / Shift+Tab stay inside it (a11y). Delegated once at
+  // Focus trap: while a .modal is open, F2 / Shift+F2 stay inside it (a11y). Delegated once at
   // boot; hidden panes are excluded by the visibility filter.
   function modalFocusables(modal) {
     return [...modal.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
@@ -2594,7 +2763,15 @@
         const idx = cards.indexOf(card);
         if (idx < 0) return;
         e.preventDefault();
-        const next = cards[(idx + dir + cards.length) % cards.length];
+        const r = card.getBoundingClientRect();
+        const vertical = e.key === 'ArrowDown' || e.key === 'ArrowUp';
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const candidates = cards.filter(c => c !== card).map(c => {
+          const b = c.getBoundingClientRect();
+          const dx = b.left + b.width / 2 - cx, dy = b.top + b.height / 2 - cy;
+          return {c, ahead: (vertical ? dy : dx) * dir, cross: Math.abs(vertical ? dx : dy)};
+        }).filter(x => x.ahead > 1).sort((a,b) => (a.cross * 3 + a.ahead) - (b.cross * 3 + b.ahead));
+        const next = candidates[0]?.c || card;
         if (next) { try { next.focus({ preventScroll: true }); } catch (_) { next.focus(); } }
         return;
       }
@@ -2621,6 +2798,10 @@
     if (!menuEl) menuEl = document.getElementById('context-menu');
     menuEl.innerHTML = items.map((it, i) => {
       if (it.sep) return '<div class="sep"></div>';
+      if (it.sizes) {
+        const current = tileSize(state.items.find(x => x.id === it.id)?.tileSize);
+        return `<div class="tile-size-label">${isEn() ? 'Tile size' : '图标布局'}</div><div class="tile-size-options">${['1x1','2x1','1x2','2x2','4x2'].map(size => `<button type="button" data-size="${size}" data-id="${escapeHtml(it.id)}" aria-pressed="${size === current}">${size.replace('x','×')}</button>`).join('')}</div>`;
+      }
       return `<div class="item ${it.danger ? 'danger' : ''}" data-i="${i}">${escapeHtml(it.label)}</div>`;
     }).join('');
     menuEl.style.left = '0px'; menuEl.style.top = '0px';
@@ -2630,7 +2811,13 @@
     const maxY = window.innerHeight - r.height - 8;
     menuEl.style.left = Math.min(x, maxX) + 'px';
     menuEl.style.top = Math.min(y, maxY) + 'px';
-    menuEl.onclick = (e) => {
+    menuEl.onclick = async (e) => {
+      const sizeBtn = e.target.closest('button[data-size]');
+      if (sizeBtn) {
+        const item = state.items.find(x => x.id === sizeBtn.dataset.id);
+        if (item) { item.tileSize = tileSize(sizeBtn.dataset.size); await Store.set(K.items, state.items); syncUI(); }
+        closeContextMenu(); return;
+      }
       const row = e.target.closest('.item');
       if (!row) return;
       const act = items[+row.dataset.i];
@@ -2666,6 +2853,7 @@
       if (!it) return;
       titleEl.textContent = t('site.edit');
       form.elements['title'].value = it.title;
+      form.elements['shortTitle'].value = it.shortTitle || '';
       form.elements['url'].value = it.url;
       form.dataset.editId = id;
     } else {
@@ -2858,6 +3046,7 @@
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const title = form.elements['title'].value.trim();
+      const shortTitle = form.elements['shortTitle'].value.trim().slice(0, 16);
       const url = normalizeUrl(form.elements['url'].value);
       if (!title) return showToast(t('toast.name_required'));
       if (!url) return showToast(t('toast.url_invalid'));
@@ -2866,9 +3055,9 @@
       const icon = sanitizeIconDataUrl(pendingIcon) || undefined;
       if (editId) {
         const it = state.items.find(x => x.id === editId);
-        if (it) { it.title = title; it.url = url; it.group = group; it.icon = icon; }
+        if (it) { it.title = title; it.shortTitle = shortTitle; it.url = url; it.group = group; it.icon = icon; }
       } else {
-        state.items.push({ id: nid(), title, url, group, icon });
+        state.items.push({ id: nid(), title, shortTitle, url, group, icon });
       }
       await Store.set(K.items, state.items);
       hideModal(modal);
@@ -2971,7 +3160,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.20.0',
+      version: '1.21.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -3057,7 +3246,10 @@
     if (!data || typeof data !== 'object') return showToast(t('toast.import_bad'));
     if (data.app && data.app !== 'LightTab') return showToast(t('toast.import_not_lighttab'));
     const hasLocal = state.items.length || state.todos.length || state.prompts.length;
-    if (hasLocal && !confirm(t('toast.import_confirm'))) return;
+    const preview = isEn()
+      ? `Restore backup?\nShortcuts: ${Array.isArray(data.items) ? data.items.length : 0}\nTodos: ${Array.isArray(data.todos) ? data.todos.length : 0}\nSettings, templates and wallpaper are also restored. Existing data will be replaced. Export a backup first if needed.`
+      : `确认恢复备份？\n快捷方式（含文件夹）：${Array.isArray(data.items) ? data.items.length : 0} 项\n待办：${Array.isArray(data.todos) ? data.todos.length : 0} 项\n同时恢复设置、模板和壁纸，现有数据将被替换。需要保留当前数据时，请先导出备份。`;
+    if (!confirm(preview)) return;
     const migrated = migrateSchema({
       settings: data.settings || {},
       items: data.items || [],
@@ -3116,7 +3308,7 @@
             return [{ id: it.id || nid(), type: 'folder', name: String(it.name || '').slice(0, 32) || t('folder.default_name'), group: fgroup, children: kids }];
           }
           if (!it || typeof it.url !== 'string') return [];
-          return [{ id: it.id || nid(), title: String(it.title || '').slice(0, 32) || t('toast.unnamed'), url: it.url, group: gids.has(it.group) ? it.group : '', icon: sanitizeIconDataUrl(it.icon) || undefined }];
+          return [{ id: it.id || nid(), shortTitle: String(it.shortTitle || '').slice(0,16), title: String(it.title || '').slice(0, 32) || t('toast.unnamed'), url: it.url, group: gids.has(it.group) ? it.group : '', icon: sanitizeIconDataUrl(it.icon) || undefined }];
         })
       : [];
     state.wallpaper = pickWallpaperFromData(migrated.wallpaper);
@@ -3271,6 +3463,8 @@
 
   // ---------- Modal (settings / wallpaper) ----------
   function bindSettings() {
+    const aiEnabled=document.getElementById('f-ai-enabled');
+    aiEnabled.addEventListener('change',async()=>{state.settings.aiEnabled=aiEnabled.checked;await Store.set(K.settings,state.settings);renderLauncher();});
     const modal = document.getElementById('modal-set');
     const tabs = modal.querySelectorAll('.tab');
     const panes = modal.querySelectorAll('.tab-pane');
@@ -3518,6 +3712,7 @@
       if (tz2In) tz2In.value = state.settings.clockTz2 || '';
       const hideSearchCb = document.getElementById('f-hidesearch');
       if (hideSearchCb) hideSearchCb.checked = state.settings.hideSearch === true;
+      document.getElementById('f-ai-enabled').checked=state.settings.aiEnabled !== false;
       const hideClockCb = document.getElementById('f-hideclock');
       if (hideClockCb) hideClockCb.checked = state.settings.hideClock === true;
       const iconSizeRg = document.getElementById('f-iconsize');
@@ -4004,6 +4199,10 @@
   async function saveTodos() {
     await Store.set(K.todos, state.todos);
   }
+  async function updateTodos(change) {
+    state.todos = await window.LT_SYNC.writeLocal(K.todos, raw => change(sanitizeTodos(raw) || []));
+    renderTodos(); renderCalendar();
+  }
   function bindTodo() {
     const form = document.getElementById('todo-form');
     const input = document.getElementById('todo-input');
@@ -4013,10 +4212,10 @@
       const text = input.value.trim();
       if (!text) return;
       const due = dueInput && /^\d{4}-\d{2}-\d{2}$/.test(dueInput.value) ? dueInput.value : '';
-      state.todos.unshift({ id: nid(), text, done: false, ...(due ? { due } : {}) });
+      const added = { id: nid(), text, done: false, ...(due ? { due } : {}) };
+      await updateTodos(todos => [added, ...todos]);
       input.value = '';
       if (dueInput) dueInput.value = '';
-      await saveTodos();
       renderTodos();
       renderCalendar(); // the calendar's due dots must follow a newly dated task
     });
@@ -4025,23 +4224,21 @@
       if (!item) return;
       const todo = state.todos.find(it => it.id === item.dataset.id);
       if (!todo) return;
-      if (e.target.closest('.t-del')) {
-        state.todos = state.todos.filter(it => it.id !== todo.id);
-      } else if (e.target.closest('.t-due')) {
-        delete todo.due; // clicking the due chip drops the deadline
-      } else {
-        todo.done = !todo.done;
-      }
-      await saveTodos();
+      const remove = !!e.target.closest('.t-del');
+      const clearDue = !!e.target.closest('.t-due');
+      const done = !todo.done;
+      await updateTodos(todos => todos.flatMap(t => {
+        if (t.id !== todo.id) return [t];
+        if (remove) return [];
+        if (clearDue) { const next = { ...t }; delete next.due; return [next]; }
+        return [{ ...t, done }];
+      }));
       renderTodos();
       renderCalendar(); // completion / deletion also moves the calendar's due dots
     });
     const clearDoneBtn = document.getElementById('todo-clear-done');
     if (clearDoneBtn) clearDoneBtn.addEventListener('click', async () => {
-      const before = state.todos.length;
-      state.todos = state.todos.filter(it => !it.done);
-      if (state.todos.length === before) return;
-      await saveTodos();
+      await updateTodos(todos => todos.filter(it => !it.done));
       renderTodos();
       renderCalendar();
     });
@@ -4187,7 +4384,39 @@
     { y: 2008, zh: '入殓师', en: 'Departures', rate: 8.8, genre: '剧情 / 音乐', blurb: '温柔对待每一个告别，让死者有尊严地启程。' },
     { y: 2010, zh: '怦然心动', en: 'Flipped', rate: 9.1, genre: '剧情 / 爱情', blurb: '斯人若彩虹，遇上方知有。' },
     { y: 2021, zh: '雄狮少年', en: 'I Am What I Am', rate: 8.3, genre: '动画 / 运动', blurb: '不认命的人，连狮子也会为他抬头。' }
-  ];
+  ].filter(m => window.LT_MOVIE_DATA?.[m.zh]?.poster).map(m => ({ ...m, ...window.LT_MOVIE_DATA[m.zh] }));
+  const HOT_MOVIE_KEY = 'lt.movie.hot.v1';
+  const HOT_MOVIE_URL = 'https://movie.douban.com/j/search_subjects?type=movie&tag=%E7%83%AD%E9%97%A8&sort=recommend&page_limit=30&page_start=0';
+  function normalizeHotMovies(data) {
+    if (!Array.isArray(data?.subjects)) return [];
+    return data.subjects.filter(m => typeof m.title === 'string' && /^https:\/\/movie\.douban\.com\/subject\/\d+\/$/.test(m.url) && /^https:\/\/img\d*\.doubanio\.com\/[\w/.-]+$/.test(m.cover)).slice(0,30).map(m => ({
+      zh:m.title, en:m.title, rate:Number(m.rate)||0, y:'', source:m.url, poster:m.cover,
+      country:'—', director:'—', genre:'豆瓣热门', hot:true,
+      blurb:'豆瓣热门电影 · 点击查看', synopsis:'热门片单暂未提供剧情简介，可前往豆瓣查看完整电影资料。'
+    }));
+  }
+  let hotCache;
+  try { hotCache = JSON.parse(localStorage.getItem(HOT_MOVIE_KEY)); } catch (_) {}
+  let hotMovies = normalizeHotMovies(hotCache?.data);
+  if (!hotMovies.length) hotMovies = normalizeHotMovies(window.LT_MOVIE_HOT);
+  function moviePool() { return hotMovies.length ? hotMovies : DOUBAN_ANNUAL_BEST; }
+  async function refreshHotMovies() {
+    if (!normalizeWidgets(state.settings?.widgets).wmovie) return;
+    if (hotCache?.at && Date.now()-hotCache.at < 86400000) return;
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(),8000);
+    try {
+      const response = await fetch(HOT_MOVIE_URL,{signal:controller.signal,credentials:'omit',referrerPolicy:'no-referrer'});
+      if (!response.ok) return;
+      const data = await response.json();
+      const movies = normalizeHotMovies(data);
+      if (!movies.length) return;
+      // Keep this tab's daily selection stable; refreshed data is used on the next open.
+      hotCache = {at:Date.now(),data};
+      try { localStorage.setItem(HOT_MOVIE_KEY,JSON.stringify(hotCache)); } catch (_) {}
+    } catch (_) { /* Cached/bundled movies remain available offline or when blocked. */ }
+    finally { clearTimeout(timer); }
+  }
   // Local cursor: -1 = follow the deterministic daily pick; otherwise a manual index into the pool.
   let movieCursor = -1;
   // Last calendar day the midnight-rollover hook ran on (see maybeRollMovieToToday).
@@ -4196,7 +4425,7 @@
     const now = new Date();
     const start = new Date(now.getFullYear(), 0, 0);
     const doy = Math.floor((now - start) / 86400000);
-    return ((doy % DOUBAN_ANNUAL_BEST.length) + DOUBAN_ANNUAL_BEST.length) % DOUBAN_ANNUAL_BEST.length;
+    return ((doy % moviePool().length) + moviePool().length) % moviePool().length;
   }
   // A manual "换一部" browse is session-only: at the next calendar day the widget returns to the
   // deterministic daily pick (the README promise). Boot never counts as a rollover — only a real
@@ -4208,21 +4437,53 @@
     }
     movieDayMarker = today;
   }
+  function openMovieDetails(movie, url) {
+    let dialog = document.getElementById('movie-details');
+    if (!dialog) {
+      dialog = document.createElement('dialog');
+      dialog.id = 'movie-details';
+      document.body.appendChild(dialog);
+      dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+    }
+    const e = escapeHtml;
+    const title = isEn() ? movie.en : movie.zh;
+    dialog.style.setProperty('--detail-poster', `url('${movie.poster}')`);
+    dialog.setAttribute('aria-labelledby', 'movie-details-title');
+    dialog.innerHTML = `<div class="movie-details-inner">
+      <button type="button" class="movie-details-close" aria-label="${isEn() ? 'Close' : '关闭'}">×</button>
+      <div class="movie-details-copy"><div class="movie-details-kicker">${isEn() ? 'DAILY MOVIE' : '每日电影'} · ${e(new Intl.DateTimeFormat(isEn() ? 'en-US' : 'zh-CN', {month:'long', day:'numeric', weekday:'short'}).format(new Date()))}</div>
+      <h2 id="movie-details-title">${e(title)}</h2>
+      <p class="movie-details-subtitle">${e(isEn() ? movie.zh : movie.en)}</p>
+      <div class="movie-details-rating"><span aria-hidden="true">★</span> ${(movie.rate ? movie.rate.toFixed(1) : '—')} <small>${isEn() ? 'Douban rating · curated entry' : (movie.hot ? '豆瓣评分 · 热门片单' : '豆瓣评分 · 内置记录')}</small></div>
+      <div class="movie-details-tags"><span>${movie.y}</span><span>${e(movie.country)}</span>${!isEn() ? `<span>${e(movie.genre)}</span>` : ''}</div>
+      <p class="movie-details-director">${isEn() ? "Director" : "导演"}：${e(movie.director)}</p>
+      <div class="movie-details-note"><span>${isEn() ? 'Film note (Chinese)' : '电影手记'}</span><p lang="zh-CN">${e(movie.blurb)}</p></div>
+      <section class="movie-details-synopsis"><h3>${isEn() ? "Synopsis (Chinese)" : "剧情简介"}</h3><p>${e(movie.synopsis)}</p></section>
+      <a class="movie-details-source" href="${e(url)}" target="_blank" rel="noopener">${isEn() ? 'View film on Douban ↗' : '查看豆瓣电影资料 ↗'}</a>
+    </div><figure class="movie-details-poster"><img referrerpolicy="no-referrer" src="${movie.poster}" alt="${e(title)} 海报"><figcaption>${e(title)} · ${movie.y}</figcaption></figure></div>`;
+    dialog.querySelector('.movie-details-close').addEventListener('click', () => dialog.close());
+    dialog.showModal();
+  }
+
   function renderMovie() {
     const card = document.getElementById('movie-card');
     if (!card) return;
-    const i = movieCursor >= 0 ? (movieCursor % DOUBAN_ANNUAL_BEST.length) : movieIndexForToday();
-    const m = DOUBAN_ANNUAL_BEST[i];
-    const douban = 'https://www.douban.com/search?cat=1002&q=' + encodeURIComponent(m.zh);
+    const i = movieCursor >= 0 ? (movieCursor % moviePool().length) : movieIndexForToday();
+    const m = moviePool()[i];
+    const douban = m.source || 'https://www.douban.com/search?cat=1002&q=' + encodeURIComponent(m.zh);
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const dateEl = document.getElementById('movie-date');
     if (dateEl) {
       const now = new Date();
       dateEl.textContent = isEn() ? `${now.getMonth() + 1}/${now.getDate()}` : `${now.getMonth() + 1}月${now.getDate()}日`;
     }
+    card.style.setProperty('--movie-background', `url('${m.poster}')`);
+    const movieNow = new Date();
     card.innerHTML =
+      '<img referrerpolicy="no-referrer" class="movie-poster-full" src="' + m.poster + '" alt="' + esc(m.zh) + ' 海报">' +
+      '<div class="movie-calendar-date"><strong>' + String(movieNow.getDate()).padStart(2, '0') + '</strong><span>' + esc(new Intl.DateTimeFormat(isEn() ? 'en-US' : 'zh-CN', { month: 'short', weekday: 'short' }).format(movieNow)) + '</span></div>' +
       '<div class="movie-top">' +
-        '<div class="movie-rate" aria-label="' + t('movie.rating') + ' ' + m.rate + '">' + m.rate.toFixed(1) + '</div>' +
+        '<div class="movie-rate" aria-label="' + t('movie.rating') + ' ' + m.rate + '">' + (m.rate ? m.rate.toFixed(1) : '—') + '</div>' +
         '<div class="movie-body">' +
           '<div class="movie-title">' + esc(m.zh) + '<span class="movie-year">' + m.y + '</span></div>' +
           '<div class="movie-en">' + esc(m.en) + '</div>' +
@@ -4230,27 +4491,25 @@
           (!isEn() ? '<div class="movie-genre">' + esc(m.genre) + '</div>' : '') +
           // The blurbs are curated in Chinese only; an English UI hides them rather than
           // surfacing a Chinese quote (the title/year/genre row above stays bilingual).
-          (!isEn() ? '<p class="movie-blurb">' + esc(m.blurb) + '</p>' : '') +
+          '<p class="movie-blurb" lang="zh-CN" title="' + (isEn() ? 'Chinese film note' : '电影手记') + '">' + esc(m.blurb) + '</p>' +
         '</div>' +
       '</div>' +
       '<div class="movie-actions">' +
-        '<button type="button" class="movie-prev" id="movie-prev" data-i18n="movie.prev">‹ Prev</button>' +
-        '<button type="button" class="movie-rand" id="movie-rand" data-i18n="movie.rand">Random</button>' +
-        '<a class="movie-link" href="' + douban + '" target="_blank" rel="noopener" data-i18n="movie.douban">豆瓣</a>' +
         '<button type="button" class="movie-next" id="movie-next" data-i18n="movie.next">Next ›</button>' +
       '</div>';
-    const len = DOUBAN_ANNUAL_BEST.length;
-    const prev = card.querySelector('#movie-prev');
-    if (prev) prev.addEventListener('click', () => { movieCursor = (i - 1 + len) % len; renderMovie(); });
-    const rand = card.querySelector('#movie-rand');
-    if (rand) rand.addEventListener('click', () => {
-      let r = i;
-      if (len > 1) { while (r === i) r = Math.floor(Math.random() * len); }
-      movieCursor = r;
-      renderMovie();
-    });
+    const detail = document.createElement('button');
+    detail.className = 'movie-open';
+    detail.type = 'button';
+    detail.addEventListener('click', () => openMovieDetails(m, douban));
+    detail.setAttribute('aria-label', (isEn() ? 'Movie details: ' : '查看电影详情：') + (isEn() ? m.en : m.zh));
+    card.prepend(detail);
+    card.querySelector('.movie-poster-full').addEventListener('error', () => {
+      const fallback = DOUBAN_ANNUAL_BEST[i % DOUBAN_ANNUAL_BEST.length];
+      if (m.hot) { hotMovies[i] = fallback; renderMovie(); }
+    }, {once:true});
+    const len = moviePool().length;
     const next = card.querySelector('#movie-next');
-    if (next) next.addEventListener('click', () => { movieCursor = (i + 1) % len; renderMovie(); });
+    if (next) next.addEventListener('click', () => { movieCursor = (i + 1) % len; renderMovie(); document.getElementById('movie-next')?.focus({preventScroll:true}); });
     // Re-apply any i18n labels injected above (t() already localized the aria; data-i18n handles the rest).
     if (window.LT_I18N && window.LT_I18N.applyStatic) window.LT_I18N.applyStatic();
   }
@@ -4882,7 +5141,7 @@
       }
       const url = normUrl(it.url);
       if (!url) continue;
-      out.push({ id: (typeof it.id === 'string' && it.id) ? it.id : nid(), title: normTitle(it.title) || t('toast.unnamed'), url, group, icon: sanitizeIconDataUrl(it.icon) || undefined, color: safeColor(it.color) || undefined });
+      out.push({ id: (typeof it.id === 'string' && it.id) ? it.id : nid(), shortTitle: String(it.shortTitle || '').slice(0,16), title: normTitle(it.title) || t('toast.unnamed'), url, group, tileSize: tileSize(it.tileSize), icon: sanitizeIconDataUrl(it.icon) || undefined, color: safeColor(it.color) || undefined });
     }
     return out;
   }
@@ -5016,6 +5275,7 @@
   function setLangOnly(l) {
     const v = (l === 'en') ? 'en' : 'zh';
     if (window.LT_I18N) window.LT_I18N.setLang(v);
+    localizeBuiltinPrompts();
     const sel = document.getElementById('f-lang');
     if (sel) sel.value = v;
   }
@@ -5032,6 +5292,7 @@
     renderCountdown(); // off-work labels / day rows follow the language
     renderPomodoro(); // phase / button labels follow the language
     window.LT_PROMPTS.renderPromptManager();
+    renderLauncher();
     setEngine(state.settings.engine);
     startClock();
     if (window.LT_SYNC) renderSyncPanel();
@@ -5330,7 +5591,10 @@
     // In free-canvas mode the block coordinates are frozen: toggling a widget without a reflow
     // leaves a hole where it was — and a revived widget may have no coords at all and park at the
     // origin. Force a re-measure even for hand-arranged layouts; this is an explicit structural edit.
-    window.LT_CANVAS.recaptureBlocksFromFlow(true);
+    const integratedMovie = vis.wmovie && state.settings.widgetPos.wmovie === 'left';
+    document.querySelector('.layout')?.classList.toggle('movie-grid', integratedMovie);
+    if (integratedMovie) window.LT_CANVAS.reinitCanvas();
+    else window.LT_CANVAS.recaptureBlocksFromFlow(true);
     // The weather widget is opt-in and network-gated: (re)render on every visibility change and
     // fetch only if it just became visible with a stale cache (maybeFetchWeather decides).
     renderWeather();
@@ -5367,7 +5631,9 @@
     for (const id of WIDGETS) {
       const el = document.querySelector('.widget.' + id);
       if (!el) continue;
-      if (pos[id] === 'top' && right && search) {
+      if (id === 'wmovie' && pos[id] === 'left') {
+        document.getElementById('grid').prepend(el);
+      } else if (pos[id] === 'top' && right && search) {
         right.insertBefore(el, search);
       } else if (pos[id] === 'left' && left) {
         left.appendChild(el);
@@ -5383,7 +5649,7 @@
   // ---------- Hide search bar / hide clock + icon tile sizing ----------
   // Hiding removes the element from the layout entirely (the [hidden] attribute wins over any
   // display rule, see style.css) — the remaining content just closes up. #search keeps living in
-  // the DOM, so every search code path (suggestions, Tab engine-cycling, the boot focus) stays
+  // the DOM, so every search code path (suggestions, F2 engine-cycling, the boot focus) stays
   // valid: the listeners sit inside the hidden box and can never fire, and readers of #q still
   // find the element. Clock visibility is computed in applyWidgets together with the registry.
   function applySearchVis() {
@@ -5394,7 +5660,7 @@
     window.LT_CANVAS.recaptureBlocksFromFlow(true);
   }
   // Slider bounds (Settings → General): keep them in one place so doImport clamps to the same range.
-  const ICON_SIZE_MIN = 48, ICON_SIZE_MAX = 80, ICON_RADIUS_MIN = 20, ICON_RADIUS_MAX = 50;
+  const ICON_SIZE_MIN = 48, ICON_SIZE_MAX = 112, ICON_RADIUS_MIN = 20, ICON_RADIUS_MAX = 50;
   function clampIcon(v, lo, hi, dflt) {
     const n = Number(v);
     return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
@@ -5406,6 +5672,7 @@
     const radius = clampIcon(state.settings.iconRadius, ICON_RADIUS_MIN, ICON_RADIUS_MAX, DEFAULT_SETTINGS.iconRadius);
     document.documentElement.style.setProperty('--icon-size', size + 'px');
     document.documentElement.style.setProperty('--icon-radius', radius + '%');
+    if (window.LT_CANVAS) window.LT_CANVAS.applyCardCanvas();
   }
   // Remove one widget, with an undo toast — same affordance as deleting a shortcut card.
   function removeWidget(id) {
@@ -5483,7 +5750,7 @@
   const SHORTCUT_HELP = [
     ['/', 'help.slash'],
     ['1-9', 'help.digits'],
-    ['Tab / Shift+Tab', 'help.tabcycle'],
+    ['F2 / Shift+F2', 'help.tabcycle'],
     ['↑ / ↓ / Enter', 'help.arrows'],
     ['e / Delete', 'help.gridkeys'],
     ['t', 'help.todo'],
@@ -5547,6 +5814,7 @@
     renderCalendar();
     bindCalendar();
     renderMovie();
+    refreshHotMovies();
     renderWeather();
     maybeFetchWeather(); // boot-time refresh, only when the cache is stale (30 min TTL)
     setInterval(maybeFetchWeather, WEATHER_REFRESH_MS); // page-open refresh cadence
@@ -5566,6 +5834,8 @@
     form.addEventListener('submit', e => { e.preventDefault(); if (!maybeCopyCalc()) submitSearch(qEl.value, e); });
     document.getElementById('search-go').addEventListener('click', e => { if (!maybeCopyCalc()) submitSearch(qEl.value, e); });
     bindSuggest();
+    renderLauncher();
+    window.addEventListener('resize',applyAiPosition);
     // Esc while a template is active: drop the template and go back to plain search.
     qEl.addEventListener('keydown', e => {
       if (e.key === 'Escape' && activePrompt) { e.stopPropagation(); window.LT_PROMPTS.clearActiveTemplate(); qEl.focus(); }
@@ -5677,7 +5947,7 @@
     }
 
     // Plum blossom: rotate the wallpaper and show an inspirational quote along the bottom.
-    document.getElementById('btn-plum').addEventListener('click', rotateWallpaperAndQuote);
+    bindPlumSecret();
 
     // Free canvas layout (draggable blocks): initialised last, once every block has rendered.
     window.LT_CANVAS.initCanvasLayout();
@@ -5720,6 +5990,22 @@
     launchPrompt, setEngine, normalizeWidgets, normalizeWidgetPos,
     getCurrentEngine: () => currentEngine,
     getActivePrompt: () => activePrompt,
+    openTemplateInSidebar: (p) => {
+      state.settings.aiEnabled = true;
+      Store.set(K.settings,state.settings);
+      launcherTemplate = p;
+      const targets = (p.targets || []).filter(id => ENGINES.some(e => e.id === id && e.ai));
+      if (targets.length) launcherTargets = targets;
+      const q = document.getElementById('q');
+      if (q.value.trim() && q.value !== '/') launcherDraft = q.value;
+      activePrompt = null;
+      document.getElementById('tpl-chip').hidden = true;
+      renderLauncher();
+      document.getElementById('ai-launcher').hidden = false;
+      document.getElementById('ai-side-toggle').setAttribute('aria-expanded', 'true');
+      applyAiPosition();
+      document.getElementById('ai-draft').focus();
+    },
     setActivePrompt: (p) => { activePrompt = p; }
   };
 
