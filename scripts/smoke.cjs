@@ -282,8 +282,21 @@ console.log('[4] pure functions');
       'sanitizeCustomEngines keeps valid engines, fixes colour');
     assert(P.sanitizeCustomEngines([{ name: 'Nope', url: 'https://n.com' }]).length === 0,
       'sanitizeCustomEngines rejects URLs without {q}');
+    // Collision hardening: a custom engine whose id matches a built-in (crafted import / legacy
+    // file) must be renamed, otherwise it shadows the built-in and deletions look ineffective.
+    const col = P.sanitizeCustomEngines([{ id: 'google', name: 'Alt', url: 'https://alt.example/s?q={q}', color: '#fff' }])[0];
+    assert(!!col && col.id !== 'google' && col.url.includes('{q}'), 'custom engine id colliding with a built-in is renamed');
+    assert(P.sanitizeCustomEngines([{ id: 'u1', name: 'A', url: 'https://a/s?q={q}' }, { id: 'u1', name: 'B', url: 'https://b/s?q={q}' }]).length === 1,
+      'exact duplicate custom ids never render twice');
   }
   void elStub;
+}
+
+// Engine-dropdown freshness: the list is rebuilt right before it is shown, so a removal done in
+// Settings can never leave a stale engine in the main dropdown.
+{
+  assert(/Re-render before showing:[\s\S]{0,160}renderEngineList\(\);/.test(appSrc),
+    'engine dropdown re-renders from allEngines() each time it opens');
 }
 
 // Reliability hardening (offline guards): the engine-name escaping gap, the calc-vs-template

@@ -2793,12 +2793,18 @@
     state.settings.countdown = normalizeCountdown(state.settings.countdown);
     // Imported engine lists get the same validation as the add form: customs must be well-formed
     // http(s) URLs carrying {q}; hidden ids must name real built-ins.
-    state.settings.customEngines = Array.isArray(state.settings.customEngines)
-      ? state.settings.customEngines
-          .filter(e => e && typeof e.name === 'string' && typeof e.url === 'string'
-            && /^https?:\/\//i.test(e.url) && e.url.includes('{q}'))
-          .map(e => ({ id: String(e.id || ('u-' + nid())), name: e.name.slice(0, 12), url: e.url, color: safeColor(e.color) || '#3b82f6', custom: true }))
-      : [];
+    state.settings.customEngines = (() => {
+      if (!Array.isArray(state.settings.customEngines)) return [];
+      const seen = new Set();
+      const out = [];
+      for (const e of state.settings.customEngines) {
+        if (!e || typeof e.name !== 'string' || typeof e.url !== 'string') continue;
+        if (!/^https?:\/\//i.test(e.url) || !e.url.includes('{q}')) continue;
+        if (seen.has(String(e.id))) continue;
+        out.push({ id: uniqueCustomEngineId(e.id, seen), name: e.name.slice(0, 12), url: e.url, color: safeColor(e.color) || '#3b82f6', custom: true });
+      }
+      return out;
+    })();
     state.settings.hiddenEngines = Array.isArray(state.settings.hiddenEngines)
       ? state.settings.hiddenEngines.filter(id => ENGINES.some(x => x.id === id))
       : [];
@@ -4276,6 +4282,19 @@
     }
     return out;
   }
+  // A custom engine's id must never collide with a built-in id (ENGINES) or another custom engine —
+  // an import/legacy file could otherwise carry a custom "google", which would shadow the built-in
+  // and make deletions look like they never applied. Colliding ids are renamed on read/import.
+  function uniqueCustomEngineId(rawId, seen) {
+    let id = (typeof rawId === 'string' && rawId) ? rawId : ('u-' + nid());
+    let guard = 0;
+    while ((seen && seen.has(id)) || ENGINES.some(x => x.id === id)) {
+      if (++guard > 24) break;
+      id = 'u-' + nid();
+    }
+    if (seen) seen.add(id);
+    return id;
+  }
   function sanitizeCustomEngines(raw) {
     if (!Array.isArray(raw)) return [];
     const seen = new Set();
@@ -4283,9 +4302,8 @@
     for (const e of raw) {
       if (!e || typeof e !== 'object' || typeof e.name !== 'string' || typeof e.url !== 'string') continue;
       if (!/^https?:\/\//i.test(e.url) || !e.url.includes('{q}')) continue;
-      const id = (typeof e.id === 'string' && e.id) ? e.id : ('u-' + nid());
-      if (seen.has(id)) continue;
-      seen.add(id);
+      if (seen.has(String(e.id))) continue; // exact duplicates never render twice
+      const id = uniqueCustomEngineId(e.id, seen);
       out.push({ id, name: e.name.slice(0, 12), url: e.url, color: safeColor(e.color) || '#3b82f6', custom: true });
     }
     return out;
@@ -5002,6 +5020,9 @@
     const engineBtn = document.getElementById('engine-btn');
     engineBtn.addEventListener('click', e => {
       e.stopPropagation();
+      // Re-render before showing: engine removals/restores can happen in Settings while this
+      // list is closed, and the DOM must never serve a stale engine that was deleted.
+      renderEngineList();
       const list = document.getElementById('engine-list');
       const open = list.hidden;
       list.hidden = !open;
