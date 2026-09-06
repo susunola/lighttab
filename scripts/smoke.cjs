@@ -1909,6 +1909,25 @@ console.log('[28] UI polish: dwell bar, reduced transparency, dialog semantics, 
   assert(/\.sg-loading \.sg-dot/.test(cssSrc), 'loader dots keep the section styling');
 }
 
+// ---------- 29) further batch: accent, storage meter, launcher-direct, CSP, E2E scaffold ----------
+console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold');
+{
+  assert(/accent: '',/.test(appSrc) && /const ACCENT_PRESETS = \[/.test(appSrc) && /function applyAccent\(\)/.test(appSrc)
+    && /function renderAccentPicks\(\)/.test(appSrc), 'custom accent plumbing lives in app.js');
+  assert(/id="accent-picks"/.test(html) && /id="f-accent"/.test(html) && /id="storage-use"/.test(html),
+    'accent picker and storage meter markup present');
+  assert(/function renderStorageUse\(\)/.test(appSrc) && /store\.used/.test(i18nSrc), 'storage usage meter is wired');
+  assert(/function exactSiteHit\(/.test(appSrc) && /function defaultFolderName\(/.test(appSrc),
+    'launcher-direct + merged folder-name helpers exist');
+  assert(/天将降大任于是人也/.test(appSrc) && /玉不琢，不成器/.test(appSrc), 'quote library expanded (8 new bilingual quotes)');
+  const manifestNow = JSON.parse(read('manifest.json'));
+  assert(manifestNow.content_security_policy && /suggestion\.baidu\.com/.test(manifestNow.content_security_policy.extension_pages)
+    && /api\.bing\.com/.test(manifestNow.content_security_policy.extension_pages),
+    'extension CSP allowlists the JSONP suggestion hosts');
+  assert(fs.existsSync(path.join(ROOT, 'tests/e2e/playwright.config.js')) && fs.existsSync(path.join(ROOT, 'tests/e2e/lighttab.spec.js')),
+    'Playwright E2E scaffold files are in the repo');
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);

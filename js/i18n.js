@@ -281,6 +281,9 @@
     'theme.dark':   { zh: '深色', en: 'Dark' },
     'theme.light':  { zh: '浅色', en: 'Light' },
     'theme.system': { zh: '跟随系统', en: 'Follow system' },
+    'gen.accent':        { zh: '强调色', en: 'Accent colour' },
+    'gen.accent_default':{ zh: '默认强调色', en: 'Default accent' },
+    'gen.accent_custom': { zh: '自定义强调色', en: 'Custom accent colour' },
     'gen.clock12h':     { zh: '12 小时制时钟', en: '12-hour clock' },
     'gen.clock12h_tip': { zh: '开启后时钟按 12 小时制显示，带上午/下午小标。', en: 'Shows h:mm with a small AM/PM indicator (上午/下午 in Chinese).' },
     'gen.clockseconds':     { zh: '显示秒', en: 'Show seconds' },
@@ -437,6 +440,7 @@
     'store.todos':     { zh: '待办保存失败', en: 'Failed to save to-dos' },
     'store.prompts':   { zh: '模板保存失败', en: 'Failed to save templates' },
     'store.generic':   { zh: '数据保存失败（可能超出浏览器存储限制）', en: 'Data save failed (may exceed browser storage)' },
+    'store.used':      { zh: '本地存储已用 {v} / 10 MB', en: 'Local storage used: {v} / 10 MB' },
 
     // ---------- 其它 ----------
     'boot.preview': { zh: '当前为浏览器直接预览模式（未安装扩展），数据保存在 localStorage。', en: 'Preview mode (extension not installed), data saved to localStorage.' },

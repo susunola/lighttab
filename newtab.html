@@ -400,6 +400,13 @@
               <option value="system" data-i18n="theme.system">Follow system</option>
             </select>
           </label>
+          <label>
+            <span data-i18n="gen.accent">Accent colour</span>
+            <span class="accent-row">
+              <span id="accent-picks" class="accent-picks" role="radiogroup" aria-label="Accent colour"></span>
+              <input id="f-accent" type="color" value="#38bdf8" data-i18n-title="gen.accent_custom" title="Custom colour">
+            </span>
+          </label>
           <label class="check-row">
             <input type="checkbox" id="f-clock12h">
             <span data-i18n="gen.clock12h">12-hour clock</span>
@@ -513,6 +520,7 @@
               <input id="f-import" type="file" accept=".json,application/json" hidden>
             </div>
             <p class="data-tip" data-i18n="gen.data_tip">Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.</p>
+            <p class="storage-use" id="storage-use" data-i18n-aria="store.used" hidden></p>
           </div>
           <div class="modal-actions">
             <button type="button" class="btn ghost" id="btn-reset-all" data-i18n="gen.reset">Reset to defaults</button>

@@ -69,6 +69,8 @@
     lang: 'zh',
     // Theme: 'dark' | 'light' | 'system' (follow the OS scheme).
     theme: 'dark',
+    // Accent colour: a custom hex, '' = the shipped per-theme accent (Settings → General).
+    accent: '',
     // Clock format: false = 24h (default); true = 12h with a small AM/PM (上午/下午) indicator.
     clock12h: false,
     // Seconds display: false (default) = hh:mm; true = the seconds span shows hh:mm:ss.
@@ -339,6 +341,31 @@
       if (hasChromeStorage) await chrome.storage.local.set({ [k]: v });
       else localStorage.setItem(k, JSON.stringify(v));
     } catch (e) { console.warn('[LightTab] local write failed', k, e); }
+  }
+  function fmtBytes(b) {
+    if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(2) + ' MB';
+    if (b >= 1024) return Math.round(b / 1024) + ' KB';
+    return b + ' B';
+  }
+  // Settings → Data management: live storage-usage line (chrome.storage bytes, localStorage in
+  // preview). Refresh after boot, when opening settings, and after any big write path.
+  async function renderStorageUse() {
+    const el = document.getElementById('storage-use');
+    if (!el) return;
+    try {
+      let bytes = 0;
+      if (hasChromeStorage && chrome.storage && chrome.storage.local && chrome.storage.local.getBytesInUse) {
+        bytes = await chrome.storage.local.getBytesInUse(null);
+      } else {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k) bytes += (localStorage.getItem(k) || '').length * 2;
+        }
+      }
+      if (!bytes) { el.hidden = true; return; }
+      el.textContent = t('store.used', { v: fmtBytes(bytes) });
+      el.hidden = false;
+    } catch { el.hidden = true; }
   }
 
   // ---------- State ----------
@@ -622,6 +649,14 @@
     { zh: '千磨万击还坚劲，任尔东西南北风。', en: 'Battered by a thousand blows, I stand firm against winds from every quarter.', src: { zh: '郑板桥《竹石》', en: 'Zheng Xie' } },
     { zh: '少壮不努力，老大徒伤悲。', en: 'Idle in youth, grieving in old age.', src: { zh: '《长歌行》', en: 'The Long Ballad' } },
     { zh: '星光不问赶路人，时光不负有心人。', en: 'The stars do not question the traveler; time rewards the devoted.', src: { zh: '佚名', en: 'Anonymous' } },
+    { zh: '学而不思则罔，思而不学则殆。', en: 'Learning without thought is labour lost; thought without learning is perilous.', src: { zh: '《论语·为政》', en: 'The Analects' } },
+    { zh: '知之者不如好之者，好之者不如乐之者。', en: 'Those who know it are not as good as those who love it; those who love it are not as good as those who delight in it.', src: { zh: '《论语·雍也》', en: 'The Analects' } },
+    { zh: '问渠那得清如许？为有源头活水来。', en: 'How can the pond stay so clear? Living water keeps flowing in from its source.', src: { zh: '朱熹《观书有感》', en: 'Zhu Xi · Reading' } },
+    { zh: '博观而约取，厚积而薄发。', en: 'Look widely, take selectively; store deeply, release sparingly.', src: { zh: '苏轼《稼说送张琥》', en: 'Su Shi' } },
+    { zh: '业精于勤，荒于嬉；行成于思，毁于随。', en: 'Mastery comes from diligence and withers with play; conduct is shaped by thought and ruined by ease.', src: { zh: '韩愈《进学解》', en: 'Han Yu' } },
+    { zh: '苟日新，日日新，又日新。', en: 'If you can renew yourself in a day, renew yourself day after day.', src: { zh: '《大学》', en: 'The Great Learning' } },
+    { zh: '天将降大任于是人也，必先苦其心志，劳其筋骨。', en: 'When Heaven entrusts a great task, it first steels the will and wearies the body.', src: { zh: '《孟子·告子下》', en: 'Mencius' } },
+    { zh: '玉不琢，不成器；人不学，不知道。', en: 'Unpolished jade cannot shine; untaught people cannot know the Way.', src: { zh: '《礼记·学记》', en: 'Book of Rites' } },
   ];
   // Pure picker (exported for offline smoke): pick an index different from the previous one when possible.
   function pickQuoteIndex(len, prevIdx) {
@@ -1479,6 +1514,25 @@
       location.href = url;
     }
   }
+  // Unique saved-site match: the typed text exactly equals one shortcut's title or URL (folders'
+  // children included). Lets plain Enter act like a launcher for exact names; ambiguous matches
+  // (or several sites sharing the name) fall through to a normal search.
+  function exactSiteHit(q) {
+    const s = String(q || '').trim().toLowerCase();
+    if (!s) return null;
+    const norm = (u) => { try { const n = normalizeUrl(u); return n || u; } catch { return u; } };
+    const hits = new Set();
+    const consider = (it) => {
+      if (!it || !it.url) return;
+      const full = norm(it.url);
+      const u = full.toLowerCase();
+      const bare = u.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+      const title = String(it.title || '').trim().toLowerCase();
+      if (title === s || u === s || bare === s) hits.add(full);
+    };
+    for (const it of (state.items || [])) { if (isFolder(it)) (it.children || []).forEach(consider); else consider(it); }
+    return hits.size === 1 ? [...hits][0] : null;
+  }
   function submitSearch(rawQuery, ev) {
     closeSuggest();
     const q = (rawQuery || '').trim();
@@ -1489,6 +1543,12 @@
       return;
     }
     if (!q) return;
+    // Launcher behaviour on a web engine: an exact, unique site name opens the site directly
+    // (URL jumps excluded from history, exactly like typing a URL).
+    if (!currentEngine.ai && !looksLikeUrl(q)) {
+      const direct = exactSiteHit(q);
+      if (direct) { openResult(direct, ev); return; }
+    }
     // Record the submission in the search history (URL jumps excluded — those are navigations, not searches).
     if (!looksLikeUrl(q)) pushHistory(q);
 
@@ -1825,6 +1885,17 @@
   function makeFolder(a, b, name) {
     const strip = (c) => { const k = { ...c }; delete k.group; return k; };
     return { id: nid(), type: 'folder', name: name || '', group: b.group || '', children: [strip(b), strip(a)] };
+  }
+  // Suggested folder name from the two merged shortcuts ("GitHub、Gmail"), capped to the rename
+  // input's 32-char budget; falls back to the generic label when nothing readable is available.
+  function defaultFolderName(a, b) {
+    const join = isEn() ? ', ' : '、';
+    const t1 = String((a && a.title) || '').trim();
+    const t2 = String((b && b.title) || '').trim();
+    const pick = (s) => [...s].slice(0, 9).join('');
+    const name = t1 || t2 ? `${pick(t2 || t1)}${join}${pick(t1 || t2)}` : '';
+    const trimmed = name ? [...name].slice(0, 30).join('').trim() : '';
+    return trimmed || t('folder.default_name');
   }
   // Drop srcId onto targetId: shortcut+shortcut -> a new folder at the target's slot; anything ->
   // folder -> src (or its kids) joins the target folder; folder -> shortcut -> null (folders cannot
@@ -2238,7 +2309,10 @@
           if (res) {
             state.items = res.items;
             if (mergeArmed) {
-              const merged = folderMergeItems([...state.items, res.child], res.child.id, a.dataset.id, t('folder.default_name'));
+              // Dropping a folder child onto a shortcut creates a new folder — name it after both.
+              const tgtItem = state.items.find(x => x.id === a.dataset.id);
+              const merged = folderMergeItems([...state.items, res.child], res.child.id, a.dataset.id,
+                defaultFolderName(res.child, tgtItem));
               if (merged) state.items = merged;
             } else {
               insertIntoView(res.child, a.dataset.id, before);
@@ -2254,7 +2328,9 @@
         if (mergeArmed) {
           const src = state.items.find(x => x.id === gridDragId);
           const tgt = state.items.find(x => x.id === a.dataset.id);
-          const merged = folderMergeItems(state.items, gridDragId, a.dataset.id, t('folder.default_name'));
+          // Fresh folders (shortcut + shortcut) get a name made from both titles.
+          const madeName = src && tgt && !isFolder(src) && !isFolder(tgt) ? defaultFolderName(src, tgt) : t('folder.default_name');
+          const merged = folderMergeItems(state.items, gridDragId, a.dataset.id, madeName);
           if (merged) {
             const created = src && tgt && !isFolder(src) && !isFolder(tgt);
             const dragId0 = gridDragId;
@@ -2704,6 +2780,7 @@
     if (!allEngines().some(x => x.id === state.settings.engine)) state.settings.engine = allEngines()[0].id;
     if (!Array.isArray(state.settings.groups)) state.settings.groups = [];
     state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
+    state.settings.accent = safeColor(state.settings.accent) || '';
     state.settings.widgets = normalizeWidgets(state.settings.widgets);
     state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
     state.settings.clock12h = state.settings.clock12h === true;
@@ -2789,6 +2866,7 @@
     renderAvatar(); // an import may carry a different name / avatar
     showToast(t('toast.import_done', { items: state.items.length, todos: state.todos.length }));
     window.LT_CANVAS.reinitCanvas(); // an import may bring in or clear layout coordinates, so resync the canvas
+    renderStorageUse(); // the import changed the data size
   }
   // Add current tab (shortcut dialog, extension mode only): prefill name + URL from the browser's
   // active tab. The "tabs" permission is optional and requested on demand, inside this user gesture
@@ -2943,6 +3021,9 @@
       await Store.set(K.settings, state.settings);
       applyTheme(); // flips the whole page instantly — no toast needed
     });
+    // Accent colour (General): preset swatches + the native colour input (empty = shipped default).
+    const accentInput = document.getElementById('f-accent');
+    if (accentInput) accentInput.addEventListener('input', () => setAccent(accentInput.value));
     // 12h/24h clock toggle (General). Older profiles lack the key, which reads as 24h.
     const clock12hCb = document.getElementById('f-clock12h');
     if (clock12hCb) clock12hCb.addEventListener('change', async () => {
@@ -3028,6 +3109,8 @@
       if (langSel) langSel.value = state.settings.lang || 'zh';
       if (weatherCityInput) weatherCityInput.value = (state.settings.weather && state.settings.weather.name) || '';
       applyTheme(); // keep the theme select in sync with state (covers remote sync changes)
+      renderAccentPicks(); // ... and the accent swatches / colour input
+      renderStorageUse(); // data-usage line is live in this pane
       renderSwatches();
       renderWallLibGrid();
       const wallRotCb = document.getElementById('f-wall-rotate');
@@ -4170,6 +4253,7 @@
     hideModal(document.getElementById('modal-set'), false);
     showToast(t('toast.reset_done'));
     window.LT_CANVAS.reinitCanvas(); // reset clears layout coordinates, back to the default canvas
+    renderStorageUse();
   }
 
   // ---------- Read-time sanitizers (boot + cloud pull + preview) ----------
@@ -4337,6 +4421,7 @@
     state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
     // Read-time hardening: whatever survived migration (old versions, cloud pulls, hand-edited
     // files) is coerced into shape before any renderer or submit path can touch it.
+    state.settings.accent = safeColor(state.settings.accent) || '';
     state.settings.groups = sanitizeGroups(state.settings.groups);
     state.settings.customEngines = sanitizeCustomEngines(state.settings.customEngines);
     state.settings.hiddenEngines = sanitizeHiddenEngines(state.settings.hiddenEngines);
@@ -4415,6 +4500,26 @@
   // Settings store 'dark' | 'light' | 'system'; the DOM attribute html[data-theme] is always
   // 'dark' | 'light' so every CSS light-mode override can key off [data-theme="light"].
   const THEME_OPTIONS = ['dark', 'light', 'system'];
+  // Custom accent picker (Settings → General): preset swatches + a native colour input. Empty
+  // string = the shipped per-theme accent. The companion --accent-2 (focus rings, gradients) is
+  // derived by dimming the pick so it never disappears into surfaces using --accent.
+  const ACCENT_PRESETS = ['#7dd3fc', '#38bdf8', '#a78bfa', '#22d3ee', '#34d399', '#fbbf24', '#f472b6', '#fb7185'];
+  function accentCompanion(hex) {
+    const n = parseInt(String(hex || '').replace('#', ''), 16);
+    if (!Number.isFinite(n)) return null;
+    const f = (v) => Math.max(0, Math.min(255, Math.round(v * 0.8)));
+    const c = ((f((n >> 16) & 255) << 16) | (f((n >> 8) & 255) << 8) | f(n & 255)).toString(16).padStart(6, '0');
+    return '#' + c;
+  }
+  function applyAccent() {
+    const a = safeColor(state.settings && state.settings.accent);
+    const root = document.documentElement;
+    const comp = a ? accentCompanion(a) : null;
+    for (const [p, v] of [['--accent', a], ['--accent-2', comp]]) {
+      if (v) root.style.setProperty(p, v);
+      else root.style.removeProperty(p);
+    }
+  }
   function resolveTheme(pref) {
     if (pref === 'light') return 'light';
     if (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
@@ -4434,9 +4539,28 @@
   function applyTheme() {
     const pref = (state.settings && state.settings.theme) || 'dark';
     document.documentElement.dataset.theme = resolveTheme(pref);
+    applyAccent();
     const sel = document.getElementById('f-theme');
     if (sel && sel.value !== pref) sel.value = pref;
     bindThemeMQ();
+  }
+  function setAccent(v) {
+    state.settings.accent = (typeof v === 'string' && safeColor(v)) ? v : '';
+    applyAccent();
+    renderAccentPicks();
+    Store.set(K.settings, state.settings);
+  }
+  // Settings → General: preset swatches + native colour input; empty swatch = shipped default.
+  function renderAccentPicks() {
+    const wrap = document.getElementById('accent-picks');
+    const input = document.getElementById('f-accent');
+    if (!wrap) return;
+    const cur = (state.settings && safeColor(state.settings.accent)) ? state.settings.accent : '';
+    const defT = escapeHtml(t('gen.accent_default'));
+    const btn = (c, active) => `<button type="button" class="accent-swatch${active ? ' active' : ''}" data-accent="${c}"${c ? ` style="background:${c}"` : ''} title="${c ? c : defT}" aria-label="${c ? c : defT}" aria-pressed="${active}"></button>`;
+    wrap.innerHTML = btn('', cur === '') + ACCENT_PRESETS.map(c => btn(c, cur === c)).join('');
+    wrap.querySelectorAll('.accent-swatch').forEach(b => b.addEventListener('click', () => setAccent(b.dataset.accent)));
+    if (input) input.value = cur || '#38bdf8';
   }
 
   // ---------- Profile avatar (top-right) ----------
@@ -4941,6 +5065,7 @@
     bindAvatar();
     renderAvatar(); // profile avatar is rendered once events are bound and sync state is reachable
     sweepPending(); // sweep expired / corrupted pending leftovers on boot
+    renderStorageUse(); // data-management usage line (boot)
 
     // Cloud sync init, last: the migration write-back has landed and every event is bound.
     if (window.LT_SYNC) {

@@ -2836,3 +2836,37 @@ input[type="file"]:focus-visible {
   html[data-theme="dark"]  { --glass: rgba(12, 16, 28, 0.94); }
   html[data-theme="light"] { --glass: rgba(255, 255, 255, 0.95); }
 }
+
+/* Accent colour picker (Settings → General). */
+.accent-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.accent-picks { display: inline-flex; align-items: center; gap: 6px; }
+.accent-swatch {
+  width: 22px; height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  background: var(--tint-3);
+  cursor: pointer;
+  transition: transform .12s ease, border-color .12s ease;
+}
+.accent-swatch.def {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+.accent-swatch:hover { transform: scale(1.1); }
+.accent-swatch.active { border-color: var(--ink); box-shadow: 0 0 0 2px var(--panel-3) inset; }
+.accent-row input[type="color"] {
+  width: 34px; height: 26px;
+  padding: 1px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Storage usage line in Data management (Settings). */
+.storage-use {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.01em;
+}
