@@ -269,6 +269,13 @@
         try { val = JSON.parse(doc.payload); } catch { continue; }
         await sSet({ [key]: val });
         changed = true;
+      } else {
+        // An empty payload is how pushDirty() represents a deleted/never-written document (see the
+        // payload construction below). Without this branch the local copy would just sit there stale:
+        // the skip left dirtyAt untouched at nothing to clear, so device B never learns the document
+        // is gone. Mirror the deletion locally so both sides converge.
+        await sRemove([key]);
+        changed = true;
       }
       S.meta.docs[key] = { rev: doc.rev, dirtyAt: 0 };
     }
@@ -315,6 +322,9 @@
           // Server wins: overwrite local.
           if (sd.payload != null && sd.payload !== '') {
             try { await sSet({ [res.key]: JSON.parse(sd.payload) }); changed = true; } catch {}
+          } else {
+            // Empty payload = the server's copy is a deletion; mirror it locally (see applyPull).
+            try { await sRemove([res.key]); changed = true; } catch {}
           }
           // An edit that landed mid-flight (after the LWW check above) stays dirty for the next round.
           if (meta.dirtyAt === pushedAt[res.key]) meta.dirtyAt = 0;
