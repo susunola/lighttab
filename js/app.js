@@ -2278,6 +2278,27 @@
       modalReturnFocus = null;
     }
   }
+  // Focus trap: while a .modal is open, Tab / Shift+Tab stay inside it (a11y). Delegated once at
+  // boot; hidden panes are excluded by the visibility filter.
+  function modalFocusables(modal) {
+    return [...modal.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter(el => !el.hidden && el.offsetParent !== null && el.getClientRects().length > 0);
+  }
+  function bindModalTrap() {
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const modal = [...document.querySelectorAll('.modal')].find(m => !m.hidden);
+      if (!modal) return;
+      const els = modalFocusables(modal);
+      if (!els.length) return;
+      const inModal = modal.contains(document.activeElement);
+      if (e.shiftKey) {
+        if (!inModal || document.activeElement === els[0]) { e.preventDefault(); els[els.length - 1].focus(); }
+      } else {
+        if (!inModal || document.activeElement === els[els.length - 1]) { e.preventDefault(); els[0].focus(); }
+      }
+    });
+  }
 
   // ---------- Icon grid keyboard navigation (a11y) ----------
   // Arrow keys move focus between visible grid cards (wrapping both ways), Delete / Backspace
@@ -3560,7 +3581,9 @@
           '<div class="movie-title">' + esc(m.zh) + '<span class="movie-year">' + m.y + '</span></div>' +
           '<div class="movie-en">' + esc(m.en) + '</div>' +
           '<div class="movie-genre">' + esc(m.genre) + '</div>' +
-          '<p class="movie-blurb">' + esc(m.blurb) + '</p>' +
+          // The blurbs are curated in Chinese only; an English UI hides them rather than
+          // surfacing a Chinese quote (the title/year/genre row above stays bilingual).
+          (!isEn() ? '<p class="movie-blurb">' + esc(m.blurb) + '</p>' : '') +
         '</div>' +
       '</div>' +
       '<div class="movie-actions">' +
@@ -4771,6 +4794,7 @@
     bindGroupBar();
     bindFolderGlobal();
     bindGridKeys();
+    bindModalTrap();
     applyWidgets();
     applySearchVis(); // hide-search preference (the clock side is folded into applyWidgets)
     applyIconSizing(); // --icon-size / --icon-radius on :root

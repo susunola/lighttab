@@ -1718,6 +1718,10 @@ assert(/let modalReturnFocus = null;/.test(appSrc) && /function hideModal\(m, re
   'modal openers are remembered and restored on close');
 assert(/openModals\.forEach\(m => hideModal\(m\)\)/.test(appSrc), 'Escape closes modals through hideModal (focus return)');
 assert(/\.card:focus-visible/.test(cssSrc), 'CSS ships a visible keyboard focus ring for cards');
+assert(/function bindModalTrap\(\)/ .test(appSrc) && /bindModalTrap\(\);/.test(appSrc),
+  'an open modal traps Tab / Shift+Tab inside it (a11y)');
+assert(/!isEn\(\) \? '<p class="movie-blurb">'/.test(appSrc),
+  'the zh-only movie blurb is hidden in the English UI');
 
 console.log('');
 if (failures) {
