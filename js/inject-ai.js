@@ -8,6 +8,17 @@
  * 3) On success, strip lt_k / lt_auto / q from the URL so a refresh does not resend.
  *
  * Graceful degradation: without extension storage (opened with a plaintext ?q=) it reads the q parameter instead.
+ * v4 changes:
+ *  - Doubao now redirects some visitors to www.dola.com/chat/ and STRIPS the query string, so the
+ *    lt_k nonce in the URL never arrives. A fresh (<90s) pointer in extension storage
+ *    (lt.pending.current) re-arms the script on the final landing page; cleared when an armed run
+ *    finishes (a page that redirects away mid-flight never finishes, which is exactly the case
+ *    the pointer exists for).
+ *  - Doubao/Dola briefly mount a decoy <textarea> before the real tiptap ProseMirror editor.
+ *    Input picking is now tiered (contenteditable outranks textarea) and the picked element must
+ *    survive a ~700ms settle window before it is trusted.
+ *  - Sending is verified: if the click does not clear the input, Enter is tried, the input is
+ *    re-resolved (the composer can re-mount) and the whole round repeats up to 3 times.
  * v3 changes:
  *  - Adds the lt_k nonce channel. Concurrent targets share one nonce, so the content script only reads
  *    and never deletes; replay protection is URL cleanup after send + TTL orphan sweeping on newtab boot.
@@ -27,21 +38,22 @@
   // Snapshot the params immediately (we run at document_start, before the SPA takes over the URL).
   const qs = new URLSearchParams(location.search);
   const armed = qs.get('lt_auto') === '1';
-  if (!armed) return;
   const q = (qs.get('q') || '').trim();
   const ltK = qs.get('lt_k') || '';
-  if (!q && !ltK) return;
-  log('armed, url q =', q.length, ', lt_k =', ltK ? 'yes' : 'no');
+  log('url state: lt_auto =', armed, ', q =', q.length, ', lt_k =', ltK ? 'yes' : 'no');
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const INPUT_SELECTORS = [
-    '#prompt-textarea',
-    'div[contenteditable="true"][role="textbox"]',
-    'div[contenteditable="true"]',
-    '[role="textbox"]',
-    'textarea'
+  // Rich editors outrank a bare textarea: Doubao/Dola mount a decoy textarea before the real
+  // tiptap ProseMirror composer, and ChatGPT's #prompt-textarea is contenteditable too.
+  const INPUT_TIERS = [
+    ['#prompt-textarea', 'div[contenteditable="true"][role="textbox"]', 'div[contenteditable="true"]', '[role="textbox"]'],
+    ['textarea']
   ];
   const PENDING_PREFIX = 'lt.pending.';
+  // One-shot pointer that survives param-stripping redirects (doubao.com -> dola.com drops the
+  // query string entirely). Written by the newtab next to the nonce record; consumed on read.
+  const POINTER_KEY = PENDING_PREFIX + 'current';
+  const POINTER_TTL = 90000; // redirect chains (doubao region gate) can sit on a page for 20s+
 
   /** Read the prompt for this nonce from extension storage (shared across targets: read-only, never deleted; returns null on failure so the URL fallback kicks in). */
   function readPending(nonce) {
@@ -65,6 +77,33 @@
         }
       } catch (_) { finish(null); }
     });
+  }
+
+  /**
+   * Peek at the one-shot pointer left by the newtab (redirect fallback). Deliberately NOT removed
+   * here: a URL-armed page can still redirect away mid-flight (doubao.com -> region gate ->
+   * dola.com), and the pointer is the only thing that re-arms the script on the final landing
+   * page. It is cleared when an armed run finishes (clearPointer) or by the 90s TTL sweep.
+   */
+  function readPointer() {
+    return new Promise((resolve) => {
+      try {
+        if (!(window.chrome && chrome.storage && chrome.storage.local)) return resolve(null);
+        chrome.storage.local.get(POINTER_KEY, (r) => {
+          try {
+            const rec = r && r[POINTER_KEY];
+            const fresh = rec && typeof rec.k === 'string' && (Date.now() - (rec.t || 0)) < POINTER_TTL;
+            resolve(fresh ? rec.k : null);
+          } catch (_) { resolve(null); }
+        });
+      } catch (_) { resolve(null); }
+    });
+  }
+
+  function clearPointer() {
+    try {
+      if (window.chrome && chrome.storage && chrome.storage.local) chrome.storage.local.remove(POINTER_KEY);
+    } catch (_) { /* ignore */ }
   }
 
   function clearParams() {
@@ -92,19 +131,22 @@
     }
   }
 
-  /** Find the visible chat input: filter by visibility, then take the largest area (matches ChatGPT's centred box and Doubao's bottom bar). */
+  /** Find the visible chat input: walk tiers in order (rich editors first), largest area wins within a tier. */
   function pickInput() {
-    let best = null, bestArea = 0;
-    for (const sel of INPUT_SELECTORS) {
-      const nodes = document.querySelectorAll(sel);
-      for (const el of nodes) {
-        if (!isVisible(el)) continue;
-        const r = el.getBoundingClientRect();
-        const area = r.width * r.height;
-        if (area > bestArea) { bestArea = area; best = el; }
+    for (const tier of INPUT_TIERS) {
+      let best = null, bestArea = 0;
+      for (const sel of tier) {
+        const nodes = document.querySelectorAll(sel);
+        for (const el of nodes) {
+          if (!isVisible(el)) continue;
+          const r = el.getBoundingClientRect();
+          const area = r.width * r.height;
+          if (area > bestArea) { bestArea = area; best = el; }
+        }
       }
+      if (best) return best;
     }
-    return best;
+    return null;
   }
 
   /** Find the send button: data-testid=send-button > aria-label (English or Chinese) > class name. All must be visible and enabled. */
@@ -179,63 +221,99 @@
     return currentValue(el).trim() === text;
   }
 
-  async function pressSend(input) {
-    // 1) Prefer clicking the send button (wait for it to render and become enabled).
-    for (let i = 0; i < 60; i++) {
+  /** Poll for a visible, enabled send button (up to ms). */
+  async function waitSendBtn(ms) {
+    for (let t = 0; t < ms; t += 150) {
       const btn = findSendBtn();
-      if (btn) {
-        try { btn.click(); log('clicked send button'); } catch (_) {}
-        return true;
-      }
+      if (btn) return btn;
       await sleep(150);
     }
-    // 2) Fall back to pressing Enter.
-    log('no send button found, fallback Enter');
+    return null;
+  }
+
+  function pressEnter(input) {
     try {
+      input.focus();
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
       input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
     } catch (_) {}
-    return true;
   }
 
-  /** After sending, poll until the input clears to confirm success (0.2s x 25 ~= 5s). */
-  async function waitCleared(input) {
-    for (let i = 0; i < 25; i++) {
+  /** After sending, poll until the input clears to confirm success. */
+  async function waitCleared(input, ms) {
+    for (let t = 0; t < ms; t += 200) {
       await sleep(200);
+      if (!document.contains(input)) return true; // a re-mounted composer means the send went through
       if (!currentValue(input).trim()) { log('input cleared, send confirmed'); return true; }
     }
-    log('input not cleared within 5s (may still be sent)');
+    return false;
+  }
+
+  /**
+   * Send with verification: click the send button; if the input does not clear, fall back to
+   * Enter; re-resolve the composer between rounds (it can re-mount after a failed attempt).
+   */
+  async function sendWithVerify(input, text) {
+    for (let round = 1; round <= 3; round++) {
+      if (!document.contains(input)) {
+        const fresh = pickInput();
+        if (fresh) { input = fresh; log('composer re-mounted, re-picked input'); }
+      }
+      if (!currentValue(input).trim()) {
+        log('input empty at round', round, ', re-filling');
+        await fillInput(input, text);
+      }
+      const btn = await waitSendBtn(6000);
+      if (btn) {
+        try { btn.click(); log('clicked send button (round ' + round + ')'); } catch (_) {}
+        if (await waitCleared(input, 2500)) return true;
+        log('click did not send (round ' + round + '), trying Enter');
+      } else {
+        log('no enabled send button (round ' + round + '), trying Enter');
+      }
+      pressEnter(input);
+      if (await waitCleared(input, 2000)) return true;
+    }
     return false;
   }
 
   async function main(text) {
-    for (let i = 0; i < 80; i++) { // up to ~20s (SPA boot / login redirects)
-      const input = pickInput();
-      if (input) {
-        log('input found:', input.tagName, input.id || input.className || '');
-        await sleep(400); // give the site's own URL prefill a chance to run first
-        let filled = currentValue(input).trim();
-        if (!filled) {
-          filled = await fillInput(input, text);
-          log('fill result:', filled ? 'ok' : 'FAILED', '| now =', (currentValue(input) || '').slice(0, 30));
-        } else {
-          log('site pre-filled already, skip manual fill');
-        }
-        if (filled) {
-          await pressSend(input);
-          await waitCleared(input);
-        } else {
-          log('give up: could not fill text into input');
-          fallbackCopyAndNotify('未能把 Prompt 填入输入框', 'could not fill the prompt into the input box', text);
-        }
-        setTimeout(clearParams, 800);
-        return;
-      }
-      await sleep(250);
+    // Find the composer and wait for it to settle: Doubao/Dola briefly mount a decoy textarea
+    // during boot, so the picked element must survive a settle window and still be the best pick.
+    let input = null;
+    for (let i = 0; i < 60 && !input; i++) { // ~25s budget for SPA boot / login redirects
+      const cand = pickInput();
+      if (!cand) { await sleep(250); continue; }
+      await sleep(700); // settle window
+      if (document.contains(cand) && pickInput() === cand) input = cand;
     }
-    log('timeout: no input box found (maybe not logged in)');
-    fallbackCopyAndNotify('未找到对话输入框（可能未登录或页面结构已变更）', 'no chat input box found (maybe not logged in, or the page layout changed)', text);
-    clearParams();
+    if (!input) {
+      log('timeout: no stable input box found (maybe not logged in)');
+      fallbackCopyAndNotify('未找到对话输入框（可能未登录或页面结构已变更）', 'no chat input box found (maybe not logged in, or the page layout changed)', text);
+      clearParams();
+      return;
+    }
+    log('input settled:', input.tagName, input.id || (typeof input.className === 'string' ? input.className : ''));
+    await sleep(300); // give the site's own URL prefill a chance to run first
+    let filled = currentValue(input).trim();
+    if (!filled) {
+      filled = await fillInput(input, text);
+      log('fill result:', filled ? 'ok' : 'FAILED', '| now =', (currentValue(input) || '').slice(0, 30));
+    } else {
+      log('site pre-filled already, skip manual fill');
+    }
+    if (!filled) {
+      log('give up: could not fill text into input');
+      fallbackCopyAndNotify('未能把 Prompt 填入输入框', 'could not fill the prompt into the input box', text);
+      setTimeout(clearParams, 800);
+      return;
+    }
+    const sent = await sendWithVerify(input, text);
+    if (!sent) {
+      log('could not confirm send after 3 rounds');
+      fallbackCopyAndNotify('已填入但未能自动发送，请手动点击发送', 'prompt filled but auto-send failed — please press send manually', text);
+    }
+    setTimeout(clearParams, 800);
   }
 
   // ---------- Failure fallback: copy the prompt to the clipboard + show an in-page notice ----------
@@ -284,16 +362,29 @@
                 : `LightTab: ${reason}, and copying to the clipboard failed — please type the prompt manually`));
   }
 
-  // Resolve the final text: lt_k wins (extension channel); otherwise fall back to the plaintext q in the URL.
+  // Resolve the final text: lt_k wins (extension channel); otherwise fall back to the plaintext q
+  // in the URL; if the URL lost everything to a param-stripping redirect, the storage pointer
+  // re-arms us. The pointer is cleared when the armed run finishes — a run whose page redirects
+  // away mid-flight never finishes, leaving the pointer for the final landing page.
   (async () => {
-    let text = q;
-    if (ltK) {
-      const fromStorage = await readPending(ltK);
+    let text = q, key = ltK;
+    const pointer = await readPointer();
+    if (armed && (q || ltK)) {
+      // URL-armed: nothing to do with the pointer yet — it gets cleared when this run finishes.
+    } else if (pointer) {
+      key = pointer;
+      log('armed via storage pointer (params lost in a redirect)');
+    } else {
+      return; // not armed at all — a normal visit
+    }
+    if (key) {
+      const fromStorage = await readPending(key);
       if (fromStorage) { text = fromStorage; log('prompt from storage nonce, len =', text.length); }
       else log('nonce not found in storage, fallback to url q');
     }
-    if (!text) { log('no prompt text, abort'); clearParams(); return; }
-    if (document.visibilityState === 'visible') main(text);
-    else document.addEventListener('visibilitychange', () => main(text), { once: true });
+    if (!text) { log('no prompt text, abort'); clearParams(); clearPointer(); return; }
+    const start = () => { main(text).finally(clearPointer); };
+    if (document.visibilityState === 'visible') start();
+    else document.addEventListener('visibilitychange', start, { once: true });
   })();
 })();

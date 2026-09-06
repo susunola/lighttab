@@ -490,7 +490,16 @@ for (const k of ['engm.title','engm.name_ph','engm.url_ph','engm.add','engm.rest
   const re = new RegExp("'" + k.replace('.', '\\.') + "':\\s*\\{\\s*zh: '[^']+', en: '[^']+' \\}");
   assert(re.test(i18nSrc), `i18n entry ${k} complete in zh/en`);
 }
-assert(!/host_permissions/.test(read('manifest.json')), 'no host_permissions requested (relies on the target site CORS)');
+// Suggestions fetch() the three provider APIs directly (see [15]); host_permissions is what lets that
+// bypass their missing CORS headers, so it must be declared and scoped to just those three hosts.
+{
+  const manifest = JSON.parse(read('manifest.json'));
+  assert(Array.isArray(manifest.host_permissions), 'manifest declares host_permissions for the suggestion providers');
+  for (const host of ['https://suggestion.baidu.com/*', 'https://suggestqueries.google.com/*', 'https://api.bing.com/*']) {
+    assert(manifest.host_permissions.includes(host), `manifest host_permissions includes ${host}`);
+  }
+  assert(manifest.host_permissions.length === 3, 'manifest host_permissions is scoped to exactly the three suggestion hosts');
+}
 for (const k of ['wb.running', 'wb.not_running', 'wb.not_detected', 'wb.get']) {
   assert(i18nSrc.includes(`'${k}'`), `i18n contains ${k}`);
 }
@@ -873,14 +882,17 @@ for (const id of ['baidu', 'google', 'bing']) {
 assert(/suggestion\.baidu\.com\/su\?wd=/.test(appSrc), 'baidu suggestion endpoint');
 assert(/suggestqueries\.google\.com\/complete\/search\?client=chrome/.test(appSrc), 'google suggestion endpoint');
 assert(/api\.bing\.com\/qsonhs\.aspx/.test(appSrc), 'bing suggestion endpoint (JSONP variant — osjson.aspx has no CORS headers)');
-// JSONP via <script> injection: no host_permissions needed
+// fetch() against declared host_permissions replaced the old <script>-injection JSONP trick, which was
+// permanently dead under MV3's page CSP (script-src 'self' cannot allow-list remote script hosts).
 assert(/function jsonp\(urlFn, timeoutMs = SUGGEST_TIMEOUT_MS\)/.test(appSrc), 'jsonp helper carries a timeout parameter');
 assert(/SUGGEST_TIMEOUT_MS = 5000/.test(appSrc), 'suggestion timeout is 5s');
 assert(/SUGGEST_DEBOUNCE_MS = 150/.test(appSrc), 'suggestion debounce is 150ms');
 assert(/SUGGEST_MAX = 8/.test(appSrc), 'suggestions are capped at 8 rows');
-assert(/delete window\[cb\]/.test(appSrc), 'jsonp deletes the window callback after use');
-assert(/script\.remove\(\)/.test(appSrc), 'jsonp removes the script tag after use');
-assert(!/host_permissions/.test(read('manifest.json')), 'manifest still carries no host_permissions (suggestions go through JSONP)');
+assert(!/document\.createElement\('script'\)/.test(appSrc), 'suggestions no longer inject a <script> tag (remote code execution risk)');
+assert(/new AbortController\(\)/.test(appSrc) && /controller\.abort\(\)/.test(appSrc), 'jsonp aborts the fetch on timeout');
+assert(/clearTimeout\(timer\)/.test(appSrc), 'jsonp always clears its timeout timer');
+assert(/function parseJsonpText\(text\)/.test(appSrc), 'app.js defines parseJsonpText to strip the JSONP wrapper without eval');
+assert(/host_permissions/.test(read('manifest.json')), 'manifest declares host_permissions so suggestions can fetch() past missing CORS headers');
 // Interaction: keyboard navigation, URL suppression, blur close, engine-switch reset, boot wiring
 assert(/e\.key === 'ArrowDown' \|\| e\.key === 'ArrowUp'/.test(appSrc), 'ArrowDown/ArrowUp move the highlight');
 assert(/e\.key === 'Enter'\) \{\s*if \(suggestHl >= 0/.test(appSrc), 'Enter opens the highlighted row');
@@ -1567,6 +1579,49 @@ assert(/\.weather-trend \.weather-trend-hi \{ stroke: #fbbf24/.test(cssSrc) && /
   I.setLang('en');
   assert(pKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'personalization entries translated in en',
     pKeys.filter(k => I.t(k) === k || !I.t(k)).join(' | '));
+  I.setLang('zh');
+}
+
+// ---------- 24) AI auto-submit robustness (inject-ai.js v4) ----------
+console.log('[24] AI injection: dola.com match, tiered input pick, pointer fallback, verified send');
+const injectSrc = read('js/inject-ai.js');
+{
+  const manifest = JSON.parse(read('manifest.json'));
+  assert(manifest.content_scripts && manifest.content_scripts[0].matches.includes('https://www.dola.com/chat*'),
+    'manifest content_scripts cover dola.com (doubao.com redirects there and strips the query string)');
+}
+// Tiered input picking: rich editors (contenteditable / ProseMirror) outrank a bare textarea
+assert(/const INPUT_TIERS = \[/.test(injectSrc) && !/INPUT_SELECTORS/.test(injectSrc), 'inject-ai.js uses tiered INPUT_TIERS');
+assert(/div\[contenteditable="true"\][\s\S]*?\],\s*\n\s*\['textarea'\]/.test(injectSrc),
+  'contenteditable tier outranks textarea (Doubao mounts a decoy textarea before tiptap)');
+// Composer settle: the picked element must survive a settle window before it is trusted
+assert(/document\.contains\(cand\) && pickInput\(\) === cand/.test(injectSrc),
+  'main() waits for the composer to settle before filling');
+// Verified send: click -> waitCleared -> Enter fallback -> re-pick, up to 3 rounds
+assert(/async function sendWithVerify/.test(injectSrc) && /round <= 3/.test(injectSrc), 'sendWithVerify retries up to 3 rounds');
+assert(/function pressEnter/.test(injectSrc), 'Enter fallback exists as pressEnter()');
+assert(/!document\.contains\(input\)\) return true/.test(injectSrc), 'a re-mounted composer counts as a confirmed send');
+// Redirect fallback: storage pointer, peeked at arm time and cleared when an armed run finishes
+assert(/POINTER_KEY = PENDING_PREFIX \+ 'current'/.test(injectSrc) && /POINTER_TTL = 90000/.test(injectSrc),
+  'inject-ai.js defines the storage pointer (90s TTL — redirect chains can sit 20s+ on a region gate)');
+assert(/function clearPointer\(\)/.test(injectSrc) && /main\(text\)\.finally\(clearPointer\)/.test(injectSrc),
+  'the pointer is cleared when an armed run finishes (a mid-flight redirect never finishes, by design)');
+assert(/armed via storage pointer/.test(injectSrc), 'inject-ai.js can arm from the pointer alone');
+// newtab side: pointer written with every nonce; sweep treats it on its own TTL
+assert(/\[POINTER_KEY\]: \{ k: nonce, t: Date\.now\(\) \}/.test(appSrc), 'putPending writes the pointer next to the nonce');
+assert(/if \(k === POINTER_KEY\)/.test(appSrc), 'sweepPending handles the pointer record shape separately');
+// Preview-mode degradation: no content script out there -> copy the prompt and say so
+assert(/ai\.preview_copied/.test(appSrc) && /webN && !hasChromeStorage/.test(appSrc),
+  'preview mode copies the prompt instead of a silent bare launch');
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  I.setLang('zh');
+  assert(I.t('ai.preview_copied') !== 'ai.preview_copied' && I.t('ai.preview_copied').length > 0, 'ai.preview_copied translated in zh');
+  I.setLang('en');
+  assert(I.t('ai.preview_copied') !== 'ai.preview_copied' && I.t('ai.preview_copied').length > 0, 'ai.preview_copied translated in en');
   I.setLang('zh');
 }
 

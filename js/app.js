@@ -1089,9 +1089,13 @@
     renderSuggest();
   }
   // ---------- Search suggestions ----------
-  // JSONP via <script> injection: suggestions need no host_permissions, keeping the manifest's
-  // single-permission design intact. Every request gets a unique window callback which is always
-  // cleaned up (script tag removed + callback deleted) and carries a hard timeout.
+  // fetch() against three declared host_permissions (see manifest.json): granting an origin lets the
+  // extension bypass the target's missing CORS headers, so we no longer need the old <script>-injection
+  // JSONP trick to reach these APIs (MV3's page CSP is script-src 'self' and cannot allow remote script
+  // hosts at all, which made the old script-injection approach permanently broken under MV3). The
+  // providers below still speak JSONP (a "cb" callback name in the query string), so the response body
+  // is a `name(...)` wrapper rather than bare JSON; parseJsonpText() strips that wrapper without ever
+  // executing it.
   const SUGGEST_DEBOUNCE_MS = 150;
   const SUGGEST_TIMEOUT_MS = 5000;
   const SUGGEST_MAX = 8;
@@ -1121,25 +1125,34 @@
     }
   };
 
-  // urlFn(cb) builds the final URL from the generated callback name. Resolves with the raw
-  // payload, rejects on script error or timeout. Cleanup runs on every settle path.
-  function jsonp(urlFn, timeoutMs = SUGGEST_TIMEOUT_MS) {
-    return new Promise((resolve, reject) => {
-      const cb = '__ltSuggest_' + Date.now().toString(36) + '_' + (++suggestSeq);
-      const script = document.createElement('script');
-      let settled = false;
-      const cleanup = () => {
-        settled = true;
-        clearTimeout(timer);
-        script.remove();
-        try { delete window[cb]; } catch { window[cb] = undefined; }
-      };
-      const timer = setTimeout(() => { if (!settled) { cleanup(); reject(new Error('suggest timeout')); } }, timeoutMs);
-      window[cb] = (data) => { if (!settled) { cleanup(); resolve(data); } };
-      script.src = urlFn(cb);
-      script.onerror = () => { if (!settled) { cleanup(); reject(new Error('suggest failed')); } };
-      document.head.appendChild(script);
-    });
+  // Strips a JSONP `name(...)` wrapper without ever eval-ing it (plain string slicing + JSON.parse),
+  // falling back to parsing the body directly in case a provider ever answers with bare JSON.
+  function parseJsonpText(text) {
+    const s = String(text).trim();
+    if (s.startsWith('{') || s.startsWith('[')) return JSON.parse(s);
+    const start = s.indexOf('(');
+    const end = s.lastIndexOf(')');
+    if (start === -1 || end === -1 || end <= start) throw new Error('unexpected suggest payload');
+    return JSON.parse(s.slice(start + 1, end));
+  }
+  // urlFn(cb) builds the final URL from the generated callback name (the providers still expect one in
+  // the query string). Resolves with the parsed payload, rejects on network error, non-2xx, timeout or
+  // malformed body. try/catch + AbortController guarantee the timer and controller are always cleaned up.
+  async function jsonp(urlFn, timeoutMs = SUGGEST_TIMEOUT_MS) {
+    const cb = '__ltSuggest_' + Date.now().toString(36) + '_' + (++suggestSeq);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(urlFn(cb), { signal: controller.signal, credentials: 'omit', cache: 'no-store' });
+      if (!res.ok) throw new Error('suggest failed: HTTP ' + res.status);
+      const text = await res.text();
+      return parseJsonpText(text);
+    } catch (err) {
+      if (err && err.name === 'AbortError') throw new Error('suggest timeout');
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   let suggestItems = [];      // current dropdown entries
@@ -1414,6 +1427,11 @@
   // -> the URL is cleaned after sending. Deliberately NOT read-once: concurrent targets share one
   // nonce, so deleting on read would break siblings. Replay protection is the post-send URL cleanup
   // plus the TTL orphan sweep on boot.
+  // A pointer lt.pending.current (TTL 90s) accompanies every nonce: some targets
+  // (doubao.com -> dola.com) redirect and STRIP the query string, and the pointer is the only
+  // way the content script can still find the nonce afterwards.
+  const POINTER_KEY = PENDING_PREFIX + 'current';
+  const POINTER_TTL = 90000; // redirect chains (the doubao region gate) can sit on a page for 20s+
   function sweepPending() {
     const now = Date.now();
     const drop = [];
@@ -1422,6 +1440,11 @@
       for (const [k, raw] of pairs) {
         try {
           const rec = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          // The pointer carries { k, t } instead of { p, t } and lives on a much shorter leash.
+          if (k === POINTER_KEY) {
+            if (!rec || typeof rec.k !== 'string' || (now - (rec.t || 0)) > POINTER_TTL) drop.push(k);
+            continue;
+          }
           if (!rec || typeof rec.p !== 'string' || (now - (rec.t || 0)) > PENDING_TTL) drop.push(k);
         } catch (_) { drop.push(k); } // structurally corrupted leftovers get swept too
       }
@@ -1445,7 +1468,10 @@
   async function putPending(promptText) {
     const nonce = 'n_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
     try {
-      if (hasChromeStorage) await chrome.storage.local.set({ [PENDING_PREFIX + nonce]: { p: promptText, t: Date.now() } });
+      if (hasChromeStorage) await chrome.storage.local.set({
+        [PENDING_PREFIX + nonce]: { p: promptText, t: Date.now() },
+        [POINTER_KEY]: { k: nonce, t: Date.now() } // redirect fallback, one-shot
+      });
       else localStorage.setItem(PENDING_PREFIX + nonce, JSON.stringify({ p: promptText, t: Date.now() }));
       return nonce;
     } catch (err) {
@@ -1520,7 +1546,13 @@
     }
     if (!webN && !dlN) return showToast(t('ai.fail'));
     const names = engs.map(x => engName(x)).join(' · ');
-    if (webN && dlN) showToast(t('ai.wb_multi', { n: webN }));
+    if (webN && !hasChromeStorage) {
+      // Preview mode (file:// / single-file dist): no content script exists out there, so the
+      // target page would open with nothing to fill it. Copy the prompt and say so instead.
+      copyText(text);
+      showToast(t('ai.preview_copied', { names }), null, null, 4200);
+    }
+    else if (webN && dlN) showToast(t('ai.wb_multi', { n: webN }));
     else if (dlN) showToast(t('ai.wb_launched'), null, null, 3600);
     else showToast(t('ai.launched', { n: webN, names }), null, null, blocked ? 4200 : 2600);
     if (blocked) setTimeout(() => showToast(t('ai.blocked'), null, null, 3200), blocked ? 2600 : 0);

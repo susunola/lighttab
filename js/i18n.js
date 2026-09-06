@@ -387,6 +387,7 @@
     'ai.fail':        { zh: '发射失败：没有成功打开任何目标', en: 'Launch failed: no target opened' },
     'ai.wb_multi':    { zh: '已拉起 WorkBuddy，并向 {n} 个网页目标发射', en: 'WorkBuddy launched and {n} web targets fired' },
     'ai.launched':    { zh: '已发射到 {n} 个目标：{names}', en: 'Launched to {n} targets: {names}' },
+    'ai.preview_copied': { zh: '已打开 {names} · 预览模式无法自动填入，Prompt 已复制，到页面粘贴发送即可', en: 'Opened {names} · auto-fill needs the installed extension; the prompt is on your clipboard, paste and send' },
     'ai.blocked':     { zh: '若浏览器拦截了弹窗，请允许本站弹窗后重试', en: 'If the popup was blocked, allow popups for this site and retry' },
 
     // ---------- 云同步 ----------
