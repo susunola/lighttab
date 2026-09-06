@@ -451,12 +451,15 @@
       </div>
     ` : '');
     swEl.querySelectorAll('.swatch').forEach(el => {
-      el.addEventListener('click', () => {
+      el.addEventListener('click', async () => {
         if (el.dataset.i === 'img') return;
         const w = WALLPAPERS[+el.dataset.i];
-        setWallpaper(w.img ? { type: 'image', value: w.img, light: false } : { type: 'gradient', value: w.css });
+        // Apply + persist, then give visible feedback. Without the toast, picking the preset that
+        // is already active (e.g. the default) changes nothing on screen and looks dead.
+        await setWallpaper(w.img ? { type: 'image', value: w.img, light: false } : { type: 'gradient', value: w.css });
         markManualPickToday(); // a manual pick wins for the rest of this calendar day
         renderSwatches();
+        showToast(t('toast.wall_applied'));
       });
     });
   }
