@@ -730,8 +730,12 @@ assert(!/id="f-w-wweather" checked/.test(html), 'weather checkbox in settings is
 // Data source and request shape: forecast + geocoding, both Open-Meteo (key-free, CORS-open)
 assert(/https:\/\/api\.open-meteo\.com\/v1\/forecast/.test(appSrc), 'app.js uses the Open-Meteo forecast endpoint');
 assert(/current=temperature_2m,relative_humidity_2m,weather_code/.test(appSrc), 'forecast request carries current temperature/humidity/weather code');
-assert(/daily=temperature_2m_max,temperature_2m_min/.test(appSrc), 'forecast request carries today high/low temperatures');
+assert(/daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7/.test(appSrc),
+  'forecast request pulls 7 days of daily weather code + high/low');
 assert(/https:\/\/geocoding-api\.open-meteo\.com\/v1\/search/.test(appSrc), 'app.js uses the Open-Meteo geocoding endpoint');
+// Multi-day forecast: the daily array is cached next to the current reading (one row per day, today first)
+assert(/day\.time\.map\(\(date, i\) => \(\{/.test(appSrc) && /daily\n?\s*\}/.test(appSrc),
+  'fetchWeatherNow builds and caches a daily[] array from the 7-day payload');
 // Timeout and refresh strategy: all fetches carry an AbortController 5s cap; cache 30-minute TTL; the page refreshes every 30 minutes while resident
 assert(/AbortController/.test(appSrc) && /WEATHER_TIMEOUT_MS = 5000/.test(appSrc), 'weather requests carry an AbortController 5s timeout');
 assert(/WEATHER_REFRESH_MS = 30 \* 60 \* 1000/.test(appSrc), 'weather cache TTL / refresh period is 30 minutes');

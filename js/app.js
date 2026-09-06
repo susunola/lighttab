@@ -2585,18 +2585,70 @@
   async function fetchWeatherNow(w) {
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + w.lat + '&longitude=' + w.lon +
       '&current=temperature_2m,relative_humidity_2m,weather_code' +
-      '&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1';
+      '&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7';
     const j = await weatherFetchJson(url);
     const cur = j && j.current, day = j && j.daily;
     if (!cur || typeof cur.temperature_2m !== 'number' ||
-        !day || !day.temperature_2m_max || !day.temperature_2m_min) throw new Error('bad payload');
+        !day || !Array.isArray(day.time) || !day.time.length ||
+        !day.weather_code || !day.temperature_2m_max || !day.temperature_2m_min) throw new Error('bad payload');
+    // One row per day, today first; kept in the cache so renders never touch the network.
+    const daily = day.time.map((date, i) => ({
+      date,
+      code: day.weather_code[i],
+      hi: Math.round(day.temperature_2m_max[i]),
+      lo: Math.round(day.temperature_2m_min[i])
+    }));
     return {
       temp: Math.round(cur.temperature_2m),
       rh: Math.round(cur.relative_humidity_2m),
       code: cur.weather_code,
-      hi: Math.round(day.temperature_2m_max[0]),
-      lo: Math.round(day.temperature_2m_min[0])
+      hi: daily[0].hi,
+      lo: daily[0].lo,
+      daily
     };
+  }
+  // Multi-day forecast UI state: in-memory only (collapsed on every page load). Collapsed shows a
+  // 3-day mini strip under the current conditions; expanded replaces it with the full 7-day list.
+  let weatherExpanded = false;
+  // 'YYYY-MM-DD' → localized weekday label (weather.d0..d6). T00:00:00 pins the parse to local
+  // midnight, so it never crosses a day boundary.
+  function weatherWeekday(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d)) return '';
+    return t('weather.d' + d.getDay());
+  }
+  function weatherCaret(up) {
+    return '<svg class="weather-fc-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      (up ? '<polyline points="6 15 12 9 18 15"/>' : '<polyline points="6 9 12 15 18 9"/>') + '</svg>';
+  }
+  // Forecast strip below the current conditions. Old caches carry no `daily` yet — the
+  // Array.isArray guard renders no strip then, and the next refresh upgrades the data.
+  function weatherForecastHtml(last) {
+    const daily = last && Array.isArray(last.daily) ? last.daily : null;
+    if (!daily || !daily.length) return '';
+    if (!weatherExpanded) {
+      // Collapsed: the next 3 days (today is already the headline above); the strip itself is the
+      // expand button.
+      const cells = daily.slice(1, 4).map((d) =>
+        '<span class="weather-fc-cell">' +
+          '<span class="weather-fc-day">' + escapeHtml(weatherWeekday(d.date)) + '</span>' +
+          '<span class="weather-fc-ico">' + weatherIcon(d.code) + '</span>' +
+          '<span class="weather-fc-temp">' + d.hi + '° / ' + d.lo + '°</span>' +
+        '</span>').join('');
+      return '<button type="button" class="weather-fc weather-mini" id="weather-fc-toggle" aria-expanded="false" aria-label="' +
+        escapeHtml(t('weather.expand')) + '">' + cells + weatherCaret(false) + '</button>';
+    }
+    // Expanded: the full week, one row per day, today first.
+    const rows = daily.map((d, i) =>
+      '<div class="weather-fc-row">' +
+        '<span class="weather-fc-date">' + escapeHtml(d.date.slice(5)) + '</span>' +
+        '<span class="weather-fc-day">' + (i === 0 ? escapeHtml(t('weather.today')) : escapeHtml(weatherWeekday(d.date))) + '</span>' +
+        '<span class="weather-fc-ico">' + weatherIcon(d.code) + '</span>' +
+        '<span class="weather-fc-temp">' + d.lo + '° — ' + d.hi + '°</span>' +
+      '</div>').join('');
+    return '<div class="weather-fc weather-forecast">' + rows +
+      '<button type="button" class="weather-fc-toggle" id="weather-fc-toggle" aria-expanded="true" aria-label="' +
+      escapeHtml(t('weather.collapse')) + '">' + weatherCaret(true) + '</button></div>';
   }
   function weatherConfigured() {
     const w = state.settings.weather;
@@ -2610,6 +2662,7 @@
     if (!weatherConfigured()) {
       // Guide state: a quiet prompt that opens Settings → General; zero network involved.
       if (updated) updated.textContent = '';
+      card.classList.remove('open');
       card.innerHTML = '<button type="button" class="weather-setup" id="weather-setup">' +
         weatherIcon(3) + '<span>' + escapeHtml(t('weather.set_city')) + '</span></button>';
       const btn = card.querySelector('#weather-setup');
@@ -2620,6 +2673,7 @@
     if (!last || typeof last.temp !== 'number') {
       // Configured but nothing fetched yet (or every fetch failed): quiet unavailable state.
       if (updated) updated.textContent = '';
+      card.classList.remove('open');
       card.innerHTML = '<div class="weather-empty">' + weatherIcon(3) +
         '<span>' + escapeHtml(t('weather.unavailable')) + '</span></div>';
       return;
@@ -2643,7 +2697,14 @@
       '<div class="weather-meta">' +
         '<span>' + last.hi + '° / ' + last.lo + '°</span>' +
         '<span>' + escapeHtml(t('weather.humidity')) + ' ' + last.rh + '%</span>' +
-      '</div>';
+      '</div>' +
+      weatherForecastHtml(last);
+    card.classList.toggle('open', weatherExpanded);
+    const fcToggle = card.querySelector('#weather-fc-toggle');
+    if (fcToggle) fcToggle.addEventListener('click', () => {
+      weatherExpanded = !weatherExpanded;
+      renderWeather();
+    });
   }
   // Compact weather tail on the clock's date line, shown only when the weather widget itself is
   // hidden — configuring a city is the opt-in, so a hidden widget should not waste the data.

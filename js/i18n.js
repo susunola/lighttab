@@ -59,6 +59,16 @@
     'weather.city_saved':  { zh: '天气城市已设为 {name}', en: 'Weather city set to {name}' },
     'weather.city_not_found': { zh: '没有找到这个城市', en: 'City not found' },
     'weather.city_fail':   { zh: '城市解析失败，请检查网络后重试', en: 'Could not resolve the city — check the network and retry' },
+    'weather.today':    { zh: '今天', en: 'Today' },
+    'weather.expand':   { zh: '展开 7 天预报', en: 'Show 7-day forecast' },
+    'weather.collapse': { zh: '收起预报', en: 'Hide forecast' },
+    'weather.d0': { zh: '周日', en: 'Sun' },
+    'weather.d1': { zh: '周一', en: 'Mon' },
+    'weather.d2': { zh: '周二', en: 'Tue' },
+    'weather.d3': { zh: '周三', en: 'Wed' },
+    'weather.d4': { zh: '周四', en: 'Thu' },
+    'weather.d5': { zh: '周五', en: 'Fri' },
+    'weather.d6': { zh: '周六', en: 'Sat' },
 
     // ---------- Movie-of-the-day ----------
     'movie.rating': { zh: '豆瓣评分', en: 'Rating' },
