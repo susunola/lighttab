@@ -875,9 +875,10 @@ assert(/script\.remove\(\)/.test(appSrc), 'jsonp removes the script tag after us
 assert(!/host_permissions/.test(read('manifest.json')), 'manifest still carries no host_permissions (suggestions go through JSONP)');
 // Interaction: keyboard navigation, URL suppression, blur close, engine-switch reset, boot wiring
 assert(/e\.key === 'ArrowDown' \|\| e\.key === 'ArrowUp'/.test(appSrc), 'ArrowDown/ArrowUp move the highlight');
-assert(/e\.key === 'Enter' && suggestHl >= 0/.test(appSrc), 'Enter opens the highlighted row');
+assert(/e\.key === 'Enter'\) \{\s*if \(suggestHl >= 0/.test(appSrc), 'Enter opens the highlighted row');
 assert(/e\.key === 'Escape'/.test(appSrc) && /closeSuggest\(\);/.test(appSrc), 'Escape closes the dropdown');
-assert(/if \(!q \|\| looksLikeUrl\(q\)\) \{ closeSuggest\(\); return; \}/.test(appSrc), 'empty input and URLs never trigger suggestions');
+assert(/if \(!q\) \{ suggestItems = \[\]; renderSuggest\(\); return; \}/.test(appSrc) && /if \(looksLikeUrl\(q\)\) \{ closeSuggest\(\); return; \}/.test(appSrc),
+  'empty input shows history instead of suggestions, and URLs never trigger suggestions');
 assert(/setTimeout\(closeSuggest, 150\)/.test(appSrc), 'the dropdown closes 150ms after blur');
 assert(/function resetSuggest\(\)/.test(appSrc) && /suggestCache\.clear\(\)/.test(appSrc), 'engine switch closes the dropdown and clears the cache');
 assert(/resetSuggest\(\); \/\/ engine switch/.test(appSrc), 'setEngine calls resetSuggest');
@@ -1153,6 +1154,99 @@ assert(/#btn-wall-favs\.on/.test(cssSrc), 'CSS defines the filter toggle active 
   I.setLang('en');
   assert(fKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'wallpaper favorite entries translated in en', fKeys.map(k => I.t(k)).join(' | '));
   I.setLang('zh');
+}
+
+// ---------- 21) Tab engine cycling + inline calculator + search history ----------
+console.log('[21] search box interactions (Tab cycle / calc / history)');
+// Tab cycling: hijacked only in the search input, wraps around, quiet cue, no toast
+assert(/e\.key === 'Tab' && document\.activeElement === qEl/.test(appSrc), 'Tab is hijacked only while #q is focused');
+assert(/e\.preventDefault\(\);\s*\n\s*cycleEngine\(e\.shiftKey \? -1 : 1\)/.test(appSrc), 'Tab / Shift+Tab cycle forwards / backwards with preventDefault');
+assert(/function cycleEngine\(dir\)/.test(appSrc) && /\(idx \+ dir \+ engines\.length\) % engines\.length/.test(appSrc), 'cycleEngine wraps around allEngines()');
+assert(/state\.settings\.engine = next\.id/.test(appSrc) && /Store\.set\(K\.settings, state\.settings\)/.test(appSrc), 'Tab cycling persists the engine setting');
+assert(/classList\.add\('eng-flash'\)/.test(appSrc), 'Tab cycling flashes the engine button as the quiet cue');
+// Calculator: hand-written parser, never eval()
+assert(/function calcEval\(/.test(appSrc), 'app.js defines calcEval()');
+assert(!/\beval\(/.test(appSrc.replace(/\/\/[^\n]*/g, '')), 'no eval() anywhere in app.js code');
+assert(/calcEval/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''), 'calcEval is exported to LT_PURE');
+assert(/maybeCopyCalc\(\)/.test(appSrc), 'Enter / click on a calc row copies via maybeCopyCalc()');
+// History: own key, out of lt.settings, out of the sync getAll set, capped, deduped
+assert(/history: 'lt\.history'/.test(appSrc), "K maps history to 'lt.history'");
+assert(/chrome\.storage\.local\.get\(\[K\.settings, K\.items, K\.wallpaper, K\.todos, K\.prompts, K\.schema\]\)/.test(appSrc),
+  'Store.getAll does not read lt.history (stays out of sync/export)');
+assert(/const HISTORY_MAX = 10/.test(appSrc), 'history is capped at 10 entries');
+assert(/function updateHistory/.test(appSrc) && /function histMatches/.test(appSrc), 'app.js defines updateHistory() / histMatches()');
+assert(/localRawSet\(K\.history/.test(appSrc), 'history persists via localRawSet (never marked dirty for cloud sync)');
+// Sandboxed behaviour tests (same convention as section 4b)
+{
+  const noop = () => {};
+  const sandbox = {
+    document: { readyState: 'loading', addEventListener: noop, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop, key: () => null, length: 0 },
+    navigator: {},
+    structuredClone,
+    URL, URLSearchParams,
+    setTimeout, clearTimeout, setInterval, clearInterval,
+    requestAnimationFrame: noop, cancelAnimationFrame: noop,
+    console
+  };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(appSrc, sandbox, { filename: 'app.js' });
+  const P = sandbox.LT_PURE;
+  assert(!!P && typeof P.calcEval === 'function' && typeof P.updateHistory === 'function' && typeof P.histMatches === 'function',
+    'calcEval / updateHistory / histMatches available in sandbox');
+  if (P && P.calcEval) {
+    assert(P.calcEval('128*3.5').result === '448' && P.calcEval('128*3.5').display === '128 × 3.5 = 448', 'calc: 128*3.5 -> "128 × 3.5 = 448"');
+    assert(P.calcEval('2+3*4').result === '14', 'calc: precedence 2+3*4 = 14');
+    assert(P.calcEval('(2+3)*4').result === '20', 'calc: parentheses (2+3)*4 = 20');
+    assert(P.calcEval('10%3').result === '1', 'calc: modulo 10%3 = 1');
+    assert(P.calcEval('-3+1').result === '-2' && P.calcEval('2*-3').result === '-6', 'calc: unary minus');
+    assert(P.calcEval('0.1+0.2').result === '0.3', 'calc: float noise trimmed (0.1+0.2 = 0.3)');
+    assert(P.calcEval('1/0') === null && P.calcEval('0/0') === null, 'calc: division by zero fails silent');
+    assert(P.calcEval('1+') === null && P.calcEval('(1+2') === null && P.calcEval('()') === null, 'calc: malformed input fails silent');
+    assert(P.calcEval('2024') === null, 'calc: a bare number is not a calculation');
+    assert(P.calcEval('hello') === null && P.calcEval('1+1;alert(1)') === null && P.calcEval('') === null && P.calcEval(null) === null,
+      'calc: non-arithmetic input rejected by the whitelist');
+    assert(P.calcEval('１２８×３.５').result === '448', 'calc: full-width digits and × operator evaluate');
+    assert(P.calcEval('８÷２').result === '4', 'calc: full-width ÷ operator evaluates');
+  }
+  if (P && P.updateHistory) {
+    const h1 = P.updateHistory([], 'alpha', 10);
+    assert(h1.length === 1 && h1[0] === 'alpha', 'history: first entry recorded');
+    const h2 = P.updateHistory(['beta', 'alpha'], 'alpha', 10);
+    assert(h2.length === 2 && h2[0] === 'alpha' && h2[1] === 'beta', 'history: dedupe moves the repeat to the front');
+    let h3 = [];
+    for (let n = 0; n < 14; n++) h3 = P.updateHistory(h3, 'q' + n, 10);
+    assert(h3.length === 10 && h3[0] === 'q13' && h3[9] === 'q4', 'history: capped at 10, newest first');
+    assert(P.updateHistory(['a'], '  ', 10).length === 1 && P.updateHistory(['a'], '', 10).length === 1,
+      'history: blank queries are not recorded');
+    assert(P.updateHistory(['a', 'x', 1, null], 'b', 10).join(',') === 'b,a,x', 'history: non-string / blank entries are dropped');
+  }
+  if (P && P.histMatches) {
+    const list = ['github actions', 'gmail', 'google maps'];
+    assert(P.histMatches(list, 'git', 3).join(',') === 'github actions', 'history match: prefix match');
+    assert(P.histMatches(list, 'maps', 3).join(',') === 'google maps', 'history match: substring match');
+    assert(P.histMatches(list, 'G', 3).join(',') === 'github actions,gmail,google maps', 'history match: case-insensitive');
+    assert(P.histMatches(list, 'g', 2).length === 2, 'history match: capped');
+    assert(P.histMatches(list, '', 10).length === 3, 'history match: empty query returns the recent list');
+  }
+}
+// i18n: both languages, non-empty
+{
+  const sandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(sandbox);
+  vm.runInContext(i18nSrc, sandbox, { filename: 'i18n.js' });
+  const I = sandbox.window.LT_I18N;
+  const sKeys = ['calc.enter_copy', 'hist.recent', 'hist.clear', 'hist.del'];
+  I.setLang('zh');
+  assert(sKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'calc/history entries translated in zh', sKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('en');
+  assert(sKeys.every(k => I.t(k) !== k && I.t(k).length > 0), 'calc/history entries translated in en', sKeys.map(k => I.t(k)).join(' | '));
+  I.setLang('zh');
+}
+// CSS: calc row, history rows, header/clear, delete × and the Tab-cycle flash
+for (const sel of ['.sg-calc', '.sg-calc-hint', '.sg-head', '.sg-clear', '.sg-hist', '.sg-hist-del', '#engine-btn.eng-flash']) {
+  assert(cssSrc.includes(sel), `CSS defines ${sel}`);
 }
 
 console.log('');

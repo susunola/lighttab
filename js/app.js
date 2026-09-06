@@ -262,7 +262,7 @@
   // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
   // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
   const SCHEMA_VERSION = 5;
-  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema' };
+  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history' };
   // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
   // to the content script across tabs without ever putting it in the URL.
   const PENDING_PREFIX = 'lt.pending.';
@@ -957,6 +957,105 @@
     });
     renderEngManager();
   }
+
+  // ---------- Inline calculator ----------
+  // A pure arithmetic evaluator (no eval(), ever): the input is only treated as a calculation
+  // when it consists of nothing but digits, +−×÷ (ASCII and full-width), %, parentheses, dots
+  // and whitespace, and carries at least one operator and one digit — so plain numbers ("2024")
+  // and any real query fall through to a normal search. Recursive-descent: expr = term ((+|-) term)*,
+  // term = factor ((*|/|%) factor)*, factor = unary, atom = number | '(' expr ')'.
+  const CALC_OPS = { '＋': '+', '－': '-', '×': '*', '÷': '/', '（': '(', '）': ')', '％': '%', '．': '.', '　': ' ' };
+  function normalizeCalc(raw) {
+    // Full-width operators/digits collapse to ASCII so both IME styles evaluate the same.
+    return String(raw).replace(/[＋－×÷（）％．　０-９]/g, (ch) =>
+      CALC_OPS[ch] || String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+  }
+  function calcEval(raw) {
+    if (typeof raw !== 'string') return null;
+    const s = normalizeCalc(raw).trim();
+    if (!s || s.length > 200) return null;
+    if (!/^[0-9+\-*/%().\s]+$/.test(s)) return null; // strict whitelist: anything else is a query
+    if (!/[+\-*/%]/.test(s) || !/\d/.test(s)) return null; // need an operator and a digit
+    let i = 0;
+    const ws = () => { while (i < s.length && /\s/.test(s[i])) i++; };
+    const fail = () => { throw null; }; // local parse-failure signal, caught below
+    function parseExpr() {
+      let v = parseTerm();
+      for (;;) { ws(); if (s[i] === '+') { i++; v += parseTerm(); } else if (s[i] === '-') { i++; v -= parseTerm(); } else return v; }
+    }
+    function parseTerm() {
+      let v = parseFactor();
+      for (;;) {
+        ws();
+        if (s[i] === '*') { i++; v *= parseFactor(); }
+        else if (s[i] === '/') { i++; const d = parseFactor(); if (d === 0) fail(); v /= d; }
+        else if (s[i] === '%') { i++; v %= parseFactor(); }
+        else return v;
+      }
+    }
+    function parseFactor() {
+      ws();
+      if (s[i] === '-') { i++; return -parseFactor(); } // unary minus binds tighter than * / %
+      if (s[i] === '+') { i++; return parseFactor(); }
+      return parseAtom();
+    }
+    function parseAtom() {
+      ws();
+      if (s[i] === '(') { i++; const v = parseExpr(); ws(); if (s[i] !== ')') fail(); i++; return v; }
+      const m = /^(\d+(?:\.\d+)?|\.\d+)/.exec(s.slice(i));
+      if (!m) fail();
+      i += m[0].length;
+      return parseFloat(m[0]);
+    }
+    let v;
+    try { v = parseExpr(); ws(); if (i !== s.length) return null; } catch { return null; }
+    if (!Number.isFinite(v)) return null; // division-by-zero already throws; this guards overflow to Infinity
+    // Trim float noise (0.1+0.2 -> 0.3) and cap at 10 significant digits.
+    const result = String(Number(v.toPrecision(10)));
+    // Display normalises to spaced × ÷ + - operators; a parenthesised unary minus stays tight.
+    const display = s.replace(/\s+/g, ' ')
+      .replace(/\s*([+*/%-])\s*/g, ' $1 ')
+      .replace(/\*/g, '×').replace(/\//g, '÷').replace(/\s+/g, ' ').trim()
+      .replace(/\(- /g, '(-');
+    return { display: `${display} = ${result}`, result };
+  }
+
+  // ---------- Search history ----------
+  // Own storage key (lt.history), a plain string array read/written through localRawGet/localRawSet,
+  // so it is never marked dirty for cloud sync and never joins lt.settings. Newest first, deduped,
+  // capped at 10. updateHistory / histMatches are pure (smoke-tested); the rest is DOM glue.
+  const HISTORY_MAX = 10;
+  const HIST_MATCH_MAX = 3; // matching rows above network suggestions while typing
+  let searchHistory = [];
+  function updateHistory(list, q, cap) {
+    const s = String(q || '').trim();
+    const out = s ? [s] : [];
+    for (const h of list) if (typeof h === 'string' && h.trim() && h !== s) out.push(h);
+    return out.slice(0, cap);
+  }
+  function histMatches(list, q, cap) {
+    const s = String(q || '').trim().toLowerCase();
+    if (!s) return list.slice(0, cap);
+    return list.filter(h => h.toLowerCase().includes(s)).slice(0, cap);
+  }
+  async function loadHistory() {
+    const raw = await localRawGet(K.history);
+    return updateHistory(Array.isArray(raw) ? raw : [], '', HISTORY_MAX + 10).slice(0, HISTORY_MAX);
+  }
+  function persistHistory() { localRawSet(K.history, searchHistory); }
+  function pushHistory(q) {
+    searchHistory = updateHistory(searchHistory, q, HISTORY_MAX);
+    persistHistory();
+  }
+  function removeHistoryEntry(q) {
+    searchHistory = searchHistory.filter(h => h !== q);
+    persistHistory();
+  }
+  function clearHistory() {
+    searchHistory = [];
+    persistHistory();
+    renderSuggest();
+  }
   // ---------- Search suggestions ----------
   // JSONP via <script> injection: suggestions need no host_permissions, keeping the manifest's
   // single-permission design intact. Every request gets a unique window callback which is always
@@ -1038,13 +1137,48 @@
     closeSuggest();
     suggestCache.clear();
   }
+  // The calc row is engine-independent local state: recompute from the live input on every render.
+  function currentCalc() {
+    const qEl = document.getElementById('q');
+    const q = qEl ? qEl.value.trim() : '';
+    return q && !looksLikeUrl(q) ? calcEval(q) : null;
+  }
+  // History rows for the current input: everything (newest first) when empty, substring matches while typing.
+  function currentHistRows() {
+    const qEl = document.getElementById('q');
+    const q = qEl ? qEl.value.trim() : '';
+    return q ? histMatches(searchHistory, q, HIST_MATCH_MAX) : searchHistory.slice(0, HISTORY_MAX);
+  }
+  // Enter (or a click) on a calc row copies the result instead of searching. The whitelist
+  // guarantees there is no real query to lose: a calc expression is never also a search phrase.
+  function maybeCopyCalc() {
+    const calc = currentCalc();
+    if (!calc) return false;
+    copyText(calc.result);
+    showToast(t('toast.copied'));
+    return true;
+  }
   function renderSuggest() {
     const list = suggestListEl();
     if (!list) return;
-    if (!suggestItems.length) { list.hidden = true; return; }
-    list.innerHTML = suggestItems.map((s, i) =>
+    const calc = currentCalc();
+    const hist = currentHistRows();
+    if (!calc && !hist.length && !suggestItems.length) { list.hidden = true; return; }
+    let html = '';
+    // Top row: the inline calculator result (local rows always sit above network suggestions).
+    if (calc) {
+      html += `<li role="option" class="sg-calc"><span class="sg-calc-expr">${escapeHtml(calc.display)}</span><span class="sg-calc-hint">${escapeHtml(t('calc.enter_copy'))}</span></li>`;
+    }
+    if (hist.length) {
+      html += `<li class="sg-head" role="presentation"><span>${escapeHtml(t('hist.recent'))}</span><button type="button" class="sg-clear" title="${escapeHtml(t('hist.clear'))}">${escapeHtml(t('hist.clear'))}</button></li>`;
+      html += hist.map((h, i) =>
+        `<li role="option" class="sg-hist" data-h="${i}"><span class="sg-hist-text">${escapeHtml(h)}</span><span class="sg-hist-del" data-del="${i}" title="${escapeHtml(t('hist.del'))}" aria-label="${escapeHtml(t('hist.del'))}">×</span></li>`
+      ).join('');
+    }
+    html += suggestItems.map((s, i) =>
       `<li role="option" data-i="${i}" class="${i === suggestHl ? 'active' : ''}" aria-selected="${i === suggestHl}">${escapeHtml(s)}</li>`
     ).join('');
+    list.innerHTML = html;
     list.hidden = false;
   }
   function setSuggestHl(i) {
@@ -1056,11 +1190,10 @@
   }
   async function fetchSuggest(q) {
     const provider = suggestProvider();
-    if (!provider) return;
+    if (!provider) return; // local rows (calc / history) are already rendered by the input listener
     const key = currentEngine.id + ':' + q;
     const cached = suggestCache.get(key);
     if (cached) {
-      if (!cached.length) return;
       suggestItems = cached.slice(0, SUGGEST_MAX);
       suggestHl = -1;
       renderSuggest();
@@ -1074,13 +1207,31 @@
       const items = provider.parse(raw).filter(s => typeof s === 'string' && s.trim()).slice(0, SUGGEST_MAX);
       suggestCache.set(key, items);
       if (document.getElementById('q').value.trim() !== q) return; // input moved on meanwhile
-      if (!items.length) { closeSuggest(); return; }
       suggestItems = items;
       suggestHl = -1;
-      renderSuggest();
+      renderSuggest(); // empty items only drop the network rows; calc / history rows stay up
     } catch {
       // Timeouts, blocked networks and engines that never call back all end here: just stay silent.
     }
+  }
+  // Tab / Shift+Tab in the search box cycles the engine instead of moving focus.
+  function cycleEngine(dir) {
+    const engines = allEngines();
+    if (engines.length < 2) return;
+    const idx = Math.max(0, engines.findIndex(e => e.id === currentEngine.id));
+    const next = engines[(idx + dir + engines.length) % engines.length];
+    setEngine(next.id); // also resets the dropdown + drops the old engine's cached suggestions
+    state.settings.engine = next.id;
+    Store.set(K.settings, state.settings);
+    renderEngineList();
+    // Quiet cue: a brief highlight flash on the engine button (no toast).
+    const btn = document.getElementById('engine-btn');
+    if (btn) { btn.classList.remove('eng-flash'); void btn.offsetWidth; btn.classList.add('eng-flash'); }
+    // Local rows (calc / history) come back instantly; network suggestions refetch for the new engine.
+    renderSuggest();
+    const qEl = document.getElementById('q');
+    const q = qEl ? qEl.value.trim() : '';
+    if (q && !looksLikeUrl(q)) fetchSuggest(q);
   }
   function bindSuggest() {
     const qEl = document.getElementById('q');
@@ -1089,13 +1240,24 @@
     qEl.addEventListener('input', () => {
       clearTimeout(suggestTimer);
       const q = qEl.value.trim();
+      // Typing in the box means the first-run "search here" tip did its job; it is anchored
+      // exactly where the dropdown floats, so dismiss it before the dropdown can slide under it.
+      if (q) dismissOnboarding();
       suggestTyped = qEl.value;
       suggestHl = -1;
-      // Never suggest for empty input or anything that looks like a URL.
-      if (!q || looksLikeUrl(q)) { closeSuggest(); return; }
+      // Empty input: show the history view. URLs never suggest (and can never be calc expressions).
+      if (!q) { suggestItems = []; renderSuggest(); return; }
+      if (looksLikeUrl(q)) { closeSuggest(); return; }
+      renderSuggest(); // calc row + history matches render instantly, network rows join when they land
       suggestTimer = setTimeout(() => fetchSuggest(q), SUGGEST_DEBOUNCE_MS);
     });
     qEl.addEventListener('keydown', (e) => {
+      // Tab / Shift+Tab: cycle engines, only while the search input itself is focused.
+      if (e.key === 'Tab' && document.activeElement === qEl) {
+        e.preventDefault();
+        cycleEngine(e.shiftKey ? -1 : 1);
+        return;
+      }
       if (list.hidden) return;
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -1103,13 +1265,17 @@
         // Range is -1..items-1: -1 is the raw input row.
         const next = suggestHl + step;
         setSuggestHl(next < -1 ? suggestItems.length - 1 : next >= suggestItems.length ? -1 : next);
-      } else if (e.key === 'Enter' && suggestHl >= 0 && suggestItems[suggestHl]) {
-        // A highlighted row wins over the plain search; the form submit never fires (preventDefault).
-        // Grab the row before closeSuggest() empties the list.
-        e.preventDefault();
-        const picked = suggestItems[suggestHl];
-        closeSuggest();
-        submitSearch(picked, e);
+      } else if (e.key === 'Enter') {
+        if (suggestHl >= 0 && suggestItems[suggestHl]) {
+          // A highlighted row wins over the plain search; the form submit never fires (preventDefault).
+          // Grab the row before closeSuggest() empties the list.
+          e.preventDefault();
+          const picked = suggestItems[suggestHl];
+          closeSuggest();
+          submitSearch(picked, e);
+        } else if (maybeCopyCalc()) {
+          e.preventDefault(); // a calc row is showing: Enter copies the result instead of searching
+        }
       } else if (e.key === 'Escape') {
         e.stopPropagation();
         closeSuggest();
@@ -1120,9 +1286,37 @@
       clearTimeout(suggestBlurTimer);
       suggestBlurTimer = setTimeout(closeSuggest, 150);
     });
-    qEl.addEventListener('focus', () => clearTimeout(suggestBlurTimer));
+    qEl.addEventListener('focus', () => {
+      clearTimeout(suggestBlurTimer);
+      // Reopening on an empty input shows the history view (renderSuggest hides the list when empty).
+      if (!qEl.value.trim()) renderSuggest();
+    });
     // mousedown (not click): it fires before the input blurs, so the row is still there to be hit.
     list.addEventListener('mousedown', (e) => {
+      const del = e.target.closest('.sg-hist-del');
+      if (del) {
+        e.preventDefault();
+        const h = currentHistRows()[+del.dataset.del];
+        if (h) { removeHistoryEntry(h); renderSuggest(); }
+        return;
+      }
+      if (e.target.closest('.sg-clear')) {
+        e.preventDefault();
+        clearHistory();
+        return;
+      }
+      if (e.target.closest('.sg-calc')) {
+        e.preventDefault();
+        maybeCopyCalc();
+        return;
+      }
+      const hli = e.target.closest('li[data-h]');
+      if (hli) {
+        e.preventDefault();
+        const h = currentHistRows()[+hli.dataset.h];
+        if (h) { qEl.value = h; closeSuggest(); submitSearch(h, e); }
+        return;
+      }
       const li = e.target.closest('li[data-i]');
       if (!li) return;
       e.preventDefault();
@@ -1130,6 +1324,8 @@
       closeSuggest();
       if (s) { qEl.value = s; submitSearch(s, e); }
     });
+    // The input is auto-focused on boot (no focus event fires): show the history view right away.
+    if (document.activeElement === qEl && !qEl.value.trim()) renderSuggest();
   }
   // Open the result page: navigate in the current tab by default (no stray blank tabs); hold Cmd/Ctrl for a new tab.
   function openResult(url, ev) {
@@ -1149,6 +1345,8 @@
       return;
     }
     if (!q) return;
+    // Record the submission in the search history (URL jumps excluded — those are navigations, not searches).
+    if (!looksLikeUrl(q)) pushHistory(q);
 
     // AI engines: WorkBuddy opens via deep link with a pre-filled draft; Doubao / ChatGPT auto-send through the nonce channel.
     if (currentEngine.ai) {
@@ -3716,6 +3914,7 @@
   // ---------- Boot ----------
   async function boot() {
     const { raw, data } = await loadDataIntoState();
+    searchHistory = await loadHistory(); // lt.history: local-only, kept out of lt.settings and cloud sync
     setLangOnly(state.settings.lang);
     applyTheme();
     // Focus the search box without scrolling: the HTML autofocus attribute makes the browser
@@ -3752,8 +3951,8 @@
     // Search
     const form = document.getElementById('search-form');
     const qEl = document.getElementById('q');
-    form.addEventListener('submit', e => { e.preventDefault(); submitSearch(qEl.value, e); });
-    document.getElementById('search-go').addEventListener('click', e => submitSearch(qEl.value, e));
+    form.addEventListener('submit', e => { e.preventDefault(); if (!maybeCopyCalc()) submitSearch(qEl.value, e); });
+    document.getElementById('search-go').addEventListener('click', e => { if (!maybeCopyCalc()) submitSearch(qEl.value, e); });
     bindSuggest();
     // Esc while a template is active: drop the template and go back to plain search.
     qEl.addEventListener('keydown', e => {
@@ -3885,7 +4084,7 @@
   // Exposed for the offline probe harness: it has to drive port fallback and timeout paths with a
   // stubbed fetch, which is impossible from the outside.
   window.LT_PROBE_WB = probeWorkBuddy;
-  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord, formatClock };
+  window.LT_PURE = { looksLikeUrl, sanitizeWallpaperUrl, sanitizeIconDataUrl, iconCropRect, hostnameOf, iconFor, iconGlyphHtml, normalizeWidgets, normalizeWidgetPos, resolveTheme, todayStr, pickRotateCandidate, pickQuoteIndex, isFolder, makeFolder, folderMergeItems, folderRemoveChild, folderRename, normalizeFolderRecord, formatClock, calcEval, normalizeCalc, updateHistory, histMatches };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

@@ -1093,6 +1093,51 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 }
 .suggest-list li:hover, .suggest-list li.active { background: var(--tint-3); color: var(--ink); }
 
+/* Inline calculator row: pinned to the top of the suggestion dropdown. */
+.suggest-list .sg-calc { justify-content: space-between; gap: 12px; color: var(--ink); }
+.suggest-list .sg-calc .sg-calc-expr { overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.suggest-list .sg-calc .sg-calc-hint { flex: none; font-size: 11px; color: var(--ink-3); }
+
+/* Search history: quiet section header + rows with an icon-level × delete. */
+.suggest-list .sg-head {
+  justify-content: space-between;
+  padding: 6px 12px 2px;
+  font-size: 11px;
+  color: var(--ink-3);
+  cursor: default;
+}
+.suggest-list .sg-head:hover { background: transparent; color: var(--ink-3); }
+.suggest-list .sg-clear {
+  padding: 0 2px;
+  font-size: 11px;
+  color: var(--ink-3);
+  background: none; border: 0;
+  cursor: pointer;
+  transition: color .12s ease;
+}
+.suggest-list .sg-clear:hover { color: var(--ink); }
+.suggest-list .sg-hist .sg-hist-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.suggest-list .sg-hist-del {
+  flex: none;
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 8px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--ink-3);
+  opacity: 0;
+  transition: opacity .12s ease, color .12s ease, background .12s ease;
+}
+.suggest-list .sg-hist:hover .sg-hist-del { opacity: 1; }
+.suggest-list .sg-hist-del:hover { color: var(--ink); background: var(--tint-2); }
+
+/* Tab engine cycling: a brief, quiet highlight on the engine button. */
+@keyframes eng-flash {
+  0% { box-shadow: inset 0 0 0 1.5px var(--accent); background: rgba(125, 211, 252, 0.14); }
+  100% { box-shadow: inset 0 0 0 0 transparent; background: transparent; }
+}
+#engine-btn.eng-flash { animation: eng-flash .55s ease; }
+
 /* ====== Icon grid ====== */
 #grid-wrap { margin-top: clamp(22px, 3.5vh, 34px); }
 .group-bar {

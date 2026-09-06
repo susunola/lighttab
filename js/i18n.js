@@ -97,6 +97,10 @@
     'search.label':     { zh: '搜索', en: 'Search' },
     'search.placeholder': { zh: '搜索或输入网址', en: 'Search or enter a URL' },
     'search.placeholder_engine': { zh: '使用 {engine} 搜索，或输入网址回车', en: 'Search with {engine}, or enter a URL' },
+    'calc.enter_copy': { zh: 'Enter 复制结果', en: 'Enter to copy' },
+    'hist.recent': { zh: '最近搜索', en: 'Recent' },
+    'hist.clear':  { zh: '清空', en: 'Clear all' },
+    'hist.del':    { zh: '删除这条记录', en: 'Delete this entry' },
 
     // ---------- AI template palette ----------
     'tpl.title':   { zh: 'AI 模板 ( / )', en: 'AI templates ( / )' },
