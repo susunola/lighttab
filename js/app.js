@@ -78,6 +78,8 @@
     clockSeconds: false,
     // Clock face font: 'modern' (bundled Inter, default) | 'serif' | 'mono' (system stacks, zero downloads).
     clockFont: 'modern',
+    // Optional second timezone (IANA name, e.g. "Asia/Tokyo"); '' = off. Rendered under the clock.
+    clockTz2: '',
     // Minimalism toggles: true removes the search bar / clock card from the layout entirely
     // (display:none, not just opacity — the icon grid simply rides up when both are hidden).
     hideSearch: false,
@@ -849,6 +851,28 @@
     el.classList.toggle('clock-font-serif', f === 'serif');
     el.classList.toggle('clock-font-mono', f === 'mono');
   }
+  // Optional second timezone line under the clock (Settings → General). Hidden when empty or the
+  // IANA zone is invalid. Updated on the same 1-minute cadence as the clock.
+  function renderTz2(now) {
+    const el = document.getElementById('clock-tz2');
+    if (!el) return;
+    const zone = String((state.settings && state.settings.clockTz2) || '').trim();
+    if (!zone) { el.hidden = true; return; }
+    let fmt;
+    try {
+      fmt = new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit', minute: '2-digit',
+        hour12: state.settings.clock12h === true,
+        timeZone: zone
+      });
+    } catch (_) { el.hidden = true; return; }
+    const city = zone.split('/').pop().replace(/_/g, ' ');
+    el.textContent = `${city} · ${fmt.format(now || new Date())}`;
+    el.hidden = false;
+  }
+  function validTz(zone) {
+    try { new Intl.DateTimeFormat('en-US', { timeZone: zone }); return true; } catch (_) { return false; }
+  }
   function startClock() {
     const hhmmEl = document.getElementById('clock-hhmm');
     const secEl = document.getElementById('clock-sec');
@@ -874,6 +898,7 @@
         const fc = formatClock(hh, mm, state.settings.clock12h === true, isEn());
         hhmmEl.textContent = fc.hhmm;
         if (ampmEl) { ampmEl.textContent = fc.ampm; ampmEl.hidden = !fc.ampm; }
+        renderTz2(); // second timezone ticks on the same minute boundary
       }
       if (hh !== lastHour) {
         lastHour = hh;
@@ -3018,6 +3043,7 @@
     if (!Array.isArray(state.settings.groups)) state.settings.groups = [];
     state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
     state.settings.accent = safeColor(state.settings.accent) || '';
+    state.settings.clockTz2 = (typeof state.settings.clockTz2 === 'string' ? state.settings.clockTz2.trim().slice(0, 64) : '');
     state.settings.widgets = normalizeWidgets(state.settings.widgets);
     state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
     state.settings.clock12h = state.settings.clock12h === true;
@@ -3355,6 +3381,18 @@
       closeSuggest(); // a hidden box can hold no open dropdown
       applySearchVis();
     });
+    // Second timezone (General): IANA name; invalid values are rejected and the old one kept.
+    const tz2Input = document.getElementById('f-tz2');
+    if (tz2Input) tz2Input.addEventListener('change', async () => {
+      const v = tz2Input.value.trim();
+      if (v && !validTz(v)) {
+        tz2Input.value = state.settings.clockTz2 || '';
+        return showToast(t('toast.tz2_invalid'));
+      }
+      state.settings.clockTz2 = v;
+      await Store.set(K.settings, state.settings);
+      renderTz2();
+    });
     const hideClockCb = document.getElementById('f-hideclock');
     if (hideClockCb) hideClockCb.addEventListener('change', async () => {
       state.settings.hideClock = !!hideClockCb.checked;
@@ -3430,6 +3468,8 @@
       if (clockSecCb) clockSecCb.checked = state.settings.clockSeconds === true;
       const clockFontSel = document.getElementById('f-clockfont');
       if (clockFontSel) clockFontSel.value = CLOCK_FONTS.includes(state.settings.clockFont) ? state.settings.clockFont : 'modern';
+      const tz2In = document.getElementById('f-tz2');
+      if (tz2In) tz2In.value = state.settings.clockTz2 || '';
       const hideSearchCb = document.getElementById('f-hidesearch');
       if (hideSearchCb) hideSearchCb.checked = state.settings.hideSearch === true;
       const hideClockCb = document.getElementById('f-hideclock');
@@ -4784,6 +4824,7 @@
     // Read-time hardening: whatever survived migration (old versions, cloud pulls, hand-edited
     // files) is coerced into shape before any renderer or submit path can touch it.
     state.settings.accent = safeColor(state.settings.accent) || '';
+    state.settings.clockTz2 = (typeof state.settings.clockTz2 === 'string' ? state.settings.clockTz2.trim().slice(0, 64) : '');
     state.settings.groups = sanitizeGroups(state.settings.groups);
     state.settings.customEngines = sanitizeCustomEngines(state.settings.customEngines);
     state.settings.hiddenEngines = sanitizeHiddenEngines(state.settings.hiddenEngines);

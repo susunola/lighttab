@@ -2010,6 +2010,14 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 
+// ---------- 35) second timezone ----------
+{
+  assert(/id="clock-tz2"/.test(html) && /id="f-tz2"/.test(html) && /function renderTz2/.test(appSrc)
+    && /function validTz/.test(appSrc) && /renderTz2\(\); \/\/ second timezone/.test(appSrc),
+    'optional second timezone (clock + settings) is wired');
+  for (const k of ['gen.tz2', 'gen.tz2_ph', 'toast.tz2_invalid']) assert(i18nSrc.includes(`'${k}'`), `tz i18n ${k}`);
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);

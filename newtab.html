@@ -58,6 +58,7 @@
           <span class="clock-ampm" id="clock-ampm" hidden></span>
         </div>
         <div class="clock-date" id="clock-date"></div>
+        <div class="clock-tz2" id="clock-tz2" hidden></div>
         <div class="clock-lunar" id="clock-lunar"></div>
         <div class="clock-greet" id="clock-greet"></div>
       </section>
@@ -437,6 +438,10 @@
               <option value="serif" data-i18n="clockfont.serif">Serif</option>
               <option value="mono" data-i18n="clockfont.mono">Mono</option>
             </select>
+          </label>
+          <label>
+            <span data-i18n="gen.tz2">Second timezone</span>
+            <input id="f-tz2" type="text" autocomplete="off" spellcheck="false" maxlength="64" data-i18n-ph="gen.tz2_ph" placeholder="e.g. Asia/Tokyo">
           </label>
           <label class="check-row">
             <input type="checkbox" id="f-hidesearch">
