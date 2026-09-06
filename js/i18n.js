@@ -116,6 +116,8 @@
     'movie.rating': { zh: '豆瓣评分', en: 'Rating' },
     'movie.douban': { zh: '豆瓣', en: 'Douban' },
     'movie.next':   { zh: '换一部', en: 'Next' },
+    'movie.prev':   { zh: '上一部', en: 'Previous' },
+    'movie.rand':   { zh: '随机', en: 'Random' },
 
     // ---------- To-dos ----------
     'todo.placeholder': { zh: '添加一件事…', en: 'Add a task…' },
@@ -123,6 +125,7 @@
     'todo.add':         { zh: '添加', en: 'Add' },
     'todo.empty':       { zh: '今天要做点什么？', en: 'What needs doing today?' },
     'todo.del':         { zh: '删除', en: 'Delete' },
+    'todo.clear_done':  { zh: '清除已完成', en: 'Clear completed' },
     'todo.due':         { zh: '截止日期（可选）', en: 'Due date (optional)' },
     'todo.due_clear':   { zh: '点击移除截止日期', en: 'Click to clear the due date' },
     'todo.overdue':     { zh: '已逾期', en: 'Overdue' },
@@ -190,16 +193,6 @@
     'wp.graphite': { zh: '石墨', en: 'Graphite' },
     'wp.rose':     { zh: '暮红', en: 'Dusk Red' },
     'wp.custom':   { zh: '自定义', en: 'Custom' },
-    'wp.city-1':   { zh: '城市霓虹', en: 'City Lights' },
-    'wp.city-2':   { zh: '城市天际线', en: 'City Skyline' },
-    'wp.space-1':  { zh: '银河', en: 'Milky Way' },
-    'wp.space-2':  { zh: '深空', en: 'Deep Space' },
-    'wp.mount-1':  { zh: '夜山', en: 'Night Peaks' },
-    'wp.mount-2':  { zh: '山间星河', en: 'Peaks & Stars' },
-    'wp.sea-1':    { zh: '月光海面', en: 'Moonlit Sea' },
-    'wp.sea-2':    { zh: '夜海沙滩', en: 'Night Shore' },
-    'wp.forest-1': { zh: '林间迷雾', en: 'Forest Mist' },
-    'wp.forest-2': { zh: '暗夜森林', en: 'Dark Forest' },
 
     // ---------- Card / context menu ----------
     'card.edit': { zh: '编辑', en: 'Edit' },
@@ -343,7 +336,7 @@
     'gen.data_tip': { zh: '备份/恢复全部数据（快捷方式、待办、设置、壁纸）。导出文件可跨浏览器迁移。', en: 'Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.' },
     'gen.reset':    { zh: '恢复默认数据', en: 'Reset to defaults' },
     'gen.done':     { zh: '完成', en: 'Done' },
-    'gen.version':  { zh: 'LightTab v1.19.0 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.19.0 · Minimal new tab · Local-first, optional cloud sync' },
+    'gen.version':  { zh: 'LightTab v1.20.0 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.20.0 · Minimal new tab · Local-first, optional cloud sync' },
 
     // ---------- Templates tab ----------
     'prompt.title':  { zh: 'Prompt 模板 · AI 发射台', en: 'Prompt templates · AI launcher' },

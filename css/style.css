@@ -859,7 +859,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   border-top: 1px solid var(--line);
 }
 .movie-link,
-.movie-next {
+.movie-next,
+.movie-prev,
+.movie-rand {
   font-size: 12px;
   line-height: 1;
   padding: 6px 11px;
@@ -872,7 +874,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
 .movie-link:hover,
-.movie-next:hover { background: var(--tint-3); color: var(--ink); }
+.movie-next:hover,
+.movie-prev:hover,
+.movie-rand:hover { background: var(--tint-3); color: var(--ink); }
 .movie-next { margin-left: auto; }
 
 /* Weather widget (opt-in, Open-Meteo) */
@@ -2960,3 +2964,16 @@ input[type="file"]:focus-visible {
   border-top: 1px solid var(--line);
 }
 .sync-data .data-label { display: block; margin-bottom: 6px; }
+
+/* To-do: clear-completed link under the list. */
+.todo-clear-done {
+  margin: 8px auto 0;
+  display: block;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: color .12s ease;
+}
+.todo-clear-done:hover { color: var(--ink); }

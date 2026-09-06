@@ -35,17 +35,7 @@
     // The factory default is a bundled render (procedurally generated, zero licensing surface);
     // entries with `img` are bundled files, entries with `css` are gradients.
     { id: 'dusk',     name: 'Dusk Mountain', img: 'assets/wallpaper-dusk.jpg' },
-    // Curated dark wallpapers (sources + per-artist licence notes: assets/wallpapers/SOURCES.md).
-    { id: 'city-1',    name: 'City Lights',   img: 'assets/wallpapers/city-1.jpg',    light: false },
-    { id: 'city-2',    name: 'City Skyline',  img: 'assets/wallpapers/city-2.jpg',    light: false },
-    { id: 'space-1',   name: 'Milky Way',     img: 'assets/wallpapers/space-1.jpg',   light: false },
-    { id: 'space-2',   name: 'Deep Space',    img: 'assets/wallpapers/space-2.jpg',   light: false },
-    { id: 'mount-1',   name: 'Night Peaks',   img: 'assets/wallpapers/mount-1.jpg',   light: false },
-    { id: 'mount-2',   name: 'Peaks & Stars', img: 'assets/wallpapers/mount-2.jpg',   light: false },
-    { id: 'sea-1',     name: 'Moonlit Sea',   img: 'assets/wallpapers/sea-1.jpg',     light: false },
-    { id: 'sea-2',     name: 'Night Shore',   img: 'assets/wallpapers/sea-2.jpg',     light: false },
-    { id: 'forest-1',  name: 'Forest Mist',   img: 'assets/wallpapers/forest-1.jpg',  light: false },
-    { id: 'forest-2',  name: 'Dark Forest',   img: 'assets/wallpapers/forest-2.jpg',  light: false },
+    // Store builds bundle only self-generated art; the online library serves curated wallpapers.
     { id: 'midnight', name: 'Dusk Blue',    css: 'linear-gradient(135deg,#0b1426 0%,#152a4f 45%,#1c3d6e 100%)' },
     { id: 'aurora',   name: 'Aurora',       css: 'linear-gradient(135deg,#0f1c3a 0%,#1e3a6e 50%,#2d5f8f 100%)' },
     { id: 'violet',   name: 'Night Violet', css: 'linear-gradient(135deg,#0f0a26 0%,#2b1b54 50%,#432e7a 100%)' },
@@ -2955,7 +2945,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.19.0',
+      version: '1.20.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -3816,8 +3806,10 @@
   function renderTodos() {
     const list = document.getElementById('todo-list');
     const countEl = document.getElementById('todo-count');
+    const clearBtn = document.getElementById('todo-clear-done');
     const done = state.todos.filter(it => it.done).length;
     countEl.textContent = done + '/' + state.todos.length;
+    if (clearBtn) clearBtn.hidden = done === 0 || !state.todos.length;
     if (!state.todos.length) {
       list.innerHTML = `<li class="todo-empty">${t('todo.empty')}</li>`;
       return;
@@ -3866,6 +3858,15 @@
       await saveTodos();
       renderTodos();
       renderCalendar(); // completion / deletion also moves the calendar's due dots
+    });
+    const clearDoneBtn = document.getElementById('todo-clear-done');
+    if (clearDoneBtn) clearDoneBtn.addEventListener('click', async () => {
+      const before = state.todos.length;
+      state.todos = state.todos.filter(it => !it.done);
+      if (state.todos.length === before) return;
+      await saveTodos();
+      renderTodos();
+      renderCalendar();
     });
     renderTodos();
   }
@@ -4056,11 +4057,23 @@
         '</div>' +
       '</div>' +
       '<div class="movie-actions">' +
+        '<button type="button" class="movie-prev" id="movie-prev" data-i18n="movie.prev">‹ Prev</button>' +
+        '<button type="button" class="movie-rand" id="movie-rand" data-i18n="movie.rand">Random</button>' +
         '<a class="movie-link" href="' + douban + '" target="_blank" rel="noopener" data-i18n="movie.douban">豆瓣</a>' +
-        '<button type="button" class="movie-next" id="movie-next" data-i18n="movie.next">换一部</button>' +
+        '<button type="button" class="movie-next" id="movie-next" data-i18n="movie.next">Next ›</button>' +
       '</div>';
+    const len = DOUBAN_ANNUAL_BEST.length;
+    const prev = card.querySelector('#movie-prev');
+    if (prev) prev.addEventListener('click', () => { movieCursor = (i - 1 + len) % len; renderMovie(); });
+    const rand = card.querySelector('#movie-rand');
+    if (rand) rand.addEventListener('click', () => {
+      let r = i;
+      if (len > 1) { while (r === i) r = Math.floor(Math.random() * len); }
+      movieCursor = r;
+      renderMovie();
+    });
     const next = card.querySelector('#movie-next');
-    if (next) next.addEventListener('click', () => { movieCursor = i + 1; renderMovie(); });
+    if (next) next.addEventListener('click', () => { movieCursor = (i + 1) % len; renderMovie(); });
     // Re-apply any i18n labels injected above (t() already localized the aria; data-i18n handles the rest).
     if (window.LT_I18N && window.LT_I18N.applyStatic) window.LT_I18N.applyStatic();
   }

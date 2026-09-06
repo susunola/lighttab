@@ -1976,15 +1976,18 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   }
 }
 
-// ---------- 32) curated dark wallpapers (bundled) ----------
+// ---------- 32) store-safety: no third-party wallpapers are bundled ----------
+// Third-party artwork (e.g. Wallhaven uploads) cannot be redistributed freely, so the shipped
+// build must only bundle self-generated art (the dusk render). Curated wallpapers live in the
+// online library instead. This guard stops a regression from re-adding bundled third-party art.
 {
-  const files = ['city-1','city-2','space-1','space-2','mount-1','mount-2','sea-1','sea-2','forest-1','forest-2'];
-  for (const f of files) {
-    assert(fs.existsSync(path.join(ROOT, 'assets/wallpapers', f + '.jpg')), `bundled wallpaper ${f}.jpg exists`);
-    assert(i18nSrc.includes(`'wp.${f}'`), `wp.${f} has an i18n label`);
+  const gone = ['city-1','city-2','space-1','space-2','mount-1','mount-2','sea-1','sea-2','forest-1','forest-2'];
+  for (const f of gone) {
+    assert(!fs.existsSync(path.join(ROOT, 'assets/wallpapers', f + '.jpg')), `no bundled third-party wallpaper ${f}.jpg`);
+    assert(!appSrc.includes(`{ id: '${f}'`), `WALLPAPERS no longer lists ${f}`);
+    assert(!i18nSrc.includes(`'wp.${f}'`), `wp.${f} label removed`);
   }
-  assert(fs.existsSync(path.join(ROOT, 'assets/wallpapers/SOURCES.md')), 'wallpaper sources/licence note exists');
-  assert(appSrc.includes(`{ id: 'city-1'`) && appSrc.includes(`{ id: 'forest-2'`), 'WALLPAPERS lists the curated set');
+  assert(!fs.existsSync(path.join(ROOT, 'assets/wallpapers')), 'assets/wallpapers dir is gone');
 }
 
 // ---------- 33) wallpaper shuffle ----------
@@ -1993,6 +1996,18 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
     && /fetchWallLib\(\{ shuffle: true \}\)/.test(appSrc) && /function collectFavUrls/.test(appSrc),
     'wallpaper "shuffle" (random idx batch) is wired');
   assert(/wall\.shuffle/.test(i18nSrc), 'wallpaper shuffle has an i18n label');
+}
+
+// ---------- 34) store-prep artifacts + v1.20.0 features ----------
+{
+  assert(/id="movie-prev"/.test(appSrc) && /id="movie-rand"/.test(appSrc) && /movieCursor = \(i - 1 \+ len\) % len/.test(appSrc),
+    'movie widget has Previous/Random controls');
+  assert(/id="todo-clear-done"/.test(html) && /todo-clear-done/.test(appSrc), 'to-dos can clear completed items');
+  assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
+  assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
+  assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
+  assert(JSON.parse(read('manifest.json')).version === '1.20.0', 'manifest version is 1.20.0');
+  for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 
 console.log('');
