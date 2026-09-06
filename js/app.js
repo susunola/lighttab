@@ -1945,7 +1945,29 @@
     clearTimeout(mergeTimer);
     mergeTimer = 0;
     mergeCardId = null;
-    document.querySelectorAll('.card.drag-merge').forEach(n => n.classList.remove('drag-merge'));
+    document.querySelectorAll('.card.dwell, .card.drag-merge').forEach(n => n.classList.remove('dwell', 'drag-merge'));
+    document.querySelectorAll('.card .dwell-bar').forEach(b => b.remove());
+  }
+  // Only a drop that would actually merge gets the dwell affordance: a folder cannot nest into a
+  // plain shortcut, so hovering that combination stays a plain reorder (no misleading progress).
+  function dwellMergeable(srcId, tgtId) {
+    if (!srcId || !tgtId) return false;
+    const src = state.items.find(x => x.id === srcId);
+    const tgt = state.items.find(x => x.id === tgtId);
+    if (!src || !tgt) return false;
+    return !(isFolder(src) && !isFolder(tgt));
+  }
+  // Start the 550ms fill bar on a card; the timer in the dragover handler flips it to drag-merge.
+  function armDwellBar(card) {
+    if (!card) return;
+    if (!card.querySelector('.dwell-bar')) {
+      const bar = document.createElement('span');
+      bar.className = 'dwell-bar';
+      bar.setAttribute('aria-hidden', 'true');
+      card.appendChild(bar);
+    }
+    card.classList.add('dwell');
+    void card.offsetWidth; // restart the fill animation if the same card is re-armed
   }
   // Insert an item into the grid: next to refId (before/after), or at the end of the visible scope.
   function insertIntoView(child, refId, before) {
@@ -2177,13 +2199,25 @@
         e.dataTransfer.dropEffect = 'move';
         document.querySelectorAll('.card.drag-over').forEach(n => n.classList.remove('drag-over'));
         a.classList.add('drag-over');
-        // Hover dwell: lingering on a tile arms folder mode — a stronger highlight, and the
-        // drop merges instead of reordering. Moving on to another tile disarms it.
+        // Hover dwell: lingering on a tile arms folder mode — a stronger highlight plus a 550ms
+        // progress bar under the tile, and the drop merges instead of reordering. Moving on to
+        // another tile disarms it. Impossibly-mergeable combos (folder onto shortcut) skip the
+        // dwell affordance and stay a plain reorder.
         if (mergeCardId !== a.dataset.id) {
           clearMergeArmed();
+          // Children dragged out of a folder popup can merge onto any card; grid cards cannot
+          // merge a folder onto a plain shortcut (that combination is a plain reorder).
+          const mergeable = folderDrag ? true : dwellMergeable(gridDragId, a.dataset.id);
+          if (!mergeable) return;
           mergeCardId = a.dataset.id;
           const el = a;
-          mergeTimer = setTimeout(() => { if (mergeCardId === el.dataset.id) el.classList.add('drag-merge'); }, FOLDER_DWELL_MS);
+          armDwellBar(el);
+          mergeTimer = setTimeout(() => {
+            if (mergeCardId === el.dataset.id) {
+              el.classList.remove('dwell'); // the bar finished filling
+              el.classList.add('drag-merge');
+            }
+          }, FOLDER_DWELL_MS);
         }
       });
       a.addEventListener('dragleave', () => a.classList.remove('drag-over'));

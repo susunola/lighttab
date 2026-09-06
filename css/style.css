@@ -2070,8 +2070,15 @@ svg.logo-tx text { font-family: inherit; }
   border: 1px solid var(--line);
   cursor: pointer;
   overflow: hidden;
-  background-color: var(--glass);
+  background-color: var(--tint-3);
+  background-image: linear-gradient(100deg, transparent 32%, rgba(255,255,255,.07) 50%, transparent 68%);
+  background-size: 220% 100%;
+  animation: wall-shimmer 1.15s linear infinite;
   transition: transform .14s ease, border-color .15s ease, box-shadow .14s ease;
+}
+@keyframes wall-shimmer {
+  from { background-position: 130% 0; }
+  to   { background-position: -130% 0; }
 }
 .wall-thumb:hover { transform: translateY(-2px); box-shadow: var(--shadow-1); }
 .wall-thumb.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(125,211,252,0.25); }
@@ -2613,7 +2620,7 @@ html[data-theme="light"] {
   color-scheme: light;
   --ink: rgba(17, 24, 39, 0.92);
   --ink-2: rgba(17, 24, 39, 0.68);
-  --ink-3: rgba(17, 24, 39, 0.48);
+  --ink-3: rgba(17, 24, 39, 0.62);
   --line: rgba(17, 24, 39, 0.10);
   --line-2: rgba(17, 24, 39, 0.26);
   /* 0.66 white was effectively opaque: the measured interior sat at rgb(225,234,254) with a 0.76
@@ -2756,31 +2763,23 @@ html[data-theme="light"] .todo-item.done .t-check::after { background: #fff; }
   color: var(--ink-3);
 }
 
-/* ---------- Keyboard / accessibility: a visible focus ring everywhere Tab can land ---------- */
-.card:focus-visible,
-.icon-btn:focus-visible,
-.engine-btn:focus-visible,
-.engine-go:focus-visible,
-.tpl-trigger:focus-visible,
-.gchip:focus-visible,
-.avatar-btn:focus-visible,
-.todo-submit:focus-visible,
-.wall-thumb:focus-visible,
-.fcard:focus-visible,
-.palette-list li:focus-visible,
-.suggest-list li:focus-visible,
-button:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 10px;
-}
-/* The shortcut dialog keeps its own focus affordances; don't double-ring inputs. */
+/* Keyboard focus rings: the global :focus-visible at the top of the file covers every element
+ * uniformly. This section only adds an affordance for form controls, which the global rule
+ * deliberately leaves alone (inputs highlight through border/containers, not an outline). */
 .modal input:focus-visible,
 .modal textarea:focus-visible,
 .modal select:focus-visible,
-.search input:focus-visible {
+.engm-url:focus-visible,
+.folder-name-input:focus-visible {
   outline: none;
+  border-color: rgba(125, 211, 252, 0.65);
+  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.25);
+}
+.search input:focus-visible,
+.todo-add input:focus-visible,
+input[type="date"]:focus-visible,
+input[type="file"]:focus-visible {
+  outline: none; /* search / todo containers and native controls own their affordance */
 }
 
 /* Suggestion dropdown: quiet loading row while the network fetch is in flight. */
@@ -2803,4 +2802,37 @@ a:focus-visible {
 @keyframes sg-pulse {
   0%, 100% { opacity: .25; transform: translateY(0); }
   50%      { opacity: .95; transform: translateY(-2px); }
+}
+
+/* ---------- Folder-dwell merge: a 550ms progress bar under the hovered card ---------- */
+.card .dwell-bar {
+  position: absolute;
+  left: 14px; right: 14px;
+  bottom: 7px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: left;
+}
+.card.dwell .dwell-bar {
+  opacity: .9;
+  animation: dwell-fill 550ms linear forwards;
+}
+@keyframes dwell-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* ---------- Reduced transparency (users who opt out of translucency) ---------- */
+@media (prefers-reduced-transparency: reduce) {
+  .widget, .search, .engine-list, .suggest-list, .palette, .menu, #context-menu,
+  .avatar-menu, #toast, #folder-pop, .modal, .card:hover, .wall-thumb {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* Keep readability: near-opaque glass instead of translucent blur. */
+  html[data-theme="dark"]  { --glass: rgba(12, 16, 28, 0.94); }
+  html[data-theme="light"] { --glass: rgba(255, 255, 255, 0.95); }
 }

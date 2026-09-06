@@ -1717,7 +1717,8 @@ assert(/if \(was\) setFolderTileExpanded\(was, false\)/.test(appSrc), 'closing a
 assert(/let modalReturnFocus = null;/.test(appSrc) && /function hideModal\(m, refocus\)/.test(appSrc),
   'modal openers are remembered and restored on close');
 assert(/openModals\.forEach\(m => hideModal\(m\)\)/.test(appSrc), 'Escape closes modals through hideModal (focus return)');
-assert(/\.card:focus-visible/.test(cssSrc), 'CSS ships a visible keyboard focus ring for cards');
+assert(/:focus-visible \{ outline: 2px solid var\(--accent-2\); outline-offset: 2px; \}/.test(cssSrc),
+  'CSS ships a visible global keyboard focus ring (covers cards and controls alike)');
 assert(/function bindModalTrap\(\)/ .test(appSrc) && /bindModalTrap\(\);/.test(appSrc),
   'an open modal traps Tab / Shift+Tab inside it (a11y)');
 assert(/!isEn\(\) \? '<p class="movie-blurb">'/.test(appSrc),
@@ -1883,6 +1884,29 @@ console.log('[27] sync.js: applyPull / pushDirty (LWW + deletion mirroring)');
     assert(!test.state.meta.docs['lt.unknown.key'], 'onLocalWrite: keys outside SYNC_KEYS are ignored');
     assert(LT_SYNC.isLoggedIn() === true && LT_SYNC.getState().email === 'a@b.com', 'getState()/isLoggedIn() reflect the current auth');
   }
+}
+
+// ---------- 28) UI polish batch: widget wrap, dwell progress, dialogs, tokens ----------
+console.log('[28] UI polish: dwell bar, reduced transparency, dialog semantics, focus/contrast');
+{
+  assert(/\.left \{\n    flex: none;[\s\S]{0,80}flex-wrap: wrap;/.test(cssSrc), 'left widgets wrap on the 721-1024px breakpoint');
+  assert(/\.card\.dwell \.dwell-bar/.test(cssSrc) && /@keyframes dwell-fill/.test(cssSrc), 'dwell-merge shows a 550ms progress bar');
+  assert(/function dwellMergeable/.test(appSrc) && /function armDwellBar/.test(appSrc)
+    && /folderDrag \? true : dwellMergeable\(gridDragId, a\.dataset\.id\)/.test(appSrc),
+    'dwell affordance only arms for mergeable combinations');
+  assert(/@media \(prefers-reduced-transparency: reduce\)/.test(cssSrc), 'CSS honours prefers-reduced-transparency');
+  assert(/\.wall-thumb \{\n  position: relative;[\s\S]{0,700}wall-shimmer/.test(cssSrc), 'wall thumbs show a shimmer placeholder while loading');
+  assert(/--ink-3: rgba\(17, 24, 39, 0\.62\);/.test(cssSrc), 'light-theme small text meets AA contrast (0.62 alpha)');
+  assert(/role="dialog" aria-modal="true" aria-labelledby="site-modal-title"/.test(html)
+    && /role="dialog" aria-modal="true"/.test(html), 'modals expose dialog semantics');
+  assert(/\.modal input:focus-visible,[\s\S]*border-color: rgba\(125, 211, 252, 0\.65\)/.test(cssSrc),
+    'modal form controls get a visible keyboard focus ring');
+  const i18nSandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
+  vm.createContext(i18nSandbox);
+  vm.runInContext(i18nSrc, i18nSandbox, { filename: 'i18n.js' });
+  const I = i18nSandbox.window.LT_I18N;
+  assert(I.t('onboard.hint').includes('/') && I.t('onboard.hint').length > 30, 'onboarding hints at the / AI template launcher');
+  assert(/\.sg-loading \.sg-dot/.test(cssSrc), 'loader dots keep the section styling');
 }
 
 console.log('');

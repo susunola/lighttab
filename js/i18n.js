@@ -198,7 +198,7 @@
     'grid.empty_view': { zh: '该视图暂无快捷方式，点 ＋ 添加', en: 'No shortcuts in this view — click ＋ to add' },
 
     // ---------- First-run onboarding hint (one quiet card, dismissed forever) ----------
-    'onboard.hint':    { zh: '在这里搜索 · 点网格末尾的 ＋ 添加快捷方式 · 右键图标看更多选项', en: 'Search here · add shortcuts with the ＋ tile · right-click a tile for more options' },
+    'onboard.hint':    { zh: '在这里搜索 · 点网格末尾的 ＋ 添加快捷方式 · 右键图标看更多选项 · 输入 / 打开 AI 模板', en: 'Search here · add shortcuts with the ＋ tile · right-click a tile for more options · press / for AI templates' },
     'onboard.dismiss': { zh: '知道了', en: 'Got it' },
 
     // ---------- Groups ----------
