@@ -190,6 +190,16 @@
     'wp.graphite': { zh: '石墨', en: 'Graphite' },
     'wp.rose':     { zh: '暮红', en: 'Dusk Red' },
     'wp.custom':   { zh: '自定义', en: 'Custom' },
+    'wp.city-1':   { zh: '城市霓虹', en: 'City Lights' },
+    'wp.city-2':   { zh: '城市天际线', en: 'City Skyline' },
+    'wp.space-1':  { zh: '银河', en: 'Milky Way' },
+    'wp.space-2':  { zh: '深空', en: 'Deep Space' },
+    'wp.mount-1':  { zh: '夜山', en: 'Night Peaks' },
+    'wp.mount-2':  { zh: '山间星河', en: 'Peaks & Stars' },
+    'wp.sea-1':    { zh: '月光海面', en: 'Moonlit Sea' },
+    'wp.sea-2':    { zh: '夜海沙滩', en: 'Night Shore' },
+    'wp.forest-1': { zh: '林间迷雾', en: 'Forest Mist' },
+    'wp.forest-2': { zh: '暗夜森林', en: 'Dark Forest' },
 
     // ---------- Card / context menu ----------
     'card.edit': { zh: '编辑', en: 'Edit' },

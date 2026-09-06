@@ -1975,6 +1975,17 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   }
 }
 
+// ---------- 32) curated dark wallpapers (bundled) ----------
+{
+  const files = ['city-1','city-2','space-1','space-2','mount-1','mount-2','sea-1','sea-2','forest-1','forest-2'];
+  for (const f of files) {
+    assert(fs.existsSync(path.join(ROOT, 'assets/wallpapers', f + '.jpg')), `bundled wallpaper ${f}.jpg exists`);
+    assert(i18nSrc.includes(`'wp.${f}'`), `wp.${f} has an i18n label`);
+  }
+  assert(fs.existsSync(path.join(ROOT, 'assets/wallpapers/SOURCES.md')), 'wallpaper sources/licence note exists');
+  assert(appSrc.includes(`{ id: 'city-1'`) && appSrc.includes(`{ id: 'forest-2'`), 'WALLPAPERS lists the curated set');
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);
