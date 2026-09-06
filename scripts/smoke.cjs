@@ -1723,9 +1723,165 @@ assert(/function bindModalTrap\(\)/ .test(appSrc) && /bindModalTrap\(\);/.test(a
 assert(/!isEn\(\) \? '<p class="movie-blurb">'/.test(appSrc),
   'the zh-only movie blurb is hidden in the English UI');
 
+// ---------- 27) sync.js behavior: whole-document LWW + deletion mirroring ----------
+// applyPull/pushDirty are async, so this section (and the final summary/exit below) runs inside an
+// async IIFE — everything above stays plain synchronous script, unchanged.
+(async () => {
+console.log('[27] sync.js: applyPull / pushDirty (LWW + deletion mirroring)');
+{
+  // Loads a fresh copy of sync.js into its own vm context, wired to an in-memory chrome.storage.local
+  // mock and a caller-supplied fetch stub. Returns the window.LT_SYNC._test hook (applyPull, pushDirty,
+  // state) plus the raw store object for assertions and a captured (never-fired) setTimeout log.
+  function loadSync(initialStorage, fetchImpl) {
+    const store = Object.assign({}, initialStorage);
+    const timers = [];
+    const chromeStorageLocal = {
+      get: async (keys) => {
+        if (keys == null) return Object.assign({}, store);
+        const arr = Array.isArray(keys) ? keys : [keys];
+        const out = {};
+        for (const k of arr) if (Object.prototype.hasOwnProperty.call(store, k)) out[k] = store[k];
+        return out;
+      },
+      set: async (obj) => { Object.assign(store, obj); },
+      remove: async (keys) => { (Array.isArray(keys) ? keys : [keys]).forEach((k) => { delete store[k]; }); }
+    };
+    const sandbox = {
+      chrome: { storage: { local: chromeStorageLocal } },
+      fetch: fetchImpl || (async () => { throw new Error('fetch should not be called in this scenario'); }),
+      console,
+      // setTimeout/clearTimeout are only recorded, never fired: tests drive applyPull/pushDirty
+      // directly, so scheduleSync's debounce must never actually kick off a real network call.
+      setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+      clearTimeout: () => {}
+    };
+    sandbox.window = sandbox;
+    vm.createContext(sandbox);
+    vm.runInContext(read('js/sync.js'), sandbox, { filename: 'sync.js' });
+    return { LT_SYNC: sandbox.LT_SYNC, test: sandbox.LT_SYNC._test, store, timers };
+  }
+  function mockRes(status, body) {
+    return { status, ok: status >= 200 && status < 300, headers: { get: () => null }, json: async () => body };
+  }
+  function sequenceFetch(responses) {
+    let i = 0;
+    return async () => responses[Math.min(i++, responses.length - 1)];
+  }
+
+  assert(!!loadSync({}).test, 'sync.js exposes window.LT_SYNC._test (applyPull/pushDirty/state)');
+
+  // -- applyPull --
+  {
+    const { test, store } = loadSync({});
+    await test.applyPull({ docs: { 'lt.items': { payload: '[{"id":1}]', updatedAt: 1000, rev: 5 } }, serverTime: 2000 }, true);
+    assert(JSON.stringify(store['lt.items']) === '[{"id":1}]', 'applyPull (first sync): server doc is written to local storage');
+    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 5, dirtyAt: 0 }), 'applyPull (first sync): meta rev stored, dirty cleared');
+    assert(test.state.meta.lastServerTime === 2000, 'applyPull stores serverTime for the next since= cursor');
+  }
+  {
+    // LWW: an unpushed local edit is newer than the incoming server doc -> local wins, server write skipped
+    const { test, store } = loadSync({ 'lt.items': ['LOCAL'] });
+    test.state.meta.docs['lt.items'] = { rev: 3, dirtyAt: 5000 };
+    await test.applyPull({ docs: { 'lt.items': { payload: '["SERVER"]', updatedAt: 4000, rev: 9 } } }, false);
+    assert(JSON.stringify(store['lt.items']) === '["LOCAL"]', 'applyPull LWW: newer local edit is not overwritten by an older server doc');
+    assert(test.state.meta.docs['lt.items'].dirtyAt === 5000 && test.state.meta.docs['lt.items'].rev === 9,
+      'applyPull LWW: rev syncs to the server doc but dirtyAt survives (pushDirty still owes a push)');
+  }
+  {
+    // LWW: no unpushed local edit -> server wins, dirty cleared
+    const { test, store } = loadSync({ 'lt.items': ['OLD'] });
+    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 1000 };
+    await test.applyPull({ docs: { 'lt.items': { payload: '["NEW"]', updatedAt: 5000, rev: 4 } } }, false);
+    assert(JSON.stringify(store['lt.items']) === '["NEW"]', 'applyPull LWW: an older local edit is overwritten by the server doc');
+    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 4, dirtyAt: 0 }), 'applyPull LWW server-wins: dirty cleared');
+  }
+  {
+    // Deletion mirroring fix: an empty payload is how pushDirty() represents a deleted document (see
+    // below); applyPull must remove the local copy instead of silently leaving it stale.
+    const { test, store } = loadSync({ 'lt.items': ['STALE'] });
+    test.state.meta.docs['lt.items'] = { rev: 2, dirtyAt: 0 };
+    await test.applyPull({ docs: { 'lt.items': { payload: '', updatedAt: 9000, rev: 10 } } }, false);
+    assert(!('lt.items' in store), 'applyPull: an empty-payload doc removes the stale local copy (deletion mirroring)');
+    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 10, dirtyAt: 0 }), 'applyPull deletion: meta rev/dirty still updated');
+  }
+  {
+    // A corrupted server payload must not crash or clobber local state; it just gets retried later.
+    const { test, store } = loadSync({ 'lt.items': ['SAFE'] });
+    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 0 };
+    await test.applyPull({ docs: { 'lt.items': { payload: '{not json', updatedAt: 100, rev: 2 } } }, false);
+    assert(JSON.stringify(store['lt.items']) === '["SAFE"]', 'applyPull: malformed payload leaves local storage untouched');
+    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 1, dirtyAt: 0 }), 'applyPull: malformed payload leaves meta untouched (retried next sync)');
+  }
+
+  // -- pushDirty --
+  {
+    const { test, store } = loadSync({ 'lt.items': ['A', 'B'] }, sequenceFetch([mockRes(200, { results: [{ key: 'lt.items', newRev: 2 }], serverTime: 999 })]));
+    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 500 };
+    await test.pushDirty();
+    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 2, dirtyAt: 0 }), 'pushDirty: a clean push updates rev and clears dirty');
+    assert(test.state.meta.lastServerTime === 999, 'pushDirty stores serverTime from the push response');
+    void store;
+  }
+  {
+    // Conflict, local wins: re-pushes with the server's rev as the new baseRev.
+    const { test, store } = loadSync({ 'lt.items': ['LOCAL'] }, sequenceFetch([
+      mockRes(200, { results: [{ key: 'lt.items', conflict: true, serverDoc: { payload: '["SERVER"]', updatedAt: 8000, rev: 5 } }] }),
+      mockRes(200, { results: [{ newRev: 6 }] })
+    ]));
+    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 9000 };
+    await test.pushDirty();
+    assert(JSON.stringify(store['lt.items']) === '["LOCAL"]', 'pushDirty conflict (local wins): local storage is never overwritten');
+    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 6, dirtyAt: 0 }), 'pushDirty conflict (local wins): rev/dirty updated from the retry');
+  }
+  {
+    // Conflict, server wins, server doc has content: local storage is overwritten.
+    const { test, store } = loadSync({ 'lt.items': ['LOCAL'] }, sequenceFetch([
+      mockRes(200, { results: [{ key: 'lt.items', conflict: true, serverDoc: { payload: '["SERVER"]', updatedAt: 9000, rev: 7 } }] })
+    ]));
+    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 1000 };
+    await test.pushDirty();
+    assert(JSON.stringify(store['lt.items']) === '["SERVER"]', 'pushDirty conflict (server wins): local storage is overwritten with the server doc');
+    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 7, dirtyAt: 0 }), 'pushDirty conflict (server wins): rev/dirty updated');
+  }
+  {
+    // Deletion mirroring fix, conflict-resolution path: an empty serverDoc payload must remove the
+    // local key, not just skip the write while still clearing dirty (the same bug as applyPull, on
+    // the other resolution path).
+    const { test, store } = loadSync({ 'lt.items': ['LOCAL'] }, sequenceFetch([
+      mockRes(200, { results: [{ key: 'lt.items', conflict: true, serverDoc: { payload: '', updatedAt: 9000, rev: 8 } }] })
+    ]));
+    test.state.meta.docs['lt.items'] = { rev: 1, dirtyAt: 1000 };
+    await test.pushDirty();
+    assert(!('lt.items' in store), 'pushDirty conflict (server wins, deleted): local copy is removed (deletion mirroring)');
+    assert(JSON.stringify(test.state.meta.docs['lt.items']) === JSON.stringify({ rev: 8, dirtyAt: 0 }), 'pushDirty conflict (server wins, deleted): rev/dirty updated');
+  }
+  {
+    // Nothing dirty -> no network call at all (the fetch stub throws if invoked).
+    const { test } = loadSync({});
+    let threw = false;
+    try { await test.pushDirty(); } catch { threw = true; }
+    assert(!threw, 'pushDirty: no dirty documents means no fetch call is made');
+  }
+
+  // -- onLocalWrite / getState / isLoggedIn --
+  {
+    const { LT_SYNC, test, timers } = loadSync({});
+    LT_SYNC.onLocalWrite('lt.items');
+    assert(!test.state.meta.docs['lt.items'] && timers.length === 0, 'onLocalWrite: logged out is a no-op (nothing marked dirty, no sync scheduled)');
+    test.state.auth = { token: 'tok', email: 'a@b.com', userId: 'u1' };
+    LT_SYNC.onLocalWrite('lt.items');
+    assert(!!test.state.meta.docs['lt.items'] && test.state.meta.docs['lt.items'].dirtyAt > 0, 'onLocalWrite: logged in stamps the key dirty');
+    assert(timers.length === 1, 'onLocalWrite: logged in schedules a debounced sync');
+    LT_SYNC.onLocalWrite('lt.unknown.key');
+    assert(!test.state.meta.docs['lt.unknown.key'], 'onLocalWrite: keys outside SYNC_KEYS are ignored');
+    assert(LT_SYNC.isLoggedIn() === true && LT_SYNC.getState().email === 'a@b.com', 'getState()/isLoggedIn() reflect the current auth');
+  }
+}
+
 console.log('');
 if (failures) {
   console.error(`smoke: ${failures} check(s) failed`);
   process.exit(1);
 }
 console.log('smoke: all checks passed');
+})();

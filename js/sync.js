@@ -374,6 +374,10 @@
     onLocalWrite,
     login, register, resend, logout, syncNow,
     getState,
-    isLoggedIn() { return !!(S.auth && S.auth.token); }
+    isLoggedIn() { return !!(S.auth && S.auth.token); },
+    // Test-only hook (mirrors app.js's window.LT_PURE): lets the offline smoke suite drive the
+    // LWW / deletion-mirroring logic directly against a mocked storage + fetch, without needing to
+    // fake an entire login round-trip. Adds one property to window; no behavior change.
+    _test: { applyPull, pushDirty, state: S }
   };
 })();
