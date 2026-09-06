@@ -116,6 +116,8 @@
     'movie.rating': { zh: '豆瓣评分', en: 'Rating' },
     'movie.douban': { zh: '豆瓣', en: 'Douban' },
     'movie.next':   { zh: '换一部', en: 'Next' },
+    'movie.prev':   { zh: '上一部', en: 'Previous' },
+    'movie.rand':   { zh: '随机', en: 'Random' },
 
     // ---------- To-dos ----------
     'todo.placeholder': { zh: '添加一件事…', en: 'Add a task…' },
@@ -123,9 +125,11 @@
     'todo.add':         { zh: '添加', en: 'Add' },
     'todo.empty':       { zh: '今天要做点什么？', en: 'What needs doing today?' },
     'todo.del':         { zh: '删除', en: 'Delete' },
+    'todo.clear_done':  { zh: '清除已完成', en: 'Clear completed' },
     'todo.due':         { zh: '截止日期（可选）', en: 'Due date (optional)' },
     'todo.due_clear':   { zh: '点击移除截止日期', en: 'Click to clear the due date' },
     'todo.overdue':     { zh: '已逾期', en: 'Overdue' },
+    'todo.overdue_count': { zh: '{n} 项逾期', en: '{n} overdue' },
 
     // ---------- Calendar ----------
     'cal.prev': { zh: '上月', en: 'Previous month' },
@@ -304,6 +308,9 @@
     'gen.accent':        { zh: '强调色', en: 'Accent colour' },
     'gen.accent_default':{ zh: '默认强调色', en: 'Default accent' },
     'gen.accent_custom': { zh: '自定义强调色', en: 'Custom accent colour' },
+    'gen.tz2':         { zh: '第二时区（可选）', en: 'Second timezone (optional)' },
+    'gen.tz2_ph':      { zh: '如 Asia/Tokyo（IANA 时区名）', en: 'e.g. Asia/Tokyo (IANA name)' },
+    'toast.tz2_invalid':{ zh: '时区名无效，需用 IANA 格式（如 Asia/Tokyo）', en: 'Invalid timezone — use the IANA form (e.g. Asia/Tokyo)' },
     'gen.clock12h':     { zh: '12 小时制时钟', en: '12-hour clock' },
     'gen.clock12h_tip': { zh: '开启后时钟按 12 小时制显示，带上午/下午小标。', en: 'Shows h:mm with a small AM/PM indicator (上午/下午 in Chinese).' },
     'gen.clockseconds':     { zh: '显示秒', en: 'Show seconds' },
@@ -326,6 +333,9 @@
     'gen.import_merge_tip': { zh: '合并导入只会按网址去重、追加快捷方式，其它数据不会被覆盖。', en: 'Merge import only adds shortcuts that are not already saved (matched by URL); nothing else is overwritten.' },
     'gen.backup_remind':    { zh: '定期提醒我导出备份', en: 'Remind me to export a backup' },
     'gen.backup_days':      { zh: '每隔 N 天提醒一次(默认 14)', en: 'Remind every N days (default 14)' },
+    'gen.diag':      { zh: '本地记录错误(默认关,不联网)', en: 'Record errors locally (off by default)' },
+    'gen.diag_tip':  { zh: '开启后仅在本机记录错误消息（不含网址/堆栈/网络请求）。', en: 'When on, error messages are stored on this device only (no URLs, no stacks, no network).' },
+    'gen.diag_export':{ zh: '导出诊断记录', en: 'Export diagnostics' },
     'toast.import_merge_empty':   { zh: '文件里没有可合并的快捷方式', en: 'No shortcuts in the file to merge' },
     'toast.import_merge_dup_only':{ zh: '{n} 个快捷方式都已存在，没有新增', en: 'All {n} shortcuts already exist — nothing added' },
     'toast.import_merge_done':    { zh: '已合并添加 {n} 个快捷方式', en: 'Merged {n} shortcuts' },
@@ -334,7 +344,7 @@
     'gen.data_tip': { zh: '备份/恢复全部数据（快捷方式、待办、设置、壁纸）。导出文件可跨浏览器迁移。', en: 'Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.' },
     'gen.reset':    { zh: '恢复默认数据', en: 'Reset to defaults' },
     'gen.done':     { zh: '完成', en: 'Done' },
-    'gen.version':  { zh: 'LightTab v1.19.0 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.19.0 · Minimal new tab · Local-first, optional cloud sync' },
+    'gen.version':  { zh: 'LightTab v1.20.0 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.20.0 · Minimal new tab · Local-first, optional cloud sync' },
 
     // ---------- Templates tab ----------
     'prompt.title':  { zh: 'Prompt 模板 · AI 发射台', en: 'Prompt templates · AI launcher' },

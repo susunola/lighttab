@@ -861,7 +861,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   border-top: 1px solid var(--line);
 }
 .movie-link,
-.movie-next {
+.movie-next,
+.movie-prev,
+.movie-rand {
   font-size: 12px;
   line-height: 1;
   padding: 6px 11px;
@@ -874,7 +876,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
 .movie-link:hover,
-.movie-next:hover { background: var(--tint-3); color: var(--ink); }
+.movie-next:hover,
+.movie-prev:hover,
+.movie-rand:hover { background: var(--tint-3); color: var(--ink); }
 .movie-next { margin-left: auto; }
 
 /* Weather widget (opt-in, Open-Meteo) */
@@ -3089,3 +3093,28 @@ button, input, select, textarea { font-family: var(--font-sans); font-optical-si
 .cal-cell i { letter-spacing: 0; }
 .btn, .movie-link, .movie-next { font-weight: 500; letter-spacing: .015em; }
 html[data-theme="light"] .card .title { text-shadow: 0 1px 3px rgba(255,255,255,.65); }
+
+/* To-do: clear-completed link under the list. */
+.todo-clear-done {
+  margin: 8px auto 0;
+  display: block;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: color .12s ease;
+}
+.todo-clear-done:hover { color: var(--ink); }
+
+/* Second timezone line under the clock. */
+.clock-tz2 {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* To-do widget head: overdue count turns the counter red. */
+.w-count.has-overdue { color: #f87171; }

@@ -12,3 +12,8 @@ icons/.bak/
 
 # Single-file preview build (scripts/build-singlefile.cjs)
 dist/
+
+# Local checks and browser sessions
+test-results/
+scripts/check-production-*.cjs
+scripts/preview-ui.cjs

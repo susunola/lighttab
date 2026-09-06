@@ -35,6 +35,7 @@
     // The factory default is a bundled render (procedurally generated, zero licensing surface);
     // entries with `img` are bundled files, entries with `css` are gradients.
     { id: 'dusk',     name: 'Dusk Mountain', img: 'assets/wallpaper-dusk.jpg' },
+    // Store builds bundle only self-generated art; the online library serves curated wallpapers.
     { id: 'midnight', name: 'Dusk Blue',    css: 'linear-gradient(135deg,#0b1426 0%,#152a4f 45%,#1c3d6e 100%)' },
     { id: 'aurora',   name: 'Aurora',       css: 'linear-gradient(135deg,#0f1c3a 0%,#1e3a6e 50%,#2d5f8f 100%)' },
     { id: 'violet',   name: 'Night Violet', css: 'linear-gradient(135deg,#0f0a26 0%,#2b1b54 50%,#432e7a 100%)' },
@@ -77,6 +78,10 @@
     clockSeconds: false,
     // Clock face font: 'modern' (bundled Inter, default) | 'serif' | 'mono' (system stacks, zero downloads).
     clockFont: 'modern',
+    // Optional second timezone (IANA name, e.g. "Asia/Tokyo"); '' = off. Rendered under the clock.
+    clockTz2: '',
+    // Local error capture (off by default): records error messages only, never leaves the device.
+    diag: false,
     // Minimalism toggles: true removes the search bar / clock card from the layout entirely
     // (display:none, not just opacity — the icon grid simply rides up when both are hidden).
     hideSearch: false,
@@ -279,7 +284,7 @@
   // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
   // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
   const SCHEMA_VERSION = 5;
-  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup' };
+  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup', diag: 'lt.diag' };
   // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
   // to the content script across tabs without ever putting it in the URL.
   const PENDING_PREFIX = 'lt.pending.';
@@ -847,6 +852,28 @@
     el.classList.toggle('clock-font-serif', f === 'serif');
     el.classList.toggle('clock-font-mono', f === 'mono');
   }
+  // Optional second timezone line under the clock (Settings → General). Hidden when empty or the
+  // IANA zone is invalid. Updated on the same 1-minute cadence as the clock.
+  function renderTz2(now) {
+    const el = document.getElementById('clock-tz2');
+    if (!el) return;
+    const zone = String((state.settings && state.settings.clockTz2) || '').trim();
+    if (!zone) { el.hidden = true; return; }
+    let fmt;
+    try {
+      fmt = new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit', minute: '2-digit',
+        hour12: state.settings.clock12h === true,
+        timeZone: zone
+      });
+    } catch (_) { el.hidden = true; return; }
+    const city = zone.split('/').pop().replace(/_/g, ' ');
+    el.textContent = `${city} · ${fmt.format(now || new Date())}`;
+    el.hidden = false;
+  }
+  function validTz(zone) {
+    try { new Intl.DateTimeFormat('en-US', { timeZone: zone }); return true; } catch (_) { return false; }
+  }
   function startClock() {
     const hhmmEl = document.getElementById('clock-hhmm');
     const secEl = document.getElementById('clock-sec');
@@ -872,6 +899,7 @@
         const fc = formatClock(hh, mm, state.settings.clock12h === true, isEn());
         hhmmEl.textContent = fc.hhmm;
         if (ampmEl) { ampmEl.textContent = fc.ampm; ampmEl.hidden = !fc.ampm; }
+        renderTz2(); // second timezone ticks on the same minute boundary
       }
       if (hh !== lastHour) {
         lastHour = hh;
@@ -2943,7 +2971,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.19.0',
+      version: '1.20.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -2974,6 +3002,34 @@
       markBackupNow(); // one toast per interval; the action button still exports now
       showToast(t('toast.backup_remind', { n: days }), t('gen.export'), () => { doExport(); markBackupNow(); }, 15000);
     }).catch(() => {});
+  }
+  // Optional local error capture (Settings → Data): stores only timestamped error messages on
+  // this device (no URLs/stacks, never sent anywhere). Off by default — see settings.diag.
+  const DIAG_MAX = 100;
+  function diagPush(msg) {
+    if (!(state.settings && state.settings.diag)) return;
+    const line = String(msg || '').slice(0, 500);
+    if (!line) return;
+    localRawGet(K.diag).then((r) => {
+      const arr = Array.isArray(r) ? r : [];
+      arr.push({ t: Date.now(), m: line });
+      if (arr.length > DIAG_MAX) arr.splice(0, arr.length - DIAG_MAX);
+      return localRawSet(K.diag, arr);
+    }).catch(() => {});
+  }
+  async function exportDiagLog() {
+    const r = await localRawGet(K.diag).catch(() => null);
+    const arr = Array.isArray(r) ? r : [];
+    const text = (arr.length ? arr.map((x) => new Date(x.t).toISOString() + '  ' + x.m).join('\n') : '(no diagnostics recorded)');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'LightTab-diagnostics.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
   function doExport() {
     try {
@@ -3016,6 +3072,8 @@
     if (!Array.isArray(state.settings.groups)) state.settings.groups = [];
     state.settings.avatar = sanitizeIconDataUrl(state.settings.avatar) || '';
     state.settings.accent = safeColor(state.settings.accent) || '';
+    state.settings.clockTz2 = (typeof state.settings.clockTz2 === 'string' ? state.settings.clockTz2.trim().slice(0, 64) : '');
+    state.settings.diag = state.settings.diag === true;
     state.settings.widgets = normalizeWidgets(state.settings.widgets);
     state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
     state.settings.clock12h = state.settings.clock12h === true;
@@ -3279,6 +3337,19 @@
       backupDays.value = String(p.days);
       await saveBackupPrefs(p);
     });
+    // Local diagnostics (opt-in, no network): toggle + export.
+    const diagCb = document.getElementById('f-diag');
+    const diagExport = document.getElementById('btn-diag-export');
+    const syncDiag = () => {
+      if (diagCb) diagCb.checked = !!(state.settings && state.settings.diag);
+      if (diagExport) diagExport.hidden = !diagCb || !diagCb.checked;
+    };
+    if (diagCb) diagCb.addEventListener('change', async () => {
+      state.settings.diag = !!diagCb.checked;
+      await Store.set(K.settings, state.settings);
+      syncDiag();
+    });
+    if (diagExport) diagExport.addEventListener('click', exportDiagLog);
 
     // General
     const nameInput = document.getElementById('f-name');
@@ -3352,6 +3423,18 @@
       closeSuggest(); // a hidden box can hold no open dropdown
       applySearchVis();
     });
+    // Second timezone (General): IANA name; invalid values are rejected and the old one kept.
+    const tz2Input = document.getElementById('f-tz2');
+    if (tz2Input) tz2Input.addEventListener('change', async () => {
+      const v = tz2Input.value.trim();
+      if (v && !validTz(v)) {
+        tz2Input.value = state.settings.clockTz2 || '';
+        return showToast(t('toast.tz2_invalid'));
+      }
+      state.settings.clockTz2 = v;
+      await Store.set(K.settings, state.settings);
+      renderTz2();
+    });
     const hideClockCb = document.getElementById('f-hideclock');
     if (hideClockCb) hideClockCb.addEventListener('change', async () => {
       state.settings.hideClock = !!hideClockCb.checked;
@@ -3415,6 +3498,10 @@
         if (bc) bc.checked = !!p.remind;
         if (bd) bd.value = String(p.days || BACKUP_DEFAULT_DAYS);
       }).catch(() => {});
+      const dg = document.getElementById('f-diag');
+      const dx = document.getElementById('btn-diag-export');
+      if (dg) dg.checked = !!(state.settings && state.settings.diag);
+      if (dx) dx.hidden = !(state.settings && state.settings.diag);
       renderSwatches();
       renderWallLibGrid();
       const wallRotCb = document.getElementById('f-wall-rotate');
@@ -3427,6 +3514,8 @@
       if (clockSecCb) clockSecCb.checked = state.settings.clockSeconds === true;
       const clockFontSel = document.getElementById('f-clockfont');
       if (clockFontSel) clockFontSel.value = CLOCK_FONTS.includes(state.settings.clockFont) ? state.settings.clockFont : 'modern';
+      const tz2In = document.getElementById('f-tz2');
+      if (tz2In) tz2In.value = state.settings.clockTz2 || '';
       const hideSearchCb = document.getElementById('f-hidesearch');
       if (hideSearchCb) hideSearchCb.checked = state.settings.hideSearch === true;
       const hideClockCb = document.getElementById('f-hideclock');
@@ -3892,8 +3981,12 @@
   function renderTodos() {
     const list = document.getElementById('todo-list');
     const countEl = document.getElementById('todo-count');
+    const clearBtn = document.getElementById('todo-clear-done');
     const done = state.todos.filter(it => it.done).length;
-    countEl.textContent = done + '/' + state.todos.length;
+    const overdue = state.todos.filter(it => !it.done && /^\d{4}-\d{2}-\d{2}$/.test(it.due || '') && it.due < todayStr()).length;
+    countEl.textContent = done + '/' + state.todos.length + (overdue ? ' · ' + t('todo.overdue_count', { n: overdue }) : '');
+    countEl.classList.toggle('has-overdue', overdue > 0);
+    if (clearBtn) clearBtn.hidden = done === 0 || !state.todos.length;
     if (!state.todos.length) {
       list.innerHTML = `<li class="todo-empty">${t('todo.empty')}</li>`;
       return;
@@ -3942,6 +4035,15 @@
       await saveTodos();
       renderTodos();
       renderCalendar(); // completion / deletion also moves the calendar's due dots
+    });
+    const clearDoneBtn = document.getElementById('todo-clear-done');
+    if (clearDoneBtn) clearDoneBtn.addEventListener('click', async () => {
+      const before = state.todos.length;
+      state.todos = state.todos.filter(it => !it.done);
+      if (state.todos.length === before) return;
+      await saveTodos();
+      renderTodos();
+      renderCalendar();
     });
     renderTodos();
   }
@@ -4132,11 +4234,23 @@
         '</div>' +
       '</div>' +
       '<div class="movie-actions">' +
+        '<button type="button" class="movie-prev" id="movie-prev" data-i18n="movie.prev">‹ Prev</button>' +
+        '<button type="button" class="movie-rand" id="movie-rand" data-i18n="movie.rand">Random</button>' +
         '<a class="movie-link" href="' + douban + '" target="_blank" rel="noopener" data-i18n="movie.douban">豆瓣</a>' +
-        '<button type="button" class="movie-next" id="movie-next" data-i18n="movie.next">换一部</button>' +
+        '<button type="button" class="movie-next" id="movie-next" data-i18n="movie.next">Next ›</button>' +
       '</div>';
+    const len = DOUBAN_ANNUAL_BEST.length;
+    const prev = card.querySelector('#movie-prev');
+    if (prev) prev.addEventListener('click', () => { movieCursor = (i - 1 + len) % len; renderMovie(); });
+    const rand = card.querySelector('#movie-rand');
+    if (rand) rand.addEventListener('click', () => {
+      let r = i;
+      if (len > 1) { while (r === i) r = Math.floor(Math.random() * len); }
+      movieCursor = r;
+      renderMovie();
+    });
     const next = card.querySelector('#movie-next');
-    if (next) next.addEventListener('click', () => { movieCursor = i + 1; renderMovie(); });
+    if (next) next.addEventListener('click', () => { movieCursor = (i + 1) % len; renderMovie(); });
     // Re-apply any i18n labels injected above (t() already localized the aria; data-i18n handles the rest).
     if (window.LT_I18N && window.LT_I18N.applyStatic) window.LT_I18N.applyStatic();
   }
@@ -4847,6 +4961,8 @@
     // Read-time hardening: whatever survived migration (old versions, cloud pulls, hand-edited
     // files) is coerced into shape before any renderer or submit path can touch it.
     state.settings.accent = safeColor(state.settings.accent) || '';
+    state.settings.clockTz2 = (typeof state.settings.clockTz2 === 'string' ? state.settings.clockTz2.trim().slice(0, 64) : '');
+    state.settings.diag = state.settings.diag === true;
     state.settings.groups = sanitizeGroups(state.settings.groups);
     state.settings.customEngines = sanitizeCustomEngines(state.settings.customEngines);
     state.settings.hiddenEngines = sanitizeHiddenEngines(state.settings.hiddenEngines);
@@ -5545,6 +5661,12 @@
     sweepPending(); // sweep expired / corrupted pending leftovers on boot
     renderStorageUse(); // data-management usage line (boot)
     maybeRemindBackup(); // interval backup nudge (opt-in, local-only)
+    // Error capture (only active when settings.diag is on; messages stay local).
+    window.addEventListener('error', (e) => diagPush((e && e.message) || 'window error'));
+    window.addEventListener('unhandledrejection', (e) => {
+      const reason = e && e.reason;
+      diagPush(reason && (reason.message || String(reason)) || 'unhandled promise rejection');
+    });
 
     // Cloud sync init, last: the migration write-back has landed and every event is bound.
     if (window.LT_SYNC) {

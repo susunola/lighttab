@@ -58,6 +58,7 @@
           <span class="clock-ampm" id="clock-ampm" hidden></span>
         </div>
         <div class="clock-date" id="clock-date"></div>
+        <div class="clock-tz2" id="clock-tz2" hidden></div>
         <div class="clock-lunar" id="clock-lunar"></div>
         <div class="clock-greet" id="clock-greet"></div>
       </section>
@@ -101,6 +102,7 @@
           <button type="submit" class="todo-submit" data-i18n-aria="todo.add" aria-label="Add">+</button>
         </form>
         <ul class="todo-list" id="todo-list"></ul>
+        <button type="button" class="todo-clear-done" id="todo-clear-done" data-i18n="todo.clear_done" hidden>Clear completed</button>
       </section>
 
       <section class="widget wmovie" data-i18n-aria="widget.movie" aria-label="Movie of the day">
@@ -442,6 +444,10 @@
               <option value="mono" data-i18n="clockfont.mono">Mono</option>
             </select>
           </label>
+          <label>
+            <span data-i18n="gen.tz2">Second timezone</span>
+            <input id="f-tz2" type="text" autocomplete="off" spellcheck="false" maxlength="64" data-i18n-ph="gen.tz2_ph" placeholder="e.g. Asia/Tokyo">
+          </label>
           <label class="check-row">
             <input type="checkbox" id="f-hidesearch">
             <span data-i18n="gen.hidesearch">Hide search bar</span>
@@ -545,6 +551,12 @@
               <span data-i18n="gen.backup_remind">Remind me to export a backup</span>
               <input type="number" id="f-backup-days" min="1" max="90" step="1" value="14" data-i18n-title="gen.backup_days" title="Every N days">
             </label>
+            <label class="check-row diag-row">
+              <input type="checkbox" id="f-diag">
+              <span data-i18n="gen.diag">Record errors locally (off by default)</span>
+            </label>
+            <p class="form-tip" data-i18n="gen.diag_tip">When on, error messages are stored on this device only (no URLs, no stacks, no network).</p>
+            <button type="button" class="btn ghost sm" id="btn-diag-export" data-i18n="gen.diag_export" hidden>Export diagnostics</button>
             <p class="storage-use" id="storage-use" data-i18n-aria="store.used" hidden></p>
           </div>
 </details>
@@ -552,7 +564,7 @@
             <button type="button" class="btn ghost" id="btn-reset-all" data-i18n="gen.reset">Reset to defaults</button>
             <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
           </div>
-          <p class="form-tip ver-line" data-i18n="gen.version">LightTab v1.19.0 · Minimal new tab · Local-first, optional cloud sync</p>
+          <p class="form-tip ver-line" data-i18n="gen.version">LightTab v1.20.0 · Minimal new tab · Local-first, optional cloud sync</p>
         </div>
         <div class="tab-pane" data-pane="prompt" hidden>
           <div class="ptoolbar">
