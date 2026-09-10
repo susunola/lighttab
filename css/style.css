@@ -3342,6 +3342,32 @@ html[lang="en"] #grid > .wmovie::after { content: 'Movie calendar'; }
 #grid > .wmovie:hover .movie-actions { opacity: 1; pointer-events: auto; }
 #grid > .wmovie:focus-within .movie-actions { opacity: 1; pointer-events: auto; }
 
+/* Canvas mode: the movie card is a free block, positioned like every other widget. Two cascade
+ * accidents break that, because the movie-calendar rules further down this file outweigh the
+ * canvas ones and are not scoped to it — so re-state both, after the rules that were winning:
+ *   1. `.widget.wmovie.w-top` sets position:relative and TIES on specificity with
+ *      `.layout.canvas .widget` while sitting later in the file. The block therefore stayed in
+ *      flow, ignored its stored coordinates, and — being 640px square — shoved the icon grid
+ *      below the fold.
+ *   2. `.widget.wmovie .movie-card, .widget.wmovie.w-top .movie-card` sets `max-width: none`,
+ *      which beats the `max-width: 320px` cap declared in the w-top block near the top of this
+ *      file, so the card swelled to fill its box. That is not merely cosmetic: captureLayout()
+ *      records the card's width as the block's width and applyCanvas() then pins it as an inline
+ *      `style.width` (capped at 640), so an uncapped card also stretches the draggable block.
+ *      The cap is therefore re-stated globally, not only under .canvas. */
+.layout.canvas .widget.wmovie,
+.layout.canvas .widget.wmovie.w-top { position: absolute; }
+.widget.wmovie.w-top .movie-card { max-width: 320px; margin: 0 auto; }
+/* 3. `.widget.wmovie, .widget.wmovie.w-top` re-adds card chrome that the whole w-top stack
+ *    deliberately drops (see the `.widget.w-top` block near the top of this file: no background,
+ *    no border). It ties on specificity with `.widget.w-top` and sits later in the file, so the
+ *    movie's 640px box — which exists only to line the stack up with the search field — painted a
+ *    panel visibly wider than the 320px card centred inside it. Only the w-top variant is affected;
+ *    the grid tile is `#grid > .wmovie`, which is styled separately and untouched. */
+.widget.wmovie.w-top {
+  background: none; border: 0; border-radius: 0; box-shadow: none; overflow: visible;
+}
+
 /* Launcher proportions calibrated together against the supplied reference. */
 .layout.movie-grid { max-width: 1344px; padding-top: 4px; }
 .layout.movie-grid #grid-wrap { max-width: calc((var(--icon-size) + 40px) * 10 - 16px); margin: 24px auto 0; width: 100%; }

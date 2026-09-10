@@ -373,7 +373,7 @@
     'gen.data_tip': { zh: '备份/恢复全部数据（快捷方式、待办、设置、壁纸）。导出文件可跨浏览器迁移。', en: 'Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.' },
     'gen.reset':    { zh: '恢复默认数据', en: 'Reset to defaults' },
     'gen.done':     { zh: '完成', en: 'Done' },
-    'gen.version':  { zh: 'LightTab v1.23.2 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.23.2 · Minimal new tab · Local-first, optional cloud sync' },
+    'gen.version':  { zh: 'LightTab v1.23.3 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.23.3 · Minimal new tab · Local-first, optional cloud sync' },
 
     // ---------- Templates tab ----------
     'prompt.title':  { zh: 'Prompt 模板 · AI 发射台', en: 'Prompt templates · AI launcher' },
@@ -408,6 +408,7 @@
     // #61 clock placement + WorkBuddy desktop detection
     'wpos.left':           { zh: '左栏', en: 'Left column' },
     'wpos.top':            { zh: '搜索框上方', en: 'Above search' },
+    'wpos.tip':            { zh: '电影卡的位置决定用哪套布局：选 <b>左栏</b> 会把它嵌进图标网格；选 <b>搜索框上方</b> 则切换到自由画布，此时所有组件都能任意拖动。', en: "The movie card's placement picks the layout engine: <b>Left column</b> tucks it into the icon grid, while <b>Above search</b> switches to a free canvas where every widget can be dragged anywhere." },
     'wb.running':          { zh: 'WorkBuddy 正在运行（v{v}）', en: 'WorkBuddy is running (v{v})' },
     'wb.not_running':      { zh: '未检测到 WorkBuddy 在运行', en: 'WorkBuddy not detected' },
     'wb.not_detected':     { zh: '没检测到 WorkBuddy 桌面端，可能未安装', en: 'Could not reach WorkBuddy Desktop — it may not be installed' },

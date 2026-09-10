@@ -151,6 +151,58 @@ const { chromium } = require('playwright');
     assert.equal(JSON.parse(cloud['lt.items'].payload)[0].title, '云端项目');
     assert.deepEqual(errors, [], 'Sync review, export and recovery should not throw');
     console.log('PASS: real extension UI conflict preview, backup download without credentials, cloud choice and offline restoration.');
+
+    // Free-canvas mode. Moving the movie card above the search box (instead of letting it integrate
+    // into the icon grid) is what switches the layout engine, and it used to be unusable: three CSS
+    // cascade accidents left the movie block in the flow, uncapped, pushing the icon grid below the
+    // fold. Measure all three instead of trusting a screenshot, then drag the calendar — that is the
+    // behaviour a user actually asked for.
+    await page.evaluate(async () => {
+      const a = window.LT_APP;
+      a.state.settings.widgets.wmovie = true;
+      a.state.settings.widgets.wcal = true;
+      a.state.settings.widgetPos.wmovie = 'top';
+      await a.Store.set(a.K.settings, a.state.settings);
+    });
+    await page.reload();
+    await page.locator('.wcal .cal-grid').waitFor();
+    await page.waitForTimeout(900);
+    const geo = await page.evaluate(() => {
+      const movie = document.querySelector('.wmovie');
+      const card = movie.querySelector('.movie-card');
+      const wrap = document.querySelector('#grid-wrap');
+      const rect = el => el.getBoundingClientRect();
+      return {
+        canvas: document.querySelector('.layout').classList.contains('canvas'),
+        moviePosition: getComputedStyle(movie).position,
+        cardWidth: Math.round(rect(card).width),
+        gridTop: Math.round(rect(wrap).top),
+        viewportHeight: window.innerHeight
+      };
+    });
+    assert(geo.canvas, 'the movie above the search box selects free-canvas mode');
+    assert.equal(geo.moviePosition, 'absolute', 'in canvas mode the movie block leaves the flow');
+    assert(geo.cardWidth <= 320, `the movie card stays capped in canvas mode (got ${geo.cardWidth}px)`);
+    assert(geo.gridTop < geo.viewportHeight,
+      `the movie block must not push the icon grid below the fold (grid top ${geo.gridTop} vs viewport ${geo.viewportHeight})`);
+    const calBefore = await page.locator('.wcal').boundingBox();
+    await page.mouse.move(calBefore.x + calBefore.width / 2, calBefore.y + 6);
+    await page.waitForTimeout(200);
+    const calHandle = await page.locator('.wcal .drag-handle').boundingBox();
+    assert(calHandle, 'the calendar exposes a drag handle in canvas mode');
+    await page.mouse.move(calHandle.x + calHandle.width / 2, calHandle.y + calHandle.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) {
+      await page.mouse.move(calHandle.x + calHandle.width / 2 + i * 18, calHandle.y + calHandle.height / 2 + i * 8);
+      await page.waitForTimeout(16);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    const calAfter = await page.locator('.wcal').boundingBox();
+    assert(Math.abs(calAfter.x - calBefore.x) > 20 || Math.abs(calAfter.y - calBefore.y) > 20,
+      'the calendar actually moves when dragged in free-canvas mode');
+    assert.deepEqual(errors, [], 'Canvas layout should not throw');
+    console.log('PASS: free-canvas mode drags blocks; the movie card leaves the flow, stays capped, and keeps the icon grid on screen.');
   } finally {
     if (context) await context.close();
     fs.rmSync(profile, { recursive: true, force: true });

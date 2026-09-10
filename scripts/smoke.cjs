@@ -1863,7 +1863,7 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
   assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
   assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
-  assert(JSON.parse(read('manifest.json')).version === '1.23.2', 'manifest version is 1.23.2');
+  assert(JSON.parse(read('manifest.json')).version === '1.23.3', 'manifest version is 1.23.3');
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 
@@ -1975,6 +1975,22 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   const curtabEnd = app.indexOf('\n  }', curtabAt);
   assert(/siteTitleDirty = true;/.test(app.slice(curtabAt, curtabEnd > -1 ? curtabEnd : undefined)),
     '"Add current tab" locks the tab title in against auto-fill');
+}
+
+// ---------- 40) free-canvas mode is usable with the movie card ----------
+{
+  // Moving the movie card above the search box is what selects the free-canvas engine. Each rule
+  // below undoes a cascade accident in which a later movie-calendar rule outweighed the canvas one;
+  // drop any of them and the block falls back into the flow at 640px wide, shoving the grid off
+  // screen. check-extension.cjs measures the behaviour — this is the fast guard that stops the
+  // rules being tidied away as duplicates.
+  const css = read('css/style.css');
+  assert(/\.layout\.canvas \.widget\.wmovie[^{]*\{[^}]*position:\s*absolute/.test(css),
+    'canvas mode pins the movie block out of the flow');
+  assert(/\.widget\.wmovie\.w-top \.movie-card\s*\{[^}]*max-width:\s*320px/.test(css),
+    'the movie card keeps a 320px cap (the w-top cap above is otherwise overridden)');
+  assert(/\.widget\.wmovie\.w-top\s*\{[^}]*background:\s*none/.test(css),
+    'the w-top movie block drops the card chrome the w-top stack is designed without');
 }
 
 console.log('');

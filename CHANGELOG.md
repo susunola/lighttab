@@ -1,3 +1,22 @@
+# 1.23.3 — the free canvas actually works
+
+- Fix: with the movie card in the **left column** (the default) the page runs an integrated grid
+  layout, and that layout turns free-canvas dragging off for *every* widget — so nothing on the
+  page could be dragged, and the drag handles were never even revealed. Moving the movie card to
+  **Above search** switches to the free canvas, but that path was broken in three ways, each a CSS
+  cascade accident in which a later movie-calendar rule outweighed the canvas one:
+  * the movie block stayed in the flow (`position: relative`) instead of being positioned like
+    every other block, because the two rules tie on specificity and the movie one is later;
+  * its card lost the 320px cap, so it swelled to fill the 640px box — and since the block's width
+    is *measured from the flow* and then pinned as an inline width, an uncapped card also stretched
+    the draggable block and pushed the icon grid below the fold;
+  * the w-top stack is designed to drop its card chrome entirely, but the movie re-added a panel
+    visibly wider than the card inside it.
+- Settings → Widgets now says plainly that the movie card's placement picks the layout engine,
+  instead of leaving users to guess why nothing drags.
+- The real-MV3 suite now measures this: in free-canvas mode the movie block must leave the flow,
+  stay capped, keep the icon grid on screen, and the calendar must actually move when dragged.
+
 # 1.23.2 — the shortcut dialog names a site for you
 
 - The *Add shortcut* dialog now fills **Name** as you type the URL (`https://fast.com/zh/cn/` →
