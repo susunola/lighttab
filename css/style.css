@@ -755,6 +755,97 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   border-radius: 4px;
   pointer-events: none;
 }
+
+/* Subscribed-calendar dots (js/calendar.js; the subscription block in app.js): one 4px dot per feed
+ * under the day number. The row is absolutely positioned so it never perturbs the cell's flex
+ * layout, and it is pointer-events:none so a click still lands on the cell itself. */
+.cal-dots {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 2px;
+  display: flex; justify-content: center; gap: 2px;
+  pointer-events: none;
+}
+.cal-dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+.cal-cell.has-ev { cursor: pointer; }
+.cal-cell.has-ev:hover { background: var(--tint-2); }
+.cal-cell.has-ev:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The top-stack variant squeezes cells to 30px, so the dot row has to sit tighter. */
+.widget.wcal.w-top .cal-dots { bottom: 1px; }
+.widget.wcal.w-top .cal-dot { width: 3px; height: 3px; }
+
+/* Day detail popover. Positioned by placeCalDay() — deliberately beside the card, never over the
+ * grid the user just clicked and never over the search box below it. A solid panel rather than
+ * glass: the whole point is that the text stays readable on top of the wallpaper. */
+.cal-day {
+  position: absolute;
+  top: 0; left: 0;
+  z-index: 30;
+  width: 236px;
+  max-width: 70vw;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--panel-1);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-2);
+  font-size: 12px;
+  color: var(--ink);
+}
+.cal-day-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.cal-day-head .icon-btn { width: 22px; height: 22px; font-size: 11px; }
+.cal-day-empty { margin: 0; color: var(--ink-3); }
+.cal-day-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cal-day-list li { display: grid; grid-template-columns: 6px auto 1fr; align-items: baseline; gap: 6px; }
+.cal-day-list .cal-dot { align-self: center; }
+.cal-day-time { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.cal-day-title { color: var(--ink); word-break: break-word; }
+.cal-day-loc { grid-column: 3; color: var(--ink-3); font-size: 11px; }
+
+/* Settings → Calendar pane */
+.cal-add { display: flex; gap: 8px; align-items: center; margin: 8px 0 12px; }
+.cal-add > input {
+  flex: 1 1 auto; min-width: 0;
+  height: 34px; padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--tint-1);
+  color: var(--ink);
+  font-size: 13px;
+}
+/* The subscribe button is a label-width control: left to shrink it goes narrower than its own
+ * two-character text and breaks onto two lines. */
+.cal-add > .btn { flex: 0 0 auto; white-space: nowrap; }
+.cal-list { display: flex; flex-direction: column; gap: 6px; }
+.cal-empty { margin: 4px 0 0; color: var(--ink-3); font-size: 12px; }
+.cal-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--tint-1);
+  border: 1px solid var(--line);
+}
+.cal-item .cal-dot { width: 8px; height: 8px; }
+.cal-item-main { flex: 1 1 auto; min-width: 0; }
+.cal-item-name { font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-item-url { font-size: 11px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-item-state { font-size: 11px; color: var(--ink-3); }
+.cal-item-state.err { color: var(--danger); }
+.cal-item-toggle { display: flex; align-items: center; }
+.cal-item-toggle input { accent-color: var(--accent); }
+.cal-list-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.cal-status { font-size: 11px; color: var(--ink-3); }
+.cal-status.ok { color: var(--ink-2); }
+.cal-status.err { color: var(--danger); }
 .cal-badge.hol { color: #f87171; background: rgba(248, 113, 113, 0.14); }
 .cal-badge.work { color: var(--ink-3); background: var(--tint-3); }
 /* Quiet line under the month grid: the next statutory holiday counted from today. */

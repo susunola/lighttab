@@ -82,6 +82,9 @@
         </div>
         <div class="cal-grid" id="cal-grid"></div>
         <div class="cal-next-holiday" id="cal-next-holiday" hidden></div>
+        <!-- Day detail for subscribed feeds. Absolutely positioned against the widget (see
+             placeCalDay() in app.js) rather than the clicked cell, so it never covers the grid. -->
+        <div class="cal-day" id="cal-day" role="dialog" hidden></div>
       </section>
 
       <section class="widget wtodo" id="todo-widget" data-i18n-aria="widget.todo" aria-label="To-dos">
@@ -329,6 +332,7 @@
           <button class="tab active" data-tab="wall" data-i18n="set.wall">Wallpaper</button>
           <button class="tab" data-tab="gen" data-i18n="set.general">General</button>
           <button class="tab" data-tab="prompt" data-i18n="set.prompt">Templates</button>
+          <button class="tab" data-tab="cal" data-i18n="set.calendar">Calendar</button>
           <button class="tab" data-tab="sync" data-i18n="set.sync">Sync</button>
         </div>
         <button class="icon-btn close-btn" data-close data-i18n-aria="set.close" aria-label="Close">
@@ -573,7 +577,7 @@
             <button type="button" class="btn ghost" id="btn-reset-all" data-i18n="gen.reset">Reset to defaults</button>
             <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
           </div>
-          <p class="form-tip ver-line" data-i18n="gen.version">LightTab v1.22.0 · Minimal new tab · Local-first, optional cloud sync</p>
+          <p class="form-tip ver-line" data-i18n="gen.version">LightTab v1.23.0 · Minimal new tab · Local-first, optional cloud sync</p>
         </div>
         <div class="tab-pane" data-pane="prompt" hidden>
           <div class="ptoolbar">
@@ -583,6 +587,28 @@
           <p class="form-tip" data-i18n-html="prompt.help">Press <b>/</b> to open the template panel: pick a template → type → Enter to launch to multiple AIs. <code>{q}</code> is the content slot; templates without <code>{q}</code> act as fixed commands and fire on selection.</p>
           <p><a href="https://github.com/susunola/lighttab/issues/new" target="_blank" rel="noopener">反馈问题 / Feedback ↗</a></p>
           <div id="prompt-manage" class="prompt-manage"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
+          </div>
+        </div>
+        <div class="tab-pane" data-pane="cal" hidden>
+          <span class="data-label" data-i18n="cal.sub_title">Subscribed calendars</span>
+          <p class="form-tip" data-i18n="cal.sub_help">Read-only. The events appear as coloured dots on the calendar above; click a day to see them.</p>
+          <div class="cal-add">
+            <input id="f-cal-url" type="text" autocomplete="off" spellcheck="false"
+                   data-i18n-ph="cal.url_ph" placeholder="https://… or webcal://…"
+                   data-i18n-aria="cal.url_ph" aria-label="Calendar feed URL">
+            <button type="button" class="btn primary sm" id="f-cal-add" data-i18n="cal.add">Subscribe</button>
+          </div>
+          <div class="cal-list" id="cal-list"></div>
+          <div class="cal-list-foot">
+            <span class="cal-status" id="cal-status"></span>
+            <button type="button" class="btn ghost sm" id="f-cal-refresh" data-i18n="cal.refresh">Refresh now</button>
+          </div>
+          <details class="settings-more"><summary data-i18n="cal.how">Where do I find the link?</summary>
+            <p class="form-tip" data-i18n-html="cal.how_body"><b>Apple Calendar (iCloud):</b> open Calendar → <b>share</b> the calendar → turn on <b>Public Calendar</b> → <b>Copy Link</b>; paste it here (a <code>webcal://</code> link is fine).<br><b>Google Calendar:</b> Settings → select the calendar → <b>Secret address in iCal format</b>.<br><b>Outlook:</b> Settings → Calendar → Shared calendars → <b>Publish</b> → ICS link.</p>
+            <p class="form-tip" data-i18n="cal.privacy_note">Published links are read-only and unguessable — they act like a key to that one calendar. They are stored on this device only and are never uploaded to the cloud sync server.</p>
+          </details>
           <div class="modal-actions">
             <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
           </div>
@@ -600,6 +626,8 @@
   <script src="js/icondb.js"></script>
   <script src="js/lunar.js"></script>
   <script src="js/holidays.js"></script>
+  <script src="js/ics.js"></script>
+  <script src="js/calendar.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/sync.js"></script>
   <script src="js/canvas.js"></script>

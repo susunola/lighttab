@@ -1,3 +1,20 @@
+# 1.23.0 — subscribe to published calendars
+
+- Subscribe to read-only iCalendar feeds from *Settings → Calendar*: paste a published link (Apple
+  iCloud, Google secret iCal address, Outlook ICS, or any `https://` / `webcal://` URL).
+- Events appear as one coloured dot per feed on the month grid; click a day for a detail popover
+  with times, titles and locations. The popover is placed by a small collision search so it never
+  covers the grid you clicked, the search box, the shortcut area or the movie card.
+- Full RFC 5545 reading on-device: line unfolding, TEXT escaping, DATE / DATE-TIME (floating, UTC
+  and `TZID` resolved through the browser's own timezone database), `DURATION`, `RRULE`
+  (DAILY / WEEKLY / MONTHLY / YEARLY with INTERVAL / COUNT / UNTIL / BYDAY / BYMONTHDAY) and `EXDATE`.
+- Permission model unchanged at install time: the feed hosts live in `optional_host_permissions` and
+  are requested the first time you subscribe. Anonymous `GET`, `credentials: 'omit'`, 15s timeout,
+  2 MB cap, 8 feeds max.
+- Feed URLs are deliberately not part of cloud sync — a published calendar link is an unguessable
+  capability, so it stays on the device (`lt.calendars`); fetched events are a local-only cache.
+- Cached events survive a failed refresh, and each feed reports its own sync state or error.
+
 # 1.22.0 — AI workflow reliability
 
 - Make the AI entry button draggable with position persistence and viewport bounds.

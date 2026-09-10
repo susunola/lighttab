@@ -307,7 +307,7 @@
   // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
   // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
   const SCHEMA_VERSION = 5;
-  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup', diag: 'lt.diag' };
+  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup', diag: 'lt.diag', calendars: 'lt.calendars', calcache: 'lt.calcache' };
   // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
   // to the content script across tabs without ever putting it in the URL.
   const PENDING_PREFIX = 'lt.pending.';
@@ -405,8 +405,14 @@
     wallpaper: null, // {type:'gradient'|'image', value}
     todos: [],
     prompts: [],
+    // Subscribed calendars: [{ id, name, url, color, on }]. Kept out of DEFAULT_SETTINGS and read
+    // through its own key because an Apple "public calendar" link is an unguessable capability —
+    // see the note above rebuildCalIndex() for why it must never reach cloud sync.
+    calendars: [],
     view: VIEW_ALL
   };
+  let calCache = {};              // feedId → { fetchedAt, etag, title, events[], error }
+  let calIndex = new Map();       // 'YYYY-MM-DD' → [{ feed, ev }], derived from calCache
   let currentEngine = ENGINES[0];
   let activePrompt = null; // template picked and waiting to launch (session only, not persisted)
   let clockTimer = null;
@@ -3252,7 +3258,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.22.0',
+      version: '1.23.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -3571,6 +3577,7 @@
       const key = tb.dataset.tab;
       panes.forEach(p => p.hidden = p.dataset.pane !== key);
       if (key === 'prompt') window.LT_PROMPTS.renderPromptManager(); // re-sync on every visit to the Templates pane
+      if (key === 'cal') { renderCalList(); renderCalStatus(); } // ... and to the Calendar pane
     }));
     document.getElementById('f-upload').addEventListener('change', onUpload);
     document.getElementById('btn-reset-wall').addEventListener('click', () => {
@@ -4338,7 +4345,8 @@
     renderTodos();
   }
 
-  // ---------- Calendar widget (fully local month view with lunar days; zero network) ----------
+  // ---------- Calendar widget (month view: lunar days + statutory holidays, plus optional dots for
+  // subscribed read-only ICS feeds — see the subscription block below for the network story) ----------
   // Next statutory holiday after todayStr (pure — smoke-tested). table is the LT_HOLIDAYS map
   // { 'YYYY-MM-DD': { h } | { work: true } }; make-up workdays are skipped. Returns
   // { key, date, days } (days = calendar days until the first holiday date, 0 = today), or null
@@ -4356,6 +4364,17 @@
     return null;
   }
   const calCursor = { y: 0, m: 0 }; // currently displayed year/month; 0 = follow today
+  const CAL_MAX_DOTS = 4;           // per cell; a fifth feed colour would just read as noise
+  let calSelected = null;           // 'YYYY-MM-DD' of the day whose detail popover is open
+
+  function calKey(y, m, d) {
+    return y + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d;
+  }
+  function hhmm(ms) {
+    const d = new Date(ms);
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
   function renderCalendar() {
     const title = document.getElementById('cal-title');
     const grid = document.getElementById('cal-grid');
@@ -4388,12 +4407,29 @@
       const badge = !hol ? '' : hol.work
         ? `<em class="cal-badge work">${escapeHtml(t('cal.badge_work'))}</em>`
         : `<em class="cal-badge hol">${escapeHtml(t('cal.badge_rest'))}</em>`;
+      // Subscribed-calendar hits for this day. One dot per feed, not per event: a day with eight
+      // standups should still read as "one thing".
+      const hits = calIndex.get(key) || [];
+      const feedIds = [];
+      for (const hit of hits) if (feedIds.indexOf(hit.feed.id) < 0) feedIds.push(hit.feed.id);
+      const dots = feedIds.slice(0, CAL_MAX_DOTS)
+        .map(id => {
+          const f = state.calendars.find(x => x.id === id);
+          return `<i class="cal-dot" style="background:${(f && f.color) || '#8a8f98'}"></i>`;
+        }).join('');
       const cls = 'cal-cell' + (isToday ? ' today' : '')
         + (hol ? (hol.work ? ' workday' : ' holiday') : '')
-        + (dueSet.has(key) ? ' due' : '');
-      cells.push(`<span class="${cls}"><b>${d}</b><i>${lday}</i>${badge}</span>`);
+        + (dueSet.has(key) ? ' due' : '')
+        + (hits.length ? ' has-ev' : '');
+      if (hits.length) {
+        cells.push(`<span class="${cls}" data-day="${d}" role="button" tabindex="0" aria-label="${escapeHtml(t('cal.events_n', { n: hits.length }))}">` +
+          `<b>${d}</b><i>${lday}</i>${badge}<span class="cal-dots">${dots}</span></span>`);
+      } else {
+        cells.push(`<span class="${cls}"><b>${d}</b><i>${lday}</i>${badge}</span>`);
+      }
     }
     grid.innerHTML = cells.join('');
+    renderCalDay(); // the popover is anchored to a specific day, so re-resolve it against the new grid
     // One quiet line under the grid: the next statutory holiday counted from today (not from the
     // viewed month). Hidden once the dataset's year has run out (see the note in js/holidays.js).
     const nhEl = document.getElementById('cal-next-holiday');
@@ -4417,12 +4453,336 @@
       }
     }
   }
+
+  // Day detail: which subscribed events fall on the clicked date, across every enabled feed.
+  //
+  // Placement is a tiny search rather than a fixed side. The card lives at the top of a narrow left
+  // column, and the search box sits to its right and *overlaps it vertically* — so a naive "park it
+  // beside the card" lands the popover squarely on the search box, while clamping it back inside
+  // covers the very grid the user just clicked. Neither is acceptable, and the free side depends on
+  // which widgets the user kept and how wide the window is.
+  //
+  // So: generate candidate slots around the card (three vertical anchors per side, three horizontal
+  // anchors above/below), score each by how much it overlaps the things that must stay usable — the
+  // search box, the month grid, and the sibling widgets — then take the first slot that overlaps
+  // nothing, falling back to the least-bad one. Must run after the box is visible: a hidden box
+  // measures 0.
+  function placeCalDay(box) {
+    const host = box.offsetParent; // .widget.wcal, the nearest positioned ancestor
+    if (!host) return;
+    const hb = host.getBoundingClientRect();
+    const w = box.offsetWidth, h = box.offsetHeight;
+    const gap = 10, pad = 8;
+
+    const cands = [];
+    for (const t of [0, hb.height / 2 - h / 2, hb.height - h]) cands.push({ left: hb.width + gap, top: t }); // right
+    for (const t of [0, hb.height / 2 - h / 2, hb.height - h]) cands.push({ left: -w - gap, top: t });        // left
+    for (const l of [0, hb.width / 2 - w / 2, hb.width - w]) cands.push({ left: l, top: hb.height + gap });  // below
+    for (const l of [0, hb.width / 2 - w / 2, hb.width - w]) cands.push({ left: l, top: -h - gap });         // above
+
+    // Things the popover must not sit on top of.
+    const obstacles = [];
+    for (const sel of ['#search', '.search-wrap', '.searchbox']) {
+      const el = document.querySelector(sel);
+      if (el) { obstacles.push(el.getBoundingClientRect()); break; }
+    }
+    // The month grid (so another day stays clickable) and the shortcut area. The latter is not
+    // cosmetic: the movie card is a `#grid > .wmovie` child rather than a left-column sibling, so
+    // "the card's siblings" misses it entirely and a naive beside-the-card slot lands right on it.
+    for (const sel of ['#cal-grid', '#grid']) {
+      const el = document.querySelector(sel);
+      if (el) obstacles.push(el.getBoundingClientRect());
+    }
+    const parent = host.parentElement;
+    if (parent) for (const sib of parent.children) {
+      if (sib !== host && !sib.contains(host) && sib.offsetParent) obstacles.push(sib.getBoundingClientRect());
+    }
+
+    const overlapArea = (a, b) =>
+      Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
+      Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+
+    let best = null;
+    for (const c of cands) {
+      // Clamp into the viewport, expressed as an offset from the card's own top-left.
+      const left = Math.max(pad - hb.left, Math.min(c.left, window.innerWidth - pad - w - hb.left));
+      const top = Math.max(pad - hb.top, Math.min(c.top, window.innerHeight - pad - h - hb.top));
+      const rect = { left: hb.left + left, top: hb.top + top, right: hb.left + left + w, bottom: hb.top + top + h };
+      let cost = 0;
+      for (const ob of obstacles) cost += overlapArea(rect, ob);
+      if (best === null || cost < best.cost) best = { cost, left, top };
+      if (cost === 0) break;
+    }
+    box.style.left = Math.round(best.left) + 'px';
+    box.style.top = Math.round(best.top) + 'px';
+  }
+
+  function renderCalDay() {
+    const box = document.getElementById('cal-day');
+    if (!box) return;
+    if (!calSelected) { box.hidden = true; box.innerHTML = ''; return; }
+    const parts = calSelected.split('-');
+    const yy = +parts[0], mm = +parts[1], dd = +parts[2];
+    // The cursor may have moved to another month while the popover was open; hide rather than lie.
+    if (yy !== calCursor.y || mm !== calCursor.m) { box.hidden = true; box.innerHTML = ''; return; }
+    const hits = calIndex.get(calKey(yy, mm, dd)) || [];
+    const label = isEn() ? `${EN_MONTHS[mm - 1]} ${dd}` : `${mm}月${dd}日`;
+    let body;
+    if (!hits.length) {
+      body = `<p class="cal-day-empty">${escapeHtml(t('cal.no_events'))}</p>`;
+    } else {
+      body = '<ul class="cal-day-list">' + hits.map(hit => {
+        const ev = hit.ev;
+        let time;
+        if (ev.d) {
+          time = t('cal.all_day');
+        } else {
+          const a = hhmm(ev.s), b = hhmm(ev.e);
+          time = (b && b !== a) ? a + '–' + b : a;
+        }
+        const loc = ev.l ? `<span class="cal-day-loc">${escapeHtml(ev.l)}</span>` : '';
+        return `<li><i class="cal-dot" style="background:${hit.feed.color}"></i>` +
+          `<span class="cal-day-time">${escapeHtml(time)}</span>` +
+          `<span class="cal-day-title">${escapeHtml(ev.t || t('cal.unnamed'))}</span>${loc}</li>`;
+      }).join('') + '</ul>';
+    }
+    box.innerHTML = `<div class="cal-day-head"><span>${escapeHtml(label)}</span>` +
+      `<button type="button" class="icon-btn" data-cal-day-close aria-label="${escapeHtml(t('cal.close'))}">✕</button></div>` + body;
+    box.hidden = false;
+    placeCalDay(box);
+  }
+
   function bindCalendar() {
     const prev = document.getElementById('cal-prev');
     const next = document.getElementById('cal-next');
     if (!prev || !next) return;
-    prev.addEventListener('click', () => { calCursor.m--; if (calCursor.m < 1) { calCursor.m = 12; calCursor.y--; } renderCalendar(); });
-    next.addEventListener('click', () => { calCursor.m++; if (calCursor.m > 12) { calCursor.m = 1; calCursor.y++; } renderCalendar(); });
+    const go = (dm) => {
+      calSelected = null; // the popover belongs to the old month
+      calCursor.m += dm;
+      if (calCursor.m < 1) { calCursor.m = 12; calCursor.y--; }
+      if (calCursor.m > 12) { calCursor.m = 1; calCursor.y++; }
+      renderCalendar();
+    };
+    prev.addEventListener('click', () => go(-1));
+    next.addEventListener('click', () => go(1));
+
+    const grid = document.getElementById('cal-grid');
+    if (grid) {
+      const toggleDay = (cell) => {
+        if (!cell || !cell.dataset.day) return;
+        const key = calKey(calCursor.y, calCursor.m, +cell.dataset.day);
+        calSelected = (calSelected === key) ? null : key;
+        renderCalDay();
+      };
+      grid.addEventListener('click', e => toggleDay(e.target.closest('.cal-cell')));
+      grid.addEventListener('keydown', e => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const cell = e.target.closest('.cal-cell');
+        if (!cell || !cell.dataset.day) return;
+        e.preventDefault();
+        toggleDay(cell);
+      });
+    }
+    const day = document.getElementById('cal-day');
+    if (day) day.addEventListener('click', e => {
+      if (e.target.closest('[data-cal-day-close]') || e.target === day) { calSelected = null; renderCalDay(); }
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && calSelected) { calSelected = null; renderCalDay(); }
+    });
+  }
+
+  // ---------- Calendar subscriptions (Apple / any published ICS feed, read-only) ----------
+  // The feed list is user data and goes through Store.set, so a failed write surfaces a toast.
+  // Note it is deliberately NOT in sync.js's SYNC_KEYS: an Apple "public calendar" link is an
+  // unguessable capability, and pushing it to the server would hand the server a key to the user's
+  // calendar. Fetched events are derived from that URL, potentially large, and device-specific, so
+  // they live in the local-only cache key and skip sync/export entirely.
+  function normalizeCalendars(raw) {
+    if (!Array.isArray(raw) || !window.LT_CAL) return [];
+    const out = [];
+    for (const c of raw) {
+      if (!c || typeof c !== 'object') continue;
+      const url = window.LT_CAL.normalizeFeedUrl(c.url);
+      if (!url) continue;
+      const id = String(c.id || nid());
+      out.push({
+        id,
+        name: String(c.name || '').slice(0, 40),
+        url,
+        color: /^#[0-9a-f]{6}$/i.test(String(c.color || '')) ? c.color : window.LT_CAL.colorFor(id),
+        on: c.on !== false
+      });
+      if (out.length >= window.LT_CAL.MAX_FEEDS) break;
+    }
+    return out;
+  }
+
+  // Day-key → [{ feed, ev }]. Rebuilt whenever the cache or the enabled set changes; the month grid
+  // then renders from a map lookup instead of scanning every event.
+  function rebuildCalIndex() {
+    calIndex = new Map();
+    if (!window.LT_CAL) return;
+    for (const feed of state.calendars) {
+      if (!feed.on) continue;
+      const entry = calCache[feed.id];
+      if (!entry || !Array.isArray(entry.events) || !entry.events.length) continue;
+      for (const [key, list] of window.LT_CAL.groupByDay(entry.events)) {
+        if (!calIndex.has(key)) calIndex.set(key, []);
+        const bucket = calIndex.get(key);
+        for (const ev of list) bucket.push({ feed, ev });
+      }
+    }
+    for (const list of calIndex.values()) list.sort((a, b) => (b.ev.d - a.ev.d) || (a.ev.s - b.ev.s));
+  }
+
+  let calBusy = false;
+  // force = ignore the freshness window (the "Refresh now" button, and a just-added feed).
+  async function syncCalendars(force) {
+    if (calBusy || !window.LT_CAL || !window.LT_ICS) return;
+    const active = state.calendars.filter(c => c.on);
+    if (!active.length) { rebuildCalIndex(); renderCalendar(); renderCalList(); renderCalStatus(); return; }
+    calBusy = true;
+    renderCalStatus();
+    try {
+      let changed = false;
+      for (const feed of active) {
+        const next = await window.LT_CAL.syncFeed(feed, force ? null : calCache[feed.id], Date.now());
+        if (JSON.stringify(next) !== JSON.stringify(calCache[feed.id] || null)) {
+          calCache[feed.id] = next;
+          changed = true;
+        }
+      }
+      if (changed) await localRawSet(K.calcache, calCache);
+      rebuildCalIndex();
+      renderCalendar();
+    } finally {
+      calBusy = false;
+      renderCalList();
+      renderCalStatus();
+    }
+  }
+
+  function calErrorMessage(entry) {
+    const code = entry && entry.error;
+    if (!code) return '';
+    const http = /^http(\d+)$/.exec(code);
+    if (http) return t('cal.err_http', { code: http[1] });
+    const known = { timeout: 'cal.err_timeout', network: 'cal.err_network', parse: 'cal.err_parse', too_large: 'cal.err_too_large' };
+    return t(known[code] || 'cal.err_network');
+  }
+
+  function renderCalStatus() {
+    const el = document.getElementById('cal-status');
+    if (!el) return;
+    if (calBusy) { el.textContent = t('cal.status_syncing'); el.className = 'cal-status'; return; }
+    const active = state.calendars.filter(c => c.on);
+    if (!active.length) { el.textContent = ''; el.className = 'cal-status'; return; }
+    const bad = active.find(c => (calCache[c.id] || {}).error);
+    if (bad) { el.textContent = t('cal.status_err', { why: calErrorMessage(calCache[bad.id]) }); el.className = 'cal-status err'; return; }
+    const last = active.reduce((mx, c) => Math.max(mx, (calCache[c.id] || {}).fetchedAt || 0), 0);
+    if (!last) { el.textContent = t('cal.status_never'); el.className = 'cal-status'; return; }
+    let n = 0;
+    for (const c of active) n += ((calCache[c.id] || {}).events || []).length;
+    el.textContent = t('cal.status_ok', { n });
+    el.className = 'cal-status ok';
+  }
+
+  function renderCalList() {
+    const box = document.getElementById('cal-list');
+    if (!box) return;
+    if (!state.calendars.length) {
+      box.innerHTML = `<p class="cal-empty">${escapeHtml(t('cal.empty'))}</p>`;
+      return;
+    }
+    box.innerHTML = state.calendars.map(feed => {
+      let host = '';
+      try { host = new URL(feed.url).hostname; } catch { host = ''; }
+      const entry = calCache[feed.id] || {};
+      const n = (entry.events || []).length;
+      const stateHtml = entry.error
+        ? `<span class="cal-item-state err">${escapeHtml(calErrorMessage(entry))}</span>`
+        : `<span class="cal-item-state">${escapeHtml(entry.fetchedAt ? t('cal.status_ok', { n }) : t('cal.status_never'))}</span>`;
+      return `<div class="cal-item" data-cal-id="${feed.id}">` +
+        `<i class="cal-dot" style="background:${feed.color}"></i>` +
+        `<div class="cal-item-main">` +
+          `<div class="cal-item-name">${escapeHtml(feed.name || entry.title || host || t('cal.unnamed'))}</div>` +
+          `<div class="cal-item-url">${escapeHtml(host)}</div>${stateHtml}` +
+        `</div>` +
+        `<label class="cal-item-toggle" title="${escapeHtml(t('cal.enable'))}">` +
+          `<input type="checkbox" data-cal-on${feed.on ? ' checked' : ''}>` +
+        `</label>` +
+        `<button type="button" class="icon-btn" data-cal-del aria-label="${escapeHtml(t('cal.remove'))}" title="${escapeHtml(t('cal.remove'))}">✕</button>` +
+      `</div>`;
+    }).join('');
+  }
+
+  async function addCalendarFeed() {
+    const input = document.getElementById('f-cal-url');
+    if (!input || !window.LT_CAL) return;
+    const url = window.LT_CAL.normalizeFeedUrl(input.value);
+    if (!url) return showToast(t('toast.cal_bad_url'));
+    if (state.calendars.some(c => c.url === url)) return showToast(t('toast.cal_dup'));
+    if (state.calendars.length >= window.LT_CAL.MAX_FEEDS) return showToast(t('toast.cal_limit', { n: window.LT_CAL.MAX_FEEDS }));
+    // Chrome refuses to prompt for an origin that is not declared in optional_host_permissions, and
+    // that refusal is indistinguishable from a user "no" — so check first and say something useful.
+    if (!window.LT_CAL.isDeclared(url)) return showToast(t('toast.cal_host'));
+    const perm = await window.LT_CAL.permissionState(url);
+    if (perm === 'unsupported') return showToast(t('toast.cal_host'));
+    if (perm !== 'granted' && !(await window.LT_CAL.requestAccess(url))) return showToast(t('toast.cal_denied'));
+
+    const id = nid();
+    state.calendars.push({ id, name: '', url, color: window.LT_CAL.colorFor(id), on: true });
+    await Store.set(K.calendars, state.calendars);
+    input.value = '';
+    showToast(t('toast.cal_added'));
+    renderCalList();
+    await syncCalendars(true); // a brand-new feed has nothing cached, so skip the freshness window
+  }
+
+  function bindCalSettings() {
+    const input = document.getElementById('f-cal-url');
+    const addBtn = document.getElementById('f-cal-add');
+    if (addBtn) addBtn.addEventListener('click', addCalendarFeed);
+    if (input) input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); addCalendarFeed(); }
+    });
+    const refresh = document.getElementById('f-cal-refresh');
+    if (refresh) refresh.addEventListener('click', () => syncCalendars(true));
+    const list = document.getElementById('cal-list');
+    if (!list) return;
+
+    list.addEventListener('click', async e => {
+      const del = e.target.closest('[data-cal-del]');
+      if (!del) return;
+      const id = (del.closest('[data-cal-id]') || {}).dataset?.calId;
+      const at = state.calendars.findIndex(c => c.id === id);
+      if (at < 0) return;
+      state.calendars.splice(at, 1);
+      delete calCache[id];
+      await Store.set(K.calendars, state.calendars);
+      await localRawSet(K.calcache, calCache);
+      rebuildCalIndex();
+      renderCalendar();
+      renderCalList();
+      renderCalStatus();
+      showToast(t('toast.cal_removed'));
+    });
+
+    list.addEventListener('change', async e => {
+      const cb = e.target.closest('[data-cal-on]');
+      if (!cb) return;
+      const id = (cb.closest('[data-cal-id]') || {}).dataset?.calId;
+      const feed = state.calendars.find(c => c.id === id);
+      if (!feed) return;
+      feed.on = cb.checked;
+      await Store.set(K.calendars, state.calendars);
+      rebuildCalIndex();
+      renderCalendar();
+      renderCalList();
+      renderCalStatus();
+      if (feed.on) syncCalendars(false); // re-enabling a feed should not wait for the next boot
+    });
   }
 
   // ---------- Movie-of-the-day widget (route C: built-in Douban annual-best list, zero network) ----------
@@ -5341,6 +5701,11 @@
     // to the default set.
     const prompts = sanitizePrompts(data.prompts);
     state.prompts = prompts !== null ? prompts : structuredClone(DEFAULT_PROMPTS);
+    // Calendar subscriptions read through their own keys (Store.getAll covers a fixed key set): the
+    // feed list is user data, the fetched events are a device-local cache that is never exported.
+    state.calendars = normalizeCalendars(await localRawGet(K.calendars));
+    calCache = (await localRawGet(K.calcache)) || {};
+    rebuildCalIndex();
     return { raw, data };
   }
 
@@ -5357,6 +5722,8 @@
     syncUI();
     renderTodos();
     renderCalendar();
+    renderCalList();  // subscribed feeds survived the pull untouched, but the status line may be stale
+    renderCalStatus();
     applyWidgets(); // a remote pull may have removed / restored left-column widgets
     applySearchVis(); // ... or flipped the hide-search preference
     applyIconSizing(); // ... or changed the icon tile geometry
@@ -6029,6 +6396,7 @@
     bindSiteForm();
     window.LT_PROMPTS.bindPalette();
     bindSettings();
+    bindCalSettings(); // subscribe / remove / toggle calendar feeds
     bindAvatar();
     renderAvatar(); // profile avatar is rendered once events are bound and sync state is reachable
     sweepPending(); // sweep expired / corrupted pending leftovers on boot
@@ -6040,6 +6408,12 @@
       const reason = e && e.reason;
       diagPush(reason && (reason.message || String(reason)) || 'unhandled promise rejection');
     });
+
+    // Subscribed calendars: render from the local cache immediately so the dots are on first paint,
+    // then refresh in the background (syncFeed skips feeds fetched within the freshness window).
+    renderCalList();
+    renderCalStatus();
+    syncCalendars(false).catch(() => {});
 
     // Cloud sync init, last: the migration write-back has landed and every event is bound.
     if (window.LT_SYNC) {

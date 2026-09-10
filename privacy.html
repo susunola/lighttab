@@ -63,6 +63,9 @@
     <h2>Daily movies</h2>
     <p>When the daily movie widget is enabled, LightTab requests the public hot-movie list from movie.douban.com and caches it locally for 24 hours. Posters load from doubanio.com without a referrer. These requests expose normal network information such as your IP address to the provider; no account, search history or shortcut data is sent. Cached and bundled movies are used when requests fail.</p>
 
+    <h2>Calendar subscriptions</h2>
+    <p>Subscribing to a calendar is off by default and entirely user-initiated: you paste a published ICS link in <em>Settings → Calendar</em>. LightTab then performs an anonymous, read-only <code>GET</code> of that one URL — no cookies, no credentials, no account — and never writes anything back to the source calendar. The calendar hosts are declared as <strong>optional</strong> host permissions, so the install prompt never asks for them; each host is requested only when you subscribe to a feed on it. A published calendar link acts as an unguessable key, so it is stored on this device only (<code>lt.calendars</code>) and is deliberately excluded from cloud sync and from JSON exports; the fetched events are cached locally (<code>lt.calcache</code>) and are not synced either. Limits: at most 8 feeds, 2 MB per feed, 15-second timeout.</p>
+
     <h2>Content script</h2>
     <p>The extension injects a content script on supported pages of <code>www.doubao.com</code>, <code>www.dola.com</code> and <code>chatgpt.com</code>. On a prompt launch it reads a temporary local prompt entry, locates the page's input and send controls, fills the prompt and attempts to submit it. Submission sends your prompt to the selected AI provider. If automatic entry fails, the extension attempts to copy the prompt and displays a notice. It does not collect your conversation history or cookies.</p>
 

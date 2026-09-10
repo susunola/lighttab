@@ -19,6 +19,7 @@ default **no data leaves your device**, and LightTab has **no tracking, no analy
 | Search suggestions are enabled | The keystrokes you type | Directly to your chosen engine's suggestion endpoint (Baidu / Google / Bing). Off by default? **No — on by default; you can disable it in Settings → General.** |
 | You enable the optional online wallpaper library | Requests for wallpaper metadata/images | To the LightTab service `lighttab.atomwangnus.com` |
 | You enable the optional weather widget | Your city name + coordinates + weather requests | Open-Meteo (`api.open-meteo.com`, `geocoding-api.open-meteo.com`) |
+| You subscribe to a calendar (*Settings → Calendar*) | An anonymous read-only `GET` of the one published ICS link you pasted | To that calendar's own host (e.g. `*.icloud.com`, `*.google.com`, `*.outlook.com`). No cookies, no credentials, no write access |
 | You enable optional cloud sync | Email address, a password hash (never the password itself), and your synced documents | `lighttab.atomwangnus.com` over HTTPS |
 | You enable "Record errors locally" | Error **messages** only (no URLs, no stacks, no network) | Stored on your device; you can export the file yourself |
 
@@ -36,6 +37,16 @@ advertising.
   send the prompt you typed. They are not active otherwise.
 - **Host permissions**: the three search-suggestion endpoints (Baidu / Google / Bing). No page
   content is read.
+- **Optional host permissions**: the calendar-feed hosts (`*.icloud.com`, `*.google.com`,
+  `*.googleusercontent.com`, `*.outlook.com`, `*.office.com`, `*.live.com`,
+  `*.calendar.yahoo.com`, `*.fastmail.com`, `*.nextcloud.com`). They are declared as *optional* so
+  the install prompt never asks for them; each one is requested only when you subscribe to a feed on
+  that host, and only a read-only `GET` of the URL you pasted is ever made. If you never open
+  *Settings → Calendar*, they are never requested.
+- **Calendar feed URLs never leave the device.** A published calendar link is an unguessable
+  capability, so it is deliberately excluded from cloud sync and from JSON exports; it is stored
+  under its own local key (`lt.calendars`). Fetched events are cached locally under `lt.calcache`
+  and are not synced either.
 
 ## 4. Cloud sync (optional)
 

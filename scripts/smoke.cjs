@@ -40,7 +40,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 // ---------- 1) JS syntax ----------
 console.log('[1] node --check');
-const JS_FILES = ['js/app.js', 'js/canvas.js', 'js/prompts.js', 'js/sync.js', 'js/inject-ai.js', 'js/lunar.js', 'js/holidays.js', 'js/icondb.js', 'js/i18n.js'];
+const JS_FILES = ['js/app.js', 'js/canvas.js', 'js/prompts.js', 'js/sync.js', 'js/inject-ai.js', 'js/lunar.js', 'js/holidays.js', 'js/icondb.js', 'js/i18n.js', 'js/ics.js', 'js/calendar.js'];
 for (const f of JS_FILES) {
   try {
     execFileSync(process.execPath, ['--check', path.join(ROOT, f)], { stdio: 'pipe' });
@@ -1863,7 +1863,7 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
   assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
   assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
-  assert(JSON.parse(read('manifest.json')).version === '1.22.0', 'manifest version is 1.22.0');
+  assert(JSON.parse(read('manifest.json')).version === '1.23.0', 'manifest version is 1.23.0');
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 
@@ -1886,6 +1886,62 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
     && /DIAG_MAX = 100/.test(appSrc) && /addEventListener\('error'/.test(appSrc)
     && /id="f-diag"/.test(html) && /id="btn-diag-export"/.test(html), 'local diagnostics (opt-in) are wired');
   for (const k of ['gen.diag', 'gen.diag_tip', 'gen.diag_export']) assert(i18nSrc.includes(`'${k}'`), `diag i18n ${k}`);
+}
+
+// ---------- 37) calendar subscriptions (published Apple/ICS feeds, read-only) ----------
+{
+  for (const f of ['js/ics.js', 'js/calendar.js']) assert(fs.existsSync(path.join(ROOT, f)), `${f} exists`);
+  const icsAt = html.indexOf('js/ics.js'), calAt = html.indexOf('js/calendar.js'), appAt = html.indexOf('js/app.js');
+  assert(icsAt > 0 && calAt > 0 && icsAt < appAt && calAt < appAt, 'ics.js + calendar.js load before app.js');
+
+  // Behavioural: all-day, zoned-recurring, cancelled and escaped-TEXT cases in one feed.
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(read('js/ics.js'), sandbox, { filename: 'ics.js' });
+  const ICS = sandbox.window.LT_ICS;
+  assert(!!ICS, 'ics.js exposes window.LT_ICS');
+  if (ICS) {
+    const src = [
+      'BEGIN:VCALENDAR', 'X-WR-CALNAME:Team Cal', 'BEGIN:VEVENT', 'UID:a@x',
+      'SUMMARY:All-day thing\\, with comma', 'DTSTART;VALUE=DATE:20260910', 'DTEND;VALUE=DATE:20260911',
+      'END:VEVENT', 'BEGIN:VEVENT', 'UID:b@x', 'SUMMARY:Zoned weekly',
+      'DTSTART;TZID=Asia/Shanghai:20260907T100000', 'DTEND;TZID=Asia/Shanghai:20260907T110000',
+      'RRULE:FREQ=WEEKLY;COUNT=4;BYDAY=MO', 'END:VEVENT', 'BEGIN:VEVENT', 'UID:c@x', 'SUMMARY:Dead',
+      'STATUS:CANCELLED', 'DTSTART:20260912T080000Z', 'END:VEVENT', 'END:VCALENDAR'
+    ].join('\r\n');
+    const raw = ICS.parseICS(src);
+    assert(raw.length === 2, 'parseICS drops STATUS:CANCELLED events', `got ${raw.length}`);
+    assert(ICS.parseCalendarName(src) === 'Team Cal', 'parseCalendarName reads X-WR-CALNAME');
+    assert(raw[0].summary === 'All-day thing, with comma', 'TEXT escaping is decoded');
+    const occ = ICS.expandAll(raw, Date.UTC(2026, 8, 1), Date.UTC(2026, 11, 31), 200);
+    const weekly = occ.filter(o => o.summary === 'Zoned weekly');
+    assert(weekly.length === 4, 'RRULE WEEKLY;COUNT=4 expands to 4 occurrences', `got ${weekly.length}`);
+    assert(weekly.every(o => new Date(o.startMs).getUTCHours() === 2),
+      'TZID resolves through the real tz database (10:00 Asia/Shanghai = 02:00Z)');
+    const ad = occ.filter(o => o.summary === 'All-day thing, with comma');
+    assert(ad.length === 1 && ad[0].allDay && ICS.occurrenceDays(ad[0]).join(',') === '2026-09-10',
+      'all-day DTEND is exclusive → the event touches exactly one day');
+  }
+
+  // A published feed URL is an unguessable capability: it must never be pushed to the cloud.
+  assert(!/lt\.calendars/.test(read('js/sync.js')), 'feed URLs stay out of SYNC_KEYS (never uploaded)');
+  const mf = JSON.parse(read('manifest.json'));
+  assert((mf.optional_host_permissions || []).some(p => p.includes('icloud.com'))
+    && !JSON.stringify(mf.permissions || []).includes('icloud'),
+    'calendar hosts are optional_host_permissions, not install-time permissions');
+
+  // UI surface + wiring.
+  assert(/data-tab="cal"/.test(html) && /data-pane="cal"/.test(html) && /id="cal-day"/.test(html)
+    && /id="f-cal-url"/.test(html) && /id="cal-list"/.test(html), 'calendar subscription UI is present');
+  assert(/function rebuildCalIndex/.test(appSrc) && /function syncCalendars/.test(appSrc)
+    && /function placeCalDay/.test(appSrc) && /function bindCalSettings/.test(appSrc)
+    && /LT_CAL\.requestAccess/.test(appSrc), 'subscription wiring exists in app.js');
+  for (const k of ['cal.sub_title', 'cal.events_n', 'cal.status_ok', 'cal.err_network',
+                   'toast.cal_added', 'toast.cal_denied', 'toast.cal_host', 'set.calendar']) {
+    assert(i18nSrc.includes(`'${k}'`), `cal i18n ${k}`);
+  }
+  assert(/\.cal-dots/.test(cssSrc) && /\.cal-day \{/.test(cssSrc) && /\.cal-item \{/.test(cssSrc),
+    'calendar dot / popover / feed-list styles exist');
 }
 
 console.log('');

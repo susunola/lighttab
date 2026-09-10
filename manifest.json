@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.22.0",
+  "version": "1.23.0",
   "name": "LightTab - Minimal New Tab",
   "short_name": "LightTab",
   "description": "Minimal new tab: clock, lunar calendar, search, AI prompts, shortcuts, to-dos, Bing wallpapers. Local-first, optional cloud sync.",
@@ -14,6 +14,17 @@
   "optional_permissions": [
     "bookmarks",
     "tabs"
+  ],
+  "optional_host_permissions": [
+    "https://*.icloud.com/*",
+    "https://*.google.com/*",
+    "https://*.googleusercontent.com/*",
+    "https://*.outlook.com/*",
+    "https://*.office.com/*",
+    "https://*.live.com/*",
+    "https://*.calendar.yahoo.com/*",
+    "https://*.fastmail.com/*",
+    "https://*.nextcloud.com/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';"
