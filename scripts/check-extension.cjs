@@ -69,6 +69,32 @@ const { chromium } = require('playwright');
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#todo-list')?.textContent.includes('Extension persistence check'));
     assert.deepEqual(errors, [], 'Reload should not throw');
+    // Add-shortcut dialog: the Name follows whatever URL is typed, but never at the expense of a
+    // name the user picked — and editing a saved shortcut leaves its stored name alone.
+    await page.locator('.card-add').click();
+    await page.waitForFunction(() => !document.querySelector('#modal-site').hidden);
+    await page.locator('#f-url').fill('https://fast.com/zh/cn/');
+    assert.equal(await page.locator('#f-title').inputValue(), 'Fast', 'typing a URL derives the Name from its host');
+    await page.locator('#f-title').fill('My Fast');
+    await page.locator('#f-url').fill('https://example.org/x');
+    assert.equal(await page.locator('#f-title').inputValue(), 'My Fast', 'a hand-typed Name survives later URL edits');
+    await page.locator('#f-title').fill(''); // emptying the Name re-arms the auto-fill
+    await page.locator('#f-url').fill('https://www.tencentcloud.com/');
+    assert.equal(await page.locator('#f-title').inputValue(), 'Tencentcloud', 'clearing the Name re-arms auto-fill (www is stripped)');
+    // Save a shortcut under a URL no default card already owns, so no duplicate prompt appears.
+    await page.locator('#f-title').fill('Auto Named');
+    await page.locator('#f-url').fill('https://lt-autoname-check.test/');
+    assert.equal(await page.locator('#f-title').inputValue(), 'Auto Named', 'a typed Name is kept when the URL changes afterwards');
+    await page.locator('#site-form button[type="submit"]').click();
+    await page.waitForFunction(() => document.querySelector('#modal-site').hidden);
+    // Editing that card and changing its URL must not rewrite the stored name.
+    await page.locator('#grid .card:not(.card-add)', { hasText: 'Auto Named' }).first().focus();
+    await page.keyboard.press('e');
+    await page.waitForFunction(() => !document.querySelector('#modal-site').hidden);
+    await page.locator('#f-url').fill('https://example.net/other');
+    assert.equal(await page.locator('#f-title').inputValue(), 'Auto Named', 'editing never rewrites the stored Name');
+    await page.locator('#modal-site .close-btn').click();
+    await page.waitForFunction(() => document.querySelector('#modal-site').hidden);
     console.log('PASS: MV3 installed; only expected movie startup requests; fetch suggestions under strict CSP; deferred wallpaper discovery; chrome.storage persistence after reload.');
 
     // Exercise recovery through the real settings UI with a fully mocked cloud service.

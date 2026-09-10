@@ -1863,7 +1863,7 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
   assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
   assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
-  assert(JSON.parse(read('manifest.json')).version === '1.23.1', 'manifest version is 1.23.1');
+  assert(JSON.parse(read('manifest.json')).version === '1.23.2', 'manifest version is 1.23.2');
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 
@@ -1954,6 +1954,27 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(/chrome\.runtime\.onUpdateAvailable\.addListener/.test(bg) && /chrome\.runtime\.reload\(\)/.test(bg),
     'a downloaded update is applied immediately (onUpdateAvailable → reload)');
   assert(fs.existsSync(path.join(ROOT, 'docs/RELEASING.md')), 'docs/RELEASING.md (release runbook) exists');
+}
+
+// ---------- 39) shortcut Name auto-fill ----------
+{
+  // Typing a URL pre-fills the Name from its host. The three entry points must agree on how a site
+  // is named, so the dialog has to reuse the same host-title derivation bulk add uses — and it has
+  // to yield to a name the user chose (and to edit mode, where the stored name is authoritative).
+  const app = read('js/app.js');
+  assert(/function batchHostTitle\(/.test(app), 'the shared host→title derivation exists');
+  const urlField = app.match(/urlField\.addEventListener\('input',[\s\S]{0,400}?\}\);/);
+  assert(urlField, 'the URL field has an auto-fill listener');
+  assert(/siteTitleDirty/.test(urlField[0]), 'auto-fill yields once the Name holds a user-chosen value');
+  assert(/form\.dataset\.editId/.test(urlField[0]), 'auto-fill is skipped while editing a saved shortcut');
+  assert(/batchHostTitle\(url\)/.test(urlField[0]), 'auto-fill names the site the same way bulk add does');
+  const curtabAt = app.indexOf('async function fillFromCurrentTab');
+  assert(curtabAt > -1, 'fillFromCurrentTab still exists');
+  // Slice to the function's own closing brace rather than a fixed character count: a magic width
+  // silently rots the moment anyone reformats or comments the body.
+  const curtabEnd = app.indexOf('\n  }', curtabAt);
+  assert(/siteTitleDirty = true;/.test(app.slice(curtabAt, curtabEnd > -1 ? curtabEnd : undefined)),
+    '"Add current tab" locks the tab title in against auto-fill');
 }
 
 console.log('');

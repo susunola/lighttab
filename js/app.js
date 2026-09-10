@@ -417,6 +417,9 @@
   let activePrompt = null; // template picked and waiting to launch (session only, not persisted)
   let clockTimer = null;
   let pendingIcon = null; // unsaved custom card icon (dataURL) held by the shortcut modal until Save
+  // True once the shortcut modal's Name field holds a name the user (or an explicit source such as
+  // "Add current tab") chose, so typing in the URL field stops overwriting it. Cleared on open.
+  let siteTitleDirty = false;
 
   // ---------- Wallpaper ----------
   function applyWallpaper(wp) {
@@ -2940,6 +2943,8 @@
     const titleEl = document.getElementById('site-modal-title');
     const form = document.getElementById('site-form');
     form.reset();
+    // Editing keeps the stored name untouched; adding starts with an empty, auto-fillable Name.
+    siteTitleDirty = !!id;
     const row = document.getElementById('f-group-row');
     const sel = document.getElementById('f-group');
     row.hidden = state.settings.groups.length === 0;
@@ -3135,10 +3140,27 @@
     });
     const curtabBtn = document.getElementById('f-curtab');
     if (curtabBtn) curtabBtn.addEventListener('click', fillFromCurrentTab);
+    // Typing a URL pre-fills the Name from its host, the same derivation bulk add and bookmark
+    // import use, so all three entry points name a site identically. It yields as soon as the Name
+    // holds something the user picked (or "Add current tab" supplied), and never runs while editing,
+    // so a hand-typed name is never overwritten.
     ['f-url', 'f-title'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', renderIconPreview);
     });
+    const urlField = document.getElementById('f-url');
+    const titleField = document.getElementById('f-title');
+    if (titleField) {
+      titleField.addEventListener('input', () => { siteTitleDirty = !!titleField.value.trim(); });
+    }
+    if (urlField && titleField) {
+      urlField.addEventListener('input', () => {
+        if (siteTitleDirty || form.dataset.editId) return;
+        const url = normalizeUrl(urlField.value);
+        titleField.value = url ? batchHostTitle(url).slice(0, 32) : '';
+        renderIconPreview(); // the letter tile falls back to the Name, so it has to re-read it
+      });
+    }
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const title = form.elements['title'].value.trim();
@@ -3258,7 +3280,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.23.1',
+      version: '1.23.2',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -3516,6 +3538,8 @@
     const form = document.getElementById('site-form');
     form.elements['title'].value = String(tab.title || hostnameOf(tab.url) || '').slice(0, 32);
     form.elements['url'].value = tab.url;
+    // The tab's own title beats anything derived from the host, so lock it in against auto-fill.
+    siteTitleDirty = true;
     renderIconPreview();
   }
 

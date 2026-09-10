@@ -1,3 +1,13 @@
+# 1.23.2 — the shortcut dialog names a site for you
+
+- The *Add shortcut* dialog now fills **Name** as you type the URL (`https://fast.com/zh/cn/` →
+  `Fast`, `www.` dropped) — the same host derivation bulk add and bookmark import already used, so
+  all three entry points name a site identically. It yields the moment you type a name of your own,
+  and never runs while editing, so a name you chose is never overwritten. Emptying the Name re-arms it.
+- "Add current tab" keeps locking in the tab's real title, which beats anything derived from a host.
+- smoke and the real-MV3 suite now cover the behaviour end to end: the auto-fill itself, the
+  user-name-wins rule, re-arming after clearing, and that editing leaves the stored name alone.
+
 # 1.23.1 — updates apply themselves
 
 - Fix: a published update could sit unused until the browser restarted, which made upgrading look
