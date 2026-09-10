@@ -1,3 +1,21 @@
+# 1.23.4 — grab the calendar anywhere
+
+- Fix: even in free-canvas mode the calendar could only be dragged by its 24px hover handle. A month
+  grid is almost entirely day cells, and cells were on the "don't start a drag here" list (the same
+  list every other widget escapes through its empty padding), so grabbing the calendar the way you
+  grab any other widget did nothing. A drag may now start on a day cell.
+- That needed the click/drag separation the card dragger already had and the block dragger did not:
+  * the click that follows a drag is now suppressed (capture phase, so it beats the calendar's own
+    handler), otherwise letting go after a drag would pop the day detail open;
+  * a day-cell press no longer calls `preventDefault()`, which was swallowing the click outright;
+  * a day-cell press is no longer pointer-captured. Capture retargets the following click to the
+    dragged block, so the click never reached the cell and the day popover could not open at all.
+    Move/up handlers now live on the document, so a drag that leaves the layout box still tracks.
+- Verified by measurement in the real-MV3 suite: a plain click on a day cell still arrives (and does
+  not move the block), and a drag from that same cell moves the calendar without firing a click.
+  Also confirmed all seven blocks (clock, calendar, todo, movie, search, grid, and the calendar via a
+  cell) still drag after the listener move.
+
 # 1.23.3 — the free canvas actually works
 
 - Fix: with the movie card in the **left column** (the default) the page runs an integrated grid

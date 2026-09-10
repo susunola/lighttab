@@ -201,6 +201,42 @@ const { chromium } = require('playwright');
     const calAfter = await page.locator('.wcal').boundingBox();
     assert(Math.abs(calAfter.x - calBefore.x) > 20 || Math.abs(calAfter.y - calBefore.y) > 20,
       'the calendar actually moves when dragged in free-canvas mode');
+    // Grabbing the calendar by a day cell must work too — a month grid is almost entirely cells, so
+    // a handle-only affordance leaves the calendar effectively undraggable while every other widget
+    // can be dragged by its body. A click on that same cell has to keep opening the day popover:
+    // that is why the cell press is not pointer-captured (capture retargets the click to the block)
+    // and why the click is suppressed only after a real drag.
+    await page.evaluate(() => {
+      window.__calClicks = 0;
+      document.getElementById('cal-grid').addEventListener('click', () => { window.__calClicks++; }, true);
+    });
+    const cellBox = await page.locator('.wcal .cal-grid .cal-cell').nth(12).boundingBox();
+    const cellX = cellBox.x + cellBox.width / 2;
+    const cellY = cellBox.y + cellBox.height / 2;
+    const clickBefore = await page.locator('.wcal').boundingBox();
+    await page.evaluate(() => { window.__calClicks = 0; });
+    await page.mouse.move(cellX, cellY);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    const clickAfter = await page.locator('.wcal').boundingBox();
+    assert.equal(await page.evaluate(() => window.__calClicks), 1, 'a plain click on a day cell still reaches the calendar');
+    assert(Math.abs(clickAfter.x - clickBefore.x) < 2 && Math.abs(clickAfter.y - clickBefore.y) < 2,
+      'a plain click on a day cell does not move the block');
+    const cellDragBefore = await page.locator('.wcal').boundingBox();
+    await page.evaluate(() => { window.__calClicks = 0; });
+    await page.mouse.move(cellX, cellY);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) {
+      await page.mouse.move(cellX + i * 14, cellY + i * 7);
+      await page.waitForTimeout(16);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(250);
+    const cellDragAfter = await page.locator('.wcal').boundingBox();
+    assert.equal(await page.evaluate(() => window.__calClicks), 0, 'the click that follows a drag is suppressed');
+    assert(Math.abs(cellDragAfter.x - cellDragBefore.x) > 20 || Math.abs(cellDragAfter.y - cellDragBefore.y) > 20,
+      'the calendar can be dragged by grabbing a day cell, not only by its handle');
     assert.deepEqual(errors, [], 'Canvas layout should not throw');
     console.log('PASS: free-canvas mode drags blocks; the movie card leaves the flow, stays capped, and keeps the icon grid on screen.');
   } finally {

@@ -460,15 +460,26 @@
     const root = canvasRoot();
     if (!root) return;
     let active = null;
+    let dragMoved = false; // whether this press became a drag (used to suppress the follow-up click)
 
     function onPointerDown(e) {
       if (!canvasEligible() || e.button !== 0) return;
       const handle = e.target.closest('.drag-handle');
       const block = blockEls().find(b => b.el === e.target.closest('.widget, #search, #grid-wrap'));
       if (!block) return;
-      // Outside the handle: only blank areas start a drag (interactive elements keep normal click behaviour).
-      if (!handle && e.target.closest(DRAG_INTERACTIVE)) return;
-      e.preventDefault();
+      // Outside the handle: only blank areas start a drag (interactive elements keep normal click
+      // behaviour). `.cal-cell` is a deliberate exception — a month grid is almost entirely cells,
+      // so refusing them left the calendar grabbable only by its 24px handle while every other
+      // widget could be dragged by its body. The movement threshold still separates a click
+      // (open the day popover) from a drag, and onClickCapture below eats the click after a drag.
+      const fromCell = !!e.target.closest('.cal-cell');
+      if (!handle && e.target.closest(DRAG_INTERACTIVE) && !fromCell) return;
+      // preventDefault cancels native drag and text selection — but it ALSO swallows the click that
+      // follows, so it must not run when the press may still turn out to be a plain click on a day
+      // cell. `.block-dragging` already sets user-select:none, and the drag path below re-applies
+      // this the moment the movement threshold is crossed.
+      if (!fromCell) e.preventDefault();
+      dragMoved = false;
       const rr = root.getBoundingClientRect();
       const r = block.el.getBoundingClientRect();
       active = {
@@ -481,7 +492,12 @@
         pointerId: e.pointerId
       };
       block.el.classList.add('block-dragging');
-      try { block.el.setPointerCapture(e.pointerId); } catch {}
+      // Pointer capture keeps a fast drag that leaves the window alive, but it also RETARGETS the
+      // follow-up click to the captured element — so capturing a press that began on a day cell
+      // would stop that click ever reaching the cell, and the day popover would never open. Card
+      // dragging avoids exactly this by not capturing; do the same for cell presses and rely on
+      // the click suppressor to eat the click only when a real drag happened.
+      if (!fromCell) { try { block.el.setPointerCapture(e.pointerId); } catch {} }
     }
 
     function onPointerMove(e) {
@@ -490,6 +506,11 @@
       const dy = e.clientY - active.startY;
       if (!active.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
       active.moved = true;
+      dragMoved = true;
+      // Committed to a drag now, so it is safe to cancel the native default (and this is what stops
+      // a poster inside the block from starting a native image drag when the block is grabbable
+      // only through a day cell).
+      e.preventDefault();
       const rootW = root.clientWidth;
       const w = active.block.el.offsetWidth;
       let nx = Math.round(active.baseX + dx);
@@ -522,10 +543,24 @@
       resolveCardCollisions(block.key); // a block dropped on the icon grid pushes cards aside
     }
 
+    // Suppress the click that follows a drag. Without this, allowing a drag to start on a day cell
+    // would also fire that cell's click and pop open the day detail the moment the drag ended.
+    // Capture phase, so it runs before the calendar's own delegated handler.
+    function onClickCapture(e) {
+      if (!dragMoved) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragMoved = false;
+    }
+
     root.addEventListener('pointerdown', onPointerDown);
-    root.addEventListener('pointermove', onPointerMove);
-    root.addEventListener('pointerup', onPointerUp);
-    root.addEventListener('pointercancel', onPointerUp);
+    // Move/up live on the document rather than on `root`: a cell press is deliberately not
+    // pointer-captured (see onPointerDown), so without this the drag would stall the moment the
+    // pointer left the layout box. Captured presses still bubble from the block up to document.
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointercancel', onPointerUp);
+    root.addEventListener('click', onClickCapture, true);
   }
 
   // True when the frozen canvas coordinates still describe a page whose left column looked different.

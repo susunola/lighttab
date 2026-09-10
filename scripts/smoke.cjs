@@ -1863,7 +1863,7 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
   assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
   assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
-  assert(JSON.parse(read('manifest.json')).version === '1.23.3', 'manifest version is 1.23.3');
+  assert(JSON.parse(read('manifest.json')).version === '1.23.4', 'manifest version is 1.23.4');
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 
@@ -1991,6 +1991,17 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
     'the movie card keeps a 320px cap (the w-top cap above is otherwise overridden)');
   assert(/\.widget\.wmovie\.w-top\s*\{[^}]*background:\s*none/.test(css),
     'the w-top movie block drops the card chrome the w-top stack is designed without');
+  // Block dragging: a day-cell press must be able to start a drag (a month grid is almost all
+  // cells, so handle-only left the calendar effectively undraggable), must NOT preventDefault at
+  // press time (that swallows the click and the day popover never opens), and the click that
+  // follows a real drag must be suppressed. check-extension.cjs proves all three by measurement.
+  const canvas = read('js/canvas.js');
+  assert(/DRAG_INTERACTIVE\)\s*&&\s*!fromCell\)\s*return;/.test(canvas),
+    'a day-cell press may start a block drag');
+  assert(/if \(!fromCell\) e\.preventDefault\(\);/.test(canvas),
+    'a day-cell press must not preventDefault, or the day popover never opens');
+  assert(/root\.addEventListener\('click', onClickCapture, true\);/.test(canvas),
+    'the click that follows a block drag is suppressed');
 }
 
 console.log('');
