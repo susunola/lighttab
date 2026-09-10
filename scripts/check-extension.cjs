@@ -73,6 +73,14 @@ const { chromium } = require('playwright');
     // name the user picked — and editing a saved shortcut leaves its stored name alone.
     await page.locator('.card-add').click();
     await page.waitForFunction(() => !document.querySelector('#modal-site').hidden);
+    // The modal focuses the Name field on a 30ms timer. That timer used to fire unconditionally, so
+    // reaching the URL field inside that window and typing put the text into the Name field instead
+    // (truncated by its maxlength) — a rare input-stealing bug for a user, and a flaky failure for
+    // the assertions just below. Reaching a field must be enough to keep it.
+    await page.locator('#f-url').focus();
+    await page.waitForTimeout(150); // let the focus timer fire
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'f-url',
+      'the modal never steals focus back from the field the user already reached');
     await page.locator('#f-url').fill('https://fast.com/zh/cn/');
     assert.equal(await page.locator('#f-title').inputValue(), 'Fast', 'typing a URL derives the Name from its host');
     await page.locator('#f-title').fill('My Fast');
@@ -239,6 +247,102 @@ const { chromium } = require('playwright');
       'the calendar can be dragged by grabbing a day cell, not only by its handle');
     assert.deepEqual(errors, [], 'Canvas layout should not throw');
     console.log('PASS: free-canvas mode drags blocks; the movie card leaves the flow, stays capped, and keeps the icon grid on screen.');
+
+    // Switching engines LIVE, through the Settings dropdown, with no reload. That transition is what
+    // enables the canvas, and it used to be a dead end: applyWidgets called recaptureBlocksFromFlow(),
+    // whose first guard bailed whenever `.canvas` was absent — precisely the state this switch starts
+    // from. The page then sat in neither engine: canvasEligible() true, so a block accepted the press
+    // and followed the pointer through inline left/top, while nothing was absolutely positioned, no
+    // coordinates were captured, and `.drag-handle` stayed at opacity 0. The block drifted and lost
+    // its place on the very screen the setting was changed on, until a reload. Boot never showed it
+    // because reinitCanvas()/captureLayout() have no such guard — so this section has to drive the
+    // dropdown itself instead of writing storage and reloading, which is exactly how the bug got
+    // through the two sections above.
+    await page.evaluate(async () => {
+      const a = window.LT_APP;
+      a.state.settings.widgets.wcal = true;
+      a.state.settings.widgetPos.wmovie = 'left';
+      await a.Store.set(a.K.settings, a.state.settings);
+    });
+    await page.reload();
+    await page.locator('.wcal .cal-grid').waitFor();
+    await page.waitForTimeout(900);
+    assert.equal(await page.evaluate(() => document.querySelector('.layout').className), 'layout movie-grid',
+      'the shipped default keeps the movie card inside the icon grid');
+    // A refused drag has to say why rather than do nothing.
+    const hintCell = await page.locator('.wcal .cal-grid .cal-cell').nth(12).boundingBox();
+    const hintX = hintCell.x + hintCell.width / 2, hintY = hintCell.y + hintCell.height / 2;
+    await page.mouse.move(hintX, hintY);
+    await page.mouse.down();
+    for (let i = 1; i <= 6; i++) { await page.mouse.move(hintX + i * 7, hintY + i * 4); await page.waitForTimeout(16); }
+    await page.mouse.up();
+    await page.waitForTimeout(250);
+    const hint = await page.evaluate(() => {
+      const b = document.getElementById('toast');
+      return { hidden: b.hidden, text: b.textContent, action: !!b.querySelector('button') };
+    });
+    assert(!hint.hidden, 'a drag attempt in the icon-grid layout is not silent');
+    assert(/自由画布|free canvas/i.test(hint.text), `the hint names the free canvas (showed "${hint.text}")`);
+    assert(hint.action, 'the hint carries the one-click remedy');
+
+    // The remedy it offers must actually engage the canvas, and the drag must then persist.
+    await page.locator('#toast button').click();
+    await page.waitForTimeout(700);
+    const fixed = await page.evaluate(() => ({
+      cls: document.querySelector('.layout').className,
+      captured: !!window.LT_APP.state.settings.layout
+    }));
+    assert(fixed.cls.includes('canvas'), `the one-click fix engages the canvas (class "${fixed.cls}")`);
+    assert(fixed.captured, 'the one-click fix captures block coordinates');
+    const fixBefore = await page.locator('.wcal').boundingBox();
+    const fixCell = await page.locator('.wcal .cal-grid .cal-cell').nth(12).boundingBox();
+    const fx = fixCell.x + fixCell.width / 2, fy = fixCell.y + fixCell.height / 2;
+    await page.mouse.move(fx, fy);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) { await page.mouse.move(fx + i * 14, fy + i * 7); await page.waitForTimeout(16); }
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    const fixAfter = await page.locator('.wcal').boundingBox();
+    assert(Math.abs(fixAfter.x - fixBefore.x) > 20 || Math.abs(fixAfter.y - fixBefore.y) > 20,
+      'after the one-click fix the calendar really moves');
+
+    // Back into the icon grid: the canvas has to let go of its absolute positioning.
+    await page.evaluate(() => { document.getElementById('f-pos-wmovie').value = 'left'; });
+    await page.locator('#f-pos-wmovie').dispatchEvent('change');
+    await page.waitForTimeout(600);
+    assert.equal(await page.evaluate(() => document.querySelector('.layout').className), 'layout movie-grid',
+      'moving the movie card back into the icon grid releases the canvas');
+
+    // The regression itself: forward again through the dropdown, no reload.
+    await page.evaluate(() => { document.getElementById('f-pos-wmovie').value = 'top'; });
+    await page.locator('#f-pos-wmovie').dispatchEvent('change');
+    await page.waitForTimeout(700);
+    const live = await page.evaluate(() => ({
+      cls: document.querySelector('.layout').className,
+      captured: !!window.LT_APP.state.settings.layout,
+      calPosition: getComputedStyle(document.querySelector('.wcal')).position
+    }));
+    assert(live.cls.includes('canvas'),
+      `the dropdown must engage the canvas without a reload (layout class was "${live.cls}")`);
+    assert(live.captured, 'the live switch captures block coordinates');
+    assert.equal(live.calPosition, 'absolute', 'the canvas positions the calendar after the live switch');
+    const liveBefore = await page.locator('.wcal').boundingBox();
+    const liveCell = await page.locator('.wcal .cal-grid .cal-cell').nth(12).boundingBox();
+    const lx = liveCell.x + liveCell.width / 2, ly = liveCell.y + liveCell.height / 2;
+    await page.mouse.move(lx, ly);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) { await page.mouse.move(lx + i * 15, ly + i * 8); await page.waitForTimeout(16); }
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    const liveAfter = await page.locator('.wcal').boundingBox();
+    assert(Math.abs(liveAfter.x - liveBefore.x) > 20 || Math.abs(liveAfter.y - liveBefore.y) > 20,
+      'the calendar moves right after the live switch, with no reload');
+    assert(await page.evaluate(() => {
+      const l = window.LT_APP.state.settings.layout;
+      return !!(l && l.wcal);
+    }), 'a drag that follows the live switch persists its coordinates');
+    assert.deepEqual(errors, [], 'Switching layout engines live should not throw');
+    console.log('PASS: the movie placement dropdown switches engines live, a refused drag explains itself, and the calendar drags and persists without a reload.');
   } finally {
     if (context) await context.close();
     fs.rmSync(profile, { recursive: true, force: true });

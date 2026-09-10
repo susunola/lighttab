@@ -563,6 +563,47 @@
     root.addEventListener('click', onClickCapture, true);
   }
 
+  // ---------- "Why won't it drag?" ----------
+  // The free canvas is opt-in (it is the movie card's placement that picks the layout engine) and
+  // width-gated (>1024px). Both refusals used to be completely silent: a press on a widget just did
+  // nothing, which reads as a broken feature rather than a setting. Explain it instead — but only
+  // once the press has actually become a drag gesture, so an ordinary click is never interrupted,
+  // and only once per gesture.
+  function bindDragHint() {
+    const root = canvasRoot();
+    if (!root) return;
+    let candidate = null;
+    function onDown(e) {
+      if (e.button !== 0 || canvasEligible()) return;
+      const block = e.target.closest('.widget, #search, #grid-wrap');
+      if (!block) return;
+      // A real control keeps its own behaviour (buttons, inputs, cards…). The calendar's day cells
+      // are the exception: they are the widget's whole surface, and grabbing one is THE gesture a
+      // user reaches for when they want to move the calendar.
+      if (e.target.closest(DRAG_INTERACTIVE) && !e.target.closest('.cal-cell')) return;
+      candidate = { x: e.clientX, y: e.clientY };
+    }
+    function onMove(e) {
+      if (!candidate) return;
+      if (Math.hypot(e.clientX - candidate.x, e.clientY - candidate.y) < DRAG_THRESHOLD) return;
+      candidate = null; // one hint per gesture
+      const A_ = A();
+      // Which of the two gates is shut? The engine choice is the actionable one, so offer the fix.
+      const integrated = canvasRoot()?.classList.contains('movie-grid');
+      A_.showToast(
+        A_.t(integrated ? 'drag.needCanvas' : 'drag.tooNarrow'),
+        integrated ? A_.t('drag.enableCanvas') : '',
+        integrated ? () => A_.enableFreeCanvas() : null,
+        7000
+      );
+    }
+    const clear = () => { candidate = null; };
+    root.addEventListener('pointerdown', onDown);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', clear);
+    document.addEventListener('pointercancel', clear);
+  }
+
   // True when the frozen canvas coordinates still describe a page whose left column looked different.
   // Only auto layouts are considered — a hand-dragged arrangement is never second-guessed.
   // The signal is exact rather than geometric: recaptureBlocksFromFlow drops the key of every hidden
@@ -595,14 +636,30 @@
   // a different page (a hole where the widget was, or a revived widget with no coords parked at the
   // origin), so re-derive the block positions from a fresh flow pass. Automatic callers (boot-time
   // stale checks, overlap self-healing) only ever touch an auto layout; applyWidgets passes force
-  // because a visibility/position change is a structural edit the user just asked for. The manual
+  // because a visibility/position change is a structural edit the user just asked for — and a forced
+  // call is also the only one allowed to bring the canvas up from scratch (see below). The manual
   // marker survives a forced reflow — only the numbers are refreshed.
   function recaptureBlocksFromFlow(force) {
     const root = canvasRoot();
-    if (!root || !root.classList.contains('canvas')) return; // flow layout reflows on its own
+    if (!root) return;
     const l = getLayout();
-    if (!l || (l.auto === false && !force)) return;
-    leaveCanvas(); // drop absolute positioning so the browser reflows around the hidden widgets
+    if (l && l.auto === false && !force) return;
+    // The `canvas` class being absent is NOT a reason to bail out. applyWidgets calls this at the
+    // exact moment the movie card leaves the icon grid — and that transition is what ENABLES the
+    // canvas — so on the very first switch the class is still missing. Returning there stranded the
+    // page in a state worse than either engine: canvasEligible() was true, so a block accepted the
+    // press and followed the pointer through inline left/top, while — with no `canvas` class —
+    // nothing was absolutely positioned, no coordinates were captured or persisted, and
+    // `.drag-handle` stayed at opacity 0. The block drifted and then lost its place: "nothing can be
+    // dragged", with no explanation, on the very screen the user switched the setting from, until a
+    // reload. So measure the flow layout and engage instead.
+    // Only a forced (structural) call may do that engaging: the automatic callers — the boot-time
+    // stale check and the overlap self-healer — can run before the widgets have settled, and must
+    // never be the thing that freezes a first draft of the geometry.
+    const engaged = root.classList.contains('canvas');
+    if (!engaged && !force) return;
+    if (!canvasEligible()) return; // flow layout reflows on its own
+    if (engaged) leaveCanvas(); // drop absolute positioning so the browser reflows around it
     const rr = root.getBoundingClientRect();
     const next = {};
     for (const b of blockEls()) {
@@ -614,7 +671,9 @@
     // the grid wider, which changes the track count — so the card map has to be re-derived too,
     // otherwise old column indices scatter the icons across the new width.
     next.cards = captureCardLayout();
-    next.auto = l.auto !== false; // a forced reflow refreshes geometry but keeps the manual marker
+    // A forced reflow refreshes geometry but keeps the manual marker; a page with no layout at all
+    // (first engagement) is auto by definition — same rule captureLayout() applies.
+    next.auto = !l || l.auto !== false;
     A().state.settings.layout = next;
     A().Store.set(A().K.settings, A().state.settings);
     applyCanvas();
@@ -664,6 +723,7 @@
   function initCanvasLayout() {
     injectDragHandles();
     bindBlockDrag();
+    bindDragHint();
     bindCardCanvasDrag();
 
     if (window.ResizeObserver) {

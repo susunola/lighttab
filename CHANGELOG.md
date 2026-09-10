@@ -1,3 +1,31 @@
+# 1.23.5 — the free canvas comes up when you switch to it
+
+- Fix: choosing **Above search** in Settings → Widgets did not actually switch the layout engine
+  until the next page load. The movie card's placement is what selects the engine, but the handler
+  for that change called `recaptureBlocksFromFlow()`, whose first guard bailed out whenever the
+  canvas was not already engaged — which is exactly the state that switch starts from. The live page
+  was then left in *neither* engine: `canvasEligible()` said yes, so a widget accepted the press and
+  followed the pointer through inline offsets, while nothing was absolutely positioned, no
+  coordinates were captured, and the drag handles stayed at `opacity: 0`. Widgets drifted and lost
+  their place on the very screen the setting was changed on. Opening a new tab always looked fine,
+  because the boot path carries no such guard — which is why this survived three rounds of fixes.
+  The guard is now explicit about what it protects: only a *structural* (forced) call may bring the
+  canvas up, and an automatic one still never overwrites a hand-arranged layout.
+- Fix: a refused drag is no longer silent. The canvas is opt-in and needs a window wider than
+  1024px; both refusals used to do nothing at all, which reads as a broken feature. Dragging a
+  widget when it cannot move now says which of the two gates is shut, and the engine one offers a
+  one-click **Enable free canvas** button.
+- Fix: the Add-shortcut dialog focuses the Name field on a 30ms timer, unconditionally. Reaching the
+  URL field inside that window and typing put the text into the **Name** field instead, silently
+  truncated by its `maxlength`. The timer now only takes focus while the dialog does not already hold
+  it — a rare but real input-stealing bug for fast typists, and the cause of an intermittent failure
+  in the test suite.
+- The test suite now drives the actual Settings dropdown instead of writing storage and reloading.
+  Writing the setting and reloading is exactly what hid this: every previous test of free-canvas
+  dragging took the boot path.
+- One smoke check locked the old guard's literal source text rather than its behaviour; it now
+  asserts the invariant (manual layouts are never auto-overwritten) so the guard can evolve.
+
 # 1.23.4 — grab the calendar anywhere
 
 - Fix: even in free-canvas mode the calendar could only be dragged by its 24px hover handle. A month

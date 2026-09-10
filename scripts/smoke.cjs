@@ -520,9 +520,10 @@ assert(/layout\.auto = true/.test(canvasSrc), 'captureLayout marks auto layout')
 assert((canvasSrc.match(/\.auto = false/g) || []).length >= 2, 'both block dragging and card dragging mark the layout as manual');
 assert(/function widgetLayoutStale/.test(canvasSrc), 'canvas.js defines widgetLayoutStale() (stale coordinate detection on cold start)');
 assert(/function recaptureBlocksFromFlow/.test(canvasSrc), 'canvas.js defines recaptureBlocksFromFlow()');
-assert(/if \(!l \|\| \(l\.auto === false && !force\)\) return/.test(canvasSrc), 'manual layouts are not overwritten by auto recompute');
+assert(/if \(l && l\.auto === false && !force\) return/.test(canvasSrc), 'manual layouts are not overwritten by an automatic recompute');
 assert(/recaptureBlocksFromFlow\(true\)/.test(appSrc), 'widget toggling/column switching is an explicit structural change: force re-flow (keep the manual flag)');
-assert(/next\.auto = l\.auto !== false/.test(canvasSrc), 'forced re-flow only refreshes coordinates, keeping the manual layout flag');
+assert(/next\.auto = !l \|\| l\.auto !== false/.test(canvasSrc),
+  'forced re-flow only refreshes coordinates, keeping the manual layout flag (a first engagement — no layout yet — is auto by definition)');
 assert(/next\.cards = captureCardLayout\(\)/.test(canvasSrc), 'card coordinates are re-derived during recompute (grid width changes the column count)');
 assert(/if \(window\.LT_CANVAS\.widgetLayoutStale\(\)\) window\.LT_CANVAS\.recaptureBlocksFromFlow\(\)/.test(appSrc), 'stale canvas coordinates are fixed at startup');
 
@@ -1863,7 +1864,7 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
   assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
   assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
-  assert(JSON.parse(read('manifest.json')).version === '1.23.4', 'manifest version is 1.23.4');
+  assert(JSON.parse(read('manifest.json')).version === '1.23.5', 'manifest version is 1.23.5');
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 
@@ -2002,6 +2003,40 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
     'a day-cell press must not preventDefault, or the day popover never opens');
   assert(/root\.addEventListener\('click', onClickCapture, true\);/.test(canvas),
     'the click that follows a block drag is suppressed');
+}
+
+// ---------- 41) engines switch live, and a refused drag explains itself ----------
+{
+  // Engines are switched from the Settings control, not by reloading — and that live transition is
+  // what ENABLES the canvas. recaptureBlocksFromFlow() used to bail out whenever `.canvas` was
+  // absent, which is precisely the state the switch starts from: flipping the dropdown to "Above
+  // search" left the page in neither engine — eligible for a drag, yet relative-positioned with
+  // nothing captured and `.drag-handle` pinned at opacity 0, so a block followed the pointer and
+  // then lost its place. Boot never showed it because reinitCanvas()/captureLayout() carry no such
+  // guard. check-extension.cjs drives the real dropdown; these are the fast guards.
+  const recapture = canvasSrc.slice(canvasSrc.indexOf('function recaptureBlocksFromFlow'),
+    canvasSrc.indexOf('function reinitCanvas'));
+  assert(recapture.length > 0, 'canvas.js defines recaptureBlocksFromFlow()');
+  assert(!/!root\.classList\.contains\('canvas'\)\)\s*return/.test(recapture),
+    'recaptureBlocksFromFlow must not bail out when the canvas is not engaged yet — that is the state a switch to free canvas starts from');
+  assert(/if \(!engaged && !force\) return;/.test(recapture),
+    'only a structural (forced) call may engage the canvas, so a pre-settle boot pass cannot freeze a first draft of the geometry');
+  assert(/if \(engaged\) leaveCanvas\(\);/.test(recapture),
+    'an already-engaged canvas is dropped before re-measuring');
+  assert(/next\.auto = !l \|\| l\.auto !== false;/.test(recapture),
+    'a first engagement is auto — a page with no layout yet has nothing to preserve');
+  // A refused drag must say why: the canvas is opt-in and width-gated, and both refusals were silent.
+  assert(/function bindDragHint/.test(canvasSrc), 'canvas.js explains a refused drag instead of doing nothing');
+  assert(/bindDragHint\(\);/.test(canvasSrc), 'the explanation is wired into initCanvasLayout()');
+  assert(/'drag\.needCanvas'/.test(canvasSrc) && /'drag\.tooNarrow'/.test(canvasSrc),
+    'both refusals are named (engine choice vs window width)');
+  assert(/drag\.needCanvas/.test(i18nSrc) && /drag\.tooNarrow/.test(i18nSrc) && /drag\.enableCanvas/.test(i18nSrc),
+    'the refusal messages exist in both languages');
+  assert(/enableFreeCanvas/.test(appSrc), 'the hint is backed by a real one-click remedy');
+  // The shortcut modal's focus timer must not steal the caret from a field already in use: typing a
+  // URL inside that window silently wrote into the Name field, truncated by its maxlength.
+  assert(/if \(active && active !== document\.body && modal\.contains\(active\)\) return;/.test(appSrc),
+    'the shortcut modal only takes focus while it does not already hold it');
 }
 
 console.log('');

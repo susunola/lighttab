@@ -373,7 +373,7 @@
     'gen.data_tip': { zh: '备份/恢复全部数据（快捷方式、待办、设置、壁纸）。导出文件可跨浏览器迁移。', en: 'Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.' },
     'gen.reset':    { zh: '恢复默认数据', en: 'Reset to defaults' },
     'gen.done':     { zh: '完成', en: 'Done' },
-    'gen.version':  { zh: 'LightTab v1.23.4 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.23.4 · Minimal new tab · Local-first, optional cloud sync' },
+    'gen.version':  { zh: 'LightTab v1.23.5 · 极简新标签页 · 本地优先，可选云同步', en: 'LightTab v1.23.5 · Minimal new tab · Local-first, optional cloud sync' },
 
     // ---------- Templates tab ----------
     'prompt.title':  { zh: 'Prompt 模板 · AI 发射台', en: 'Prompt templates · AI launcher' },
@@ -408,7 +408,12 @@
     // #61 clock placement + WorkBuddy desktop detection
     'wpos.left':           { zh: '左栏', en: 'Left column' },
     'wpos.top':            { zh: '搜索框上方', en: 'Above search' },
-    'wpos.tip':            { zh: '电影卡的位置决定用哪套布局：选 <b>左栏</b> 会把它嵌进图标网格；选 <b>搜索框上方</b> 则切换到自由画布，此时所有组件都能任意拖动。', en: "The movie card's placement picks the layout engine: <b>Left column</b> tucks it into the icon grid, while <b>Above search</b> switches to a free canvas where every widget can be dragged anywhere." },
+    'wpos.tip':            { zh: '电影卡的位置决定用哪套布局：选 <b>左栏</b> 会把它嵌进图标网格；选 <b>搜索框上方</b> 则切换到自由画布，此时所有组件都能任意拖动（需要窗口宽度超过 1024px）。', en: "The movie card's placement picks the layout engine: <b>Left column</b> tucks it into the icon grid, while <b>Above search</b> switches to a free canvas where every widget can be dragged anywhere (needs a window wider than 1024px)." },
+    // Shown when someone tries to drag a block while the canvas is unavailable — the failure used to
+    // be completely silent, so say which of the two gates is shut. The first has a one-click fix.
+    'drag.needCanvas':     { zh: '当前布局不能拖动组件。要自由拖动，需开启自由画布。', en: 'This layout cannot drag widgets. To move them freely, turn on the free canvas.' },
+    'drag.enableCanvas':   { zh: '开启自由画布', en: 'Enable free canvas' },
+    'drag.tooNarrow':      { zh: '窗口太窄，组件拖动不可用（需要宽度超过 1024px）。', en: 'Window too narrow to drag widgets (needs to be wider than 1024px).' },
     'wb.running':          { zh: 'WorkBuddy 正在运行（v{v}）', en: 'WorkBuddy is running (v{v})' },
     'wb.not_running':      { zh: '未检测到 WorkBuddy 在运行', en: 'WorkBuddy not detected' },
     'wb.not_detected':     { zh: '没检测到 WorkBuddy 桌面端，可能未安装', en: 'Could not reach WorkBuddy Desktop — it may not be installed' },

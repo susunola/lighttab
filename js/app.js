@@ -2998,7 +2998,17 @@
     // Remember what opened the modal so closing returns focus there (a11y).
     if (document.activeElement && !modal.contains(document.activeElement)) modalReturnFocus = document.activeElement;
     modal.hidden = false;
-    setTimeout(() => form.elements['title'].focus(), 30);
+    // Focus the Name field once the modal has painted — but never yank the caret back out of a field
+    // that already has it. This runs on a timer, so an unconditional focus() can land in the gap
+    // between someone reaching the URL field and typing into it: the keystrokes then go into the Name
+    // field instead, silently truncated by its maxlength. Only adopt focus while the modal does not
+    // already hold it.
+    setTimeout(() => {
+      if (modal.hidden) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && modal.contains(active)) return;
+      form.elements['title'].focus();
+    }, 30);
   }
   // Live "what will this card look like" tile in the shortcut modal: uploaded image wins; otherwise the
   // brand icon (or letter tile) is derived from whatever URL / title is currently typed.
@@ -3280,7 +3290,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.23.4',
+      version: '1.23.5',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
@@ -6507,7 +6517,16 @@
       applyAiPosition();
       document.getElementById('ai-draft').focus();
     },
-    setActivePrompt: (p) => { activePrompt = p; }
+    setActivePrompt: (p) => { activePrompt = p; },
+    // The movie card's placement is what selects the layout engine, and only the free canvas lets
+    // blocks be dragged — so this is the one-click remedy behind the "why won't it drag?" hint.
+    // Goes through the same normalize + persist + apply path as the Settings dropdown.
+    enableFreeCanvas: () => {
+      state.settings.widgetPos = normalizeWidgetPos(state.settings.widgetPos);
+      state.settings.widgetPos.wmovie = 'top';
+      Store.set(K.settings, state.settings);
+      applyWidgets();
+    }
   };
 
   // Pure-function exports for the offline assertions in scripts/smoke.cjs
