@@ -40,7 +40,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 // ---------- 1) JS syntax ----------
 console.log('[1] node --check');
-const JS_FILES = ['js/app.js', 'js/canvas.js', 'js/prompts.js', 'js/sync.js', 'js/inject-ai.js', 'js/lunar.js', 'js/holidays.js', 'js/icondb.js', 'js/i18n.js', 'js/ics.js', 'js/calendar.js'];
+const JS_FILES = ['js/app.js', 'js/canvas.js', 'js/prompts.js', 'js/sync.js', 'js/inject-ai.js', 'js/lunar.js', 'js/holidays.js', 'js/icondb.js', 'js/i18n.js', 'js/ics.js', 'js/calendar.js', 'js/background.js'];
 for (const f of JS_FILES) {
   try {
     execFileSync(process.execPath, ['--check', path.join(ROOT, f)], { stdio: 'pipe' });
@@ -1863,7 +1863,7 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
   assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
   assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
-  assert(JSON.parse(read('manifest.json')).version === '1.23.0', 'manifest version is 1.23.0');
+  assert(JSON.parse(read('manifest.json')).version === '1.23.1', 'manifest version is 1.23.1');
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 
@@ -1942,6 +1942,18 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   }
   assert(/\.cal-dots/.test(cssSrc) && /\.cal-day \{/.test(cssSrc) && /\.cal-item \{/.test(cssSrc),
     'calendar dot / popover / feed-list styles exist');
+}
+
+// ---------- 38) self-applying updates ----------
+{
+  // Chrome only installs a pending update while the extension is idle, and an open extension page
+  // counts as "in use". LightTab overrides the new-tab page, so in normal use it is never idle and
+  // the update would wait for a browser restart — which is why upgrading appeared to require an
+  // uninstall/reinstall. background.js has to apply the downloaded update itself.
+  const bg = read('js/background.js');
+  assert(/chrome\.runtime\.onUpdateAvailable\.addListener/.test(bg) && /chrome\.runtime\.reload\(\)/.test(bg),
+    'a downloaded update is applied immediately (onUpdateAvailable → reload)');
+  assert(fs.existsSync(path.join(ROOT, 'docs/RELEASING.md')), 'docs/RELEASING.md (release runbook) exists');
 }
 
 console.log('');

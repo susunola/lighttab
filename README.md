@@ -75,13 +75,19 @@ Cloud data deletion still requires a backend implementation and is unavailable i
 
 ## Install
 
-**Chrome Web Store** — not published yet; please install via developer mode for now.
+**Chrome Web Store** — install the published build from the store listing (updates arrive on their own; see below).
 
 **Developer mode**
 1. Clone this repo
 2. Open `chrome://extensions`
 3. Enable **Developer mode** (top right)
 4. Click **Load unpacked** and select this folder
+
+### Updating
+
+Chrome checks for extension updates on startup and every few hours, and only *installs* one while the extension is idle — an open extension page counts as "in use". LightTab **is** the new-tab page, so it would never qualify and an update could sit unused until a browser restart; `js/background.js` therefore applies a downloaded update as soon as it is ready.
+
+To force a check immediately, open `chrome://extensions`, turn on **Developer mode** and click **Update**. There is no need to reinstall — uninstalling clears local data unless cloud sync is on. A copy loaded with **Load unpacked** is a *separate* extension from the store one: it never auto-updates (reload it from `chrome://extensions`) and it does not share storage. Full release runbook: [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Tech
 

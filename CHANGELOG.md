@@ -1,3 +1,19 @@
+# 1.23.1 — updates apply themselves
+
+- Fix: a published update could sit unused until the browser restarted, which made upgrading look
+  like it required an uninstall + reinstall. Chrome only installs a pending update while the
+  extension is considered idle, and an open extension page counts as "in use" — LightTab overrides
+  the new-tab page, so in normal use it is never idle. `js/background.js` now applies a downloaded
+  update as soon as it is ready (`chrome.runtime.onUpdateAvailable` → `chrome.runtime.reload()`).
+  Nothing is lost: user state is written to storage as it changes.
+  *Takes effect from 1.23.1 onward* — the build that is already installed has no such handler, so
+  that one first hop still needs a manual **Update** (or a restart).
+- Add `docs/RELEASING.md`: the release + update runbook — the five version sites, packaging, why
+  updates are not instant, how to force one without reinstalling, and the unpacked-vs-store
+  extension-ID trap.
+- README: document how updating works; drop the stale "not published yet" install note.
+- smoke: `node --check` `js/background.js` too, and assert the update handler stays wired.
+
 # 1.23.0 — subscribe to published calendars
 
 - Subscribe to read-only iCalendar feeds from *Settings → Calendar*: paste a published link (Apple
