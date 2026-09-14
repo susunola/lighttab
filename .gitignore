@@ -14,6 +14,7 @@ icons/.bak/
 dist/
 
 # Local checks and browser sessions
+node_modules/
 test-results/
 scripts/check-production-*.cjs
 scripts/preview-ui.cjs

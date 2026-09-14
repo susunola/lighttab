@@ -60,15 +60,28 @@ const { chromium } = require('playwright');
     await page.waitForTimeout(200);
     assert(requests.some(url => url.includes('/v1/wallpapers/sources')), 'Opening wallpaper settings discovers sources');
     await page.keyboard.press('Escape');
-    await page.evaluate(async()=>{const a=window.LT_APP;a.state.settings.widgets.wtodo=true;await a.Store.set(a.K.settings,a.state.settings);});
+    // The home todo widget was retired in 1.24.0 (the calendar became its own page), so the
+    // persistence check now lives on a personal calendar event, added through the real
+    // calendar-page UI — which also exercises 1.24.2's bundled-feed seeding.
+    await page.locator('#btn-cal-page').click();
+    await page.waitForFunction(() => document.documentElement.getAttribute('data-view') === 'calendar');
+    assert.equal(await page.evaluate(() => (window.LT_APP.state.calendars[0] || {}).name), '港新马印泰假期',
+      'first launch seeds the bundled 港新马印泰假期 feed');
+    await page.locator('#cal-add-open').click();
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    await page.locator('#cal-add-form input[name="day"]').fill(todayStr);
+    await page.locator('#cal-add-form input[name="title"]').fill('Extension persistence check');
+    await page.locator('#cal-add-form button[type="submit"]').click();
+    await page.waitForFunction(async () => JSON.stringify(await chrome.storage.local.get('lt.myevents')).includes('Extension persistence check'));
+    await page.waitForFunction(() => document.querySelector('#cal-upcoming')?.textContent.includes('Extension persistence check'));
     await page.reload();
-    await page.locator('#todo-input').fill('Extension persistence check');
-    await page.locator('#todo-form button[type="submit"]').click();
-    await page.waitForFunction(async () => JSON.stringify(await chrome.storage.local.get('lt.todos')).includes('Extension persistence check'));
-    await page.waitForFunction(() => document.querySelector('#todo-list')?.textContent.includes('Extension persistence check'));
-    await page.reload();
-    await page.waitForFunction(() => document.querySelector('#todo-list')?.textContent.includes('Extension persistence check'));
+    await page.locator('#btn-cal-page').click();
+    await page.waitForFunction(() => document.querySelector('#cal-upcoming')?.textContent.includes('Extension persistence check'));
     assert.deepEqual(errors, [], 'Reload should not throw');
+    // Back to the home view — the grid (and the add card) is hidden while the calendar page is up.
+    await page.locator('#btn-cal-page').click();
+    await page.waitForFunction(() => document.documentElement.getAttribute('data-view') === 'home');
     // Add-shortcut dialog: the Name follows whatever URL is typed, but never at the expense of a
     // name the user picked — and editing a saved shortcut leaves its stored name alone.
     await page.locator('.card-add').click();
@@ -165,15 +178,16 @@ const { chromium } = require('playwright');
     // cascade accidents left the movie block in the flow, uncapped, pushing the icon grid below the
     // fold. Measure all three instead of trusting a screenshot, then drag the calendar — that is the
     // behaviour a user actually asked for.
+    // The calendar retired from the home page in 1.24.0 (it is the second page now), so the
+    // canvas-drag checks below drive the movie block, which is still a home widget.
     await page.evaluate(async () => {
       const a = window.LT_APP;
       a.state.settings.widgets.wmovie = true;
-      a.state.settings.widgets.wcal = true;
       a.state.settings.widgetPos.wmovie = 'top';
       await a.Store.set(a.K.settings, a.state.settings);
     });
     await page.reload();
-    await page.locator('.wcal .cal-grid').waitFor();
+    await page.locator('.wmovie .movie-card').waitFor();
     await page.waitForTimeout(900);
     const geo = await page.evaluate(() => {
       const movie = document.querySelector('.wmovie');
@@ -193,11 +207,11 @@ const { chromium } = require('playwright');
     assert(geo.cardWidth <= 320, `the movie card stays capped in canvas mode (got ${geo.cardWidth}px)`);
     assert(geo.gridTop < geo.viewportHeight,
       `the movie block must not push the icon grid below the fold (grid top ${geo.gridTop} vs viewport ${geo.viewportHeight})`);
-    const calBefore = await page.locator('.wcal').boundingBox();
+    const calBefore = await page.locator('.wmovie').boundingBox();
     await page.mouse.move(calBefore.x + calBefore.width / 2, calBefore.y + 6);
     await page.waitForTimeout(200);
-    const calHandle = await page.locator('.wcal .drag-handle').boundingBox();
-    assert(calHandle, 'the calendar exposes a drag handle in canvas mode');
+    const calHandle = await page.locator('.wmovie .drag-handle').boundingBox();
+    assert(calHandle, 'the movie block exposes a drag handle in canvas mode');
     await page.mouse.move(calHandle.x + calHandle.width / 2, calHandle.y + calHandle.height / 2);
     await page.mouse.down();
     for (let i = 1; i <= 10; i++) {
@@ -206,45 +220,16 @@ const { chromium } = require('playwright');
     }
     await page.mouse.up();
     await page.waitForTimeout(300);
-    const calAfter = await page.locator('.wcal').boundingBox();
+    const calAfter = await page.locator('.wmovie').boundingBox();
     assert(Math.abs(calAfter.x - calBefore.x) > 20 || Math.abs(calAfter.y - calBefore.y) > 20,
-      'the calendar actually moves when dragged in free-canvas mode');
-    // Grabbing the calendar by a day cell must work too — a month grid is almost entirely cells, so
-    // a handle-only affordance leaves the calendar effectively undraggable while every other widget
-    // can be dragged by its body. A click on that same cell has to keep opening the day popover:
-    // that is why the cell press is not pointer-captured (capture retargets the click to the block)
-    // and why the click is suppressed only after a real drag.
-    await page.evaluate(() => {
-      window.__calClicks = 0;
-      document.getElementById('cal-grid').addEventListener('click', () => { window.__calClicks++; }, true);
-    });
-    const cellBox = await page.locator('.wcal .cal-grid .cal-cell').nth(12).boundingBox();
-    const cellX = cellBox.x + cellBox.width / 2;
-    const cellY = cellBox.y + cellBox.height / 2;
-    const clickBefore = await page.locator('.wcal').boundingBox();
-    await page.evaluate(() => { window.__calClicks = 0; });
-    await page.mouse.move(cellX, cellY);
-    await page.mouse.down();
-    await page.mouse.up();
-    await page.waitForTimeout(200);
-    const clickAfter = await page.locator('.wcal').boundingBox();
-    assert.equal(await page.evaluate(() => window.__calClicks), 1, 'a plain click on a day cell still reaches the calendar');
-    assert(Math.abs(clickAfter.x - clickBefore.x) < 2 && Math.abs(clickAfter.y - clickBefore.y) < 2,
-      'a plain click on a day cell does not move the block');
-    const cellDragBefore = await page.locator('.wcal').boundingBox();
-    await page.evaluate(() => { window.__calClicks = 0; });
-    await page.mouse.move(cellX, cellY);
-    await page.mouse.down();
-    for (let i = 1; i <= 8; i++) {
-      await page.mouse.move(cellX + i * 14, cellY + i * 7);
-      await page.waitForTimeout(16);
-    }
-    await page.mouse.up();
-    await page.waitForTimeout(250);
-    const cellDragAfter = await page.locator('.wcal').boundingBox();
-    assert.equal(await page.evaluate(() => window.__calClicks), 0, 'the click that follows a drag is suppressed');
-    assert(Math.abs(cellDragAfter.x - cellDragBefore.x) > 20 || Math.abs(cellDragAfter.y - cellDragBefore.y) > 20,
-      'the calendar can be dragged by grabbing a day cell, not only by its handle');
+      'the movie block actually moves when dragged in free-canvas mode');
+    // The home calendar is gone (it is the second page now) and the movie card is all interactive
+    // surface, so the body-grab affordance no longer applies to any home block — the handle is the
+    // gesture. What must hold is that the handle drag above persisted its coordinates.
+    assert(await page.evaluate(() => {
+      const l = window.LT_APP.state.settings.layout;
+      return !!(l && l.wmovie);
+    }), 'the handle drag persisted the movie block coordinates');
     assert.deepEqual(errors, [], 'Canvas layout should not throw');
     console.log('PASS: free-canvas mode drags blocks; the movie card leaves the flow, stays capped, and keeps the icon grid on screen.');
 
@@ -260,17 +245,17 @@ const { chromium } = require('playwright');
     // through the two sections above.
     await page.evaluate(async () => {
       const a = window.LT_APP;
-      a.state.settings.widgets.wcal = true;
       a.state.settings.widgetPos.wmovie = 'left';
       await a.Store.set(a.K.settings, a.state.settings);
     });
     await page.reload();
-    await page.locator('.wcal .cal-grid').waitFor();
+    await page.locator('.wmovie .movie-card').waitFor();
     await page.waitForTimeout(900);
     assert.equal(await page.evaluate(() => document.querySelector('.layout').className), 'layout movie-grid',
       'the shipped default keeps the movie card inside the icon grid');
-    // A refused drag has to say why rather than do nothing.
-    const hintCell = await page.locator('.wcal .cal-grid .cal-cell').nth(12).boundingBox();
+    // A refused drag has to say why rather than do nothing. The movie card is a full-area button
+    // and can never start a drag; the clock face is the remaining grabbable home block.
+    const hintCell = await page.locator('.wclock').boundingBox();
     const hintX = hintCell.x + hintCell.width / 2, hintY = hintCell.y + hintCell.height / 2;
     await page.mouse.move(hintX, hintY);
     await page.mouse.down();
@@ -294,17 +279,17 @@ const { chromium } = require('playwright');
     }));
     assert(fixed.cls.includes('canvas'), `the one-click fix engages the canvas (class "${fixed.cls}")`);
     assert(fixed.captured, 'the one-click fix captures block coordinates');
-    const fixBefore = await page.locator('.wcal').boundingBox();
-    const fixCell = await page.locator('.wcal .cal-grid .cal-cell').nth(12).boundingBox();
+    const fixBefore = await page.locator('.wclock').boundingBox();
+    const fixCell = await page.locator('.wclock').boundingBox();
     const fx = fixCell.x + fixCell.width / 2, fy = fixCell.y + fixCell.height / 2;
     await page.mouse.move(fx, fy);
     await page.mouse.down();
     for (let i = 1; i <= 8; i++) { await page.mouse.move(fx + i * 14, fy + i * 7); await page.waitForTimeout(16); }
     await page.mouse.up();
     await page.waitForTimeout(300);
-    const fixAfter = await page.locator('.wcal').boundingBox();
+    const fixAfter = await page.locator('.wclock').boundingBox();
     assert(Math.abs(fixAfter.x - fixBefore.x) > 20 || Math.abs(fixAfter.y - fixBefore.y) > 20,
-      'after the one-click fix the calendar really moves');
+      'after the one-click fix the clock block really moves');
 
     // Back into the icon grid: the canvas has to let go of its absolute positioning.
     await page.evaluate(() => { document.getElementById('f-pos-wmovie').value = 'left'; });
@@ -320,29 +305,29 @@ const { chromium } = require('playwright');
     const live = await page.evaluate(() => ({
       cls: document.querySelector('.layout').className,
       captured: !!window.LT_APP.state.settings.layout,
-      calPosition: getComputedStyle(document.querySelector('.wcal')).position
+      calPosition: getComputedStyle(document.querySelector('.wmovie')).position
     }));
     assert(live.cls.includes('canvas'),
       `the dropdown must engage the canvas without a reload (layout class was "${live.cls}")`);
     assert(live.captured, 'the live switch captures block coordinates');
-    assert.equal(live.calPosition, 'absolute', 'the canvas positions the calendar after the live switch');
-    const liveBefore = await page.locator('.wcal').boundingBox();
-    const liveCell = await page.locator('.wcal .cal-grid .cal-cell').nth(12).boundingBox();
+    assert.equal(live.calPosition, 'absolute', 'the canvas positions the movie block after the live switch');
+    const liveBefore = await page.locator('.wclock').boundingBox();
+    const liveCell = await page.locator('.wclock').boundingBox();
     const lx = liveCell.x + liveCell.width / 2, ly = liveCell.y + liveCell.height / 2;
     await page.mouse.move(lx, ly);
     await page.mouse.down();
     for (let i = 1; i <= 8; i++) { await page.mouse.move(lx + i * 15, ly + i * 8); await page.waitForTimeout(16); }
     await page.mouse.up();
     await page.waitForTimeout(300);
-    const liveAfter = await page.locator('.wcal').boundingBox();
+    const liveAfter = await page.locator('.wclock').boundingBox();
     assert(Math.abs(liveAfter.x - liveBefore.x) > 20 || Math.abs(liveAfter.y - liveBefore.y) > 20,
-      'the calendar moves right after the live switch, with no reload');
+      'the clock block moves right after the live switch, with no reload');
     assert(await page.evaluate(() => {
       const l = window.LT_APP.state.settings.layout;
-      return !!(l && l.wcal);
+      return !!(l && l.wclock);
     }), 'a drag that follows the live switch persists its coordinates');
     assert.deepEqual(errors, [], 'Switching layout engines live should not throw');
-    console.log('PASS: the movie placement dropdown switches engines live, a refused drag explains itself, and the calendar drags and persists without a reload.');
+    console.log('PASS: the movie placement dropdown switches engines live, a refused drag explains itself, and the clock block drags and persists without a reload.');
   } finally {
     if (context) await context.close();
     fs.rmSync(profile, { recursive: true, force: true });

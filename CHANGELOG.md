@@ -31,6 +31,11 @@
 - Manifest hardening: `optional_host_permissions` is now a single HTTPS wildcard (`https://*/*`) —
   the ten enumerated hosts were dead entries, and plaintext `http://*/*` is gone; feed URLs typed
   as `http://` are rejected at normalization instead of being fetched unencrypted.
+- Release tooling: `check-extension.cjs` / `check-upgrade.cjs` updated for the 1.24.0 layout (home
+  todo/countdown/pomodoro widgets are retired and the calendar is the second page): persistence is
+  now checked with a personal calendar event through the real calendar-page UI — which also asserts
+  the SEA feed seeding — and canvas drags drive the clock/movie blocks instead of the retired home
+  calendar.
 - HK gazetted weekend substitutions modelled in the bundled calendar: Ching Ming 2026 observed
   Apr 6, Easter Monday 2026 displaced to Apr 7, Buddha's Birthday 2026 on May 25, LNY 2027
   fourth-day substitution on Feb 9, plus the 2027/2028 Sunday shifts for Tuen Ng, Chung Yeung,
