@@ -3401,7 +3401,7 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.24.2',
+      version: '1.24.3',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,

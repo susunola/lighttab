@@ -1,4 +1,4 @@
-# Unreleased
+# 1.24.3 — DeepSeek joins auto-send, Enter-first submission
 
 - AI launcher: DeepSeek is now a real injected target (was manual-paste-only) — the content script
   matches `chat.deepseek.com` and submits with Enter.
