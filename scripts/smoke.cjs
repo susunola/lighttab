@@ -1870,7 +1870,7 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
   assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
   assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
-  assert(JSON.parse(read('manifest.json')).version === '1.24.0', 'manifest version is 1.24.0');
+  assert(JSON.parse(read('manifest.json')).version === '1.24.2', 'manifest version is 1.24.2');
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 
