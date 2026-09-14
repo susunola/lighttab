@@ -35,13 +35,28 @@
   'use strict';
   const log = (...a) => { try { console.info('[LightTab]', ...a); } catch (_) {} };
 
+  // Per-target behaviour — a UI redesign on an AI site should only touch this table.
+  //   hosts:      hostnames this target owns (targetId is derived from it)
+  //   enterFirst: submit with a synthetic Enter before trying the send button — more stable than
+  //               button detection on composers that natively submit on Enter (ChatGPT, DeepSeek)
+  //   extraInputs: target-specific composer selectors, tried before the shared INPUT_TIERS
+  const TARGET_CFG = {
+    doubao:   { hosts: ['www.doubao.com', 'www.dola.com'], enterFirst: false, extraInputs: [] },
+    openai:   { hosts: ['chatgpt.com', 'chat.openai.com'], enterFirst: true,
+                extraInputs: ['#prompt-textarea', 'div.ProseMirror[contenteditable="true"]'] },
+    deepseek: { hosts: ['chat.deepseek.com'], enterFirst: true,
+                extraInputs: ['textarea#chat-input', 'textarea[placeholder]'] }
+  };
+
   // Snapshot the params immediately (we run at document_start, before the SPA takes over the URL).
   const qs = new URLSearchParams(location.search);
   const armed = qs.get('lt_auto') === '1';
   const q = (qs.get('q') || '').trim();
   const ltK = qs.get('lt_k') || '';
   let activeNonce=ltK;
-  const targetId=(location.hostname==='chatgpt.com'||location.hostname==='chat.openai.com')?'openai':'doubao';
+  const targetEntry = Object.entries(TARGET_CFG).find(([, c]) => c.hosts.includes(location.hostname));
+  const targetId = targetEntry ? targetEntry[0] : 'doubao';
+  const cfg = targetEntry ? targetEntry[1] : { enterFirst: false, extraInputs: [] };
   function report(status){try{if(activeNonce)chrome.storage.local.set({['lt.delivery.'+activeNonce+'.'+targetId]:{status,t:Date.now()}});}catch(_){}}
   // Auto-send is earned, not defaulted: only a nonce that resolves to a real storage record (set by
   // the extension) may flip it on. A bare q= URL — which ANY website can mint, e.g.
@@ -149,9 +164,11 @@
     }
   }
 
-  /** Find the visible chat input: walk tiers in order (rich editors first), largest area wins within a tier. */
+  /** Find the visible chat input: walk tiers in order (target-specific extras first, then rich
+      editors, then a bare textarea); largest area wins within a tier. */
   function pickInput() {
-    for (const tier of INPUT_TIERS) {
+    const tiers = cfg.extraInputs.length ? [cfg.extraInputs, ...INPUT_TIERS] : INPUT_TIERS;
+    for (const tier of tiers) {
       let best = null, bestArea = 0;
       for (const sel of tier) {
         const nodes = document.querySelectorAll(sel);
@@ -268,16 +285,33 @@
   }
 
   /**
-   * Send with verification: click the send button; if the input does not clear, fall back to
-   * Enter; re-resolve the composer between rounds (it can re-mount after a failed attempt).
+   * Send with verification: for enterFirst targets (ChatGPT, DeepSeek — composers that natively
+   * submit on Enter) a synthetic Enter goes before button detection, which is the first thing a
+   * site redesign breaks. Otherwise click the send button; if the input does not clear, fall back
+   * to Enter. The composer is re-resolved between attempts (it can re-mount after a failed one).
+   * Dispatch once per attempt path: a slow site must never receive duplicate prompts from retries.
    */
   async function sendWithVerify(input, text) {
-    // Dispatch once: a slow site must never receive duplicate prompts from automatic retries.
-    const btn=await waitSendBtn(6000);
-    if(!document.contains(input)||currentValue(input).trim()!==text.trim())return false;
-    if(btn){try{btn.click();}catch(_){return false;}}
-    else pressEnter(input);
-    return waitCleared(input,8000);
+    const hasText = () => { if (!document.contains(input)) { const f = pickInput(); if (f) input = f; } return currentValue(input).trim() === text.trim(); };
+    if (cfg.enterFirst) {
+      if (hasText()) {
+        pressEnter(input);
+        if (await waitCleared(input, 2500)) return true;
+      }
+      // Enter did not take — fall through to the button path.
+    }
+    const btn = await waitSendBtn(6000);
+    if (!hasText()) return false;
+    if (btn) {
+      try { btn.click(); } catch (_) { return false; }
+      if (await waitCleared(input, 6000)) return true;
+      // The click did not clear the composer: one Enter attempt before giving up (a no-op if the
+      // send actually went through and the composer is just slow to clear — the text is gone).
+      if (hasText()) { pressEnter(input); return waitCleared(input, 3000); }
+      return true;
+    }
+    pressEnter(input);
+    return waitCleared(input, 8000);
   }
 
   async function main(text) {

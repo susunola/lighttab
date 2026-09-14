@@ -1,3 +1,14 @@
+# Unreleased
+
+- AI launcher: DeepSeek is now a real injected target (was manual-paste-only) — the content script
+  matches `chat.deepseek.com` and submits with Enter.
+- AI launcher: per-target behaviour is table-driven (`TARGET_CFG` in js/inject-ai.js) — hosts,
+  Enter-first submission and extra composer selectors per site, so a target-site redesign is a
+  one-line config change. ChatGPT and DeepSeek submit with Enter before send-button detection,
+  and a button click that does not clear the composer gets one Enter attempt before giving up.
+- AI launcher: a target row still waiting 20s after launch is flagged ("logged out or page
+  changed?") and the prompt is copied to the clipboard for manual paste.
+
 # 1.24.2 — bundled SEA holidays
 
 - Calendar widget on by default.

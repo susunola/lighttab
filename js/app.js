@@ -25,7 +25,7 @@
     // (the URL only carries lt_auto=1&lt_k=<nonce>); preview mode falls back to a plaintext ?q=.
     { id: 'doubao',   name: 'Doubao AI', url: 'https://www.doubao.com/chat/',                      color: '#3d8cff', ai: true, injected: true },
     { id: 'openai',   name: 'ChatGPT', url: 'https://chatgpt.com/',                               color: '#10a37f', ai: true, injected: true },
-    { id: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', color: '#4d6bfe', ai: true, copyOnly: true },
+    { id: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', color: '#4d6bfe', ai: true, injected: true },
     // WorkBuddy desktop: open a new task draft through its deep link.
     { id: 'wbai',     name: 'WorkBuddy', url: 'workbuddy://task?action=start&prompt={q}', color: '#22d3ee', ai: true, deeplink: true }
   ];
@@ -2125,6 +2125,15 @@
     }
     if(failedTargets.length){const retry=document.createElement('button');retry.textContent=isEn()?'Retry unopened targets':'重试未打开的目标';retry.onclick=ev=>launchPrompt({...tpl,tmpl:'{q}',targets:failedTargets},text,ev);results.append(retry);}
     if(nonce&&window.chrome?.storage?.onChanged){deliveryListener=(changes)=>{for(const el of results.querySelectorAll('[data-delivery-key]')){const rec=changes[el.dataset.deliveryKey]?.newValue;if(!rec)continue;const labels=isEn()?{filled:'Filled',sent:'Input submitted',manual:'Manual action required'}:{filled:'已填入',sent:'输入已提交',manual:'需手动处理'};el.textContent=' · '+(labels[rec.status]||'');}};chrome.storage.onChanged.addListener(deliveryListener);}
+    // A row still waiting 20s after launch means the target page never answered — logged out, or
+    // the site redesigned and the injector found nothing. Say so and make sure the prompt is on
+    // the clipboard so manual paste is one keystroke away.
+    if(nonce)setTimeout(()=>{
+      const stale=[...results.querySelectorAll('[data-delivery-key]')].filter(el=>/等待目标|Waiting/.test(el.textContent));
+      if(!stale.length)return;
+      copyToClipboard(text);
+      for(const el of stale)el.textContent=isEn()?' · No answer from the target (logged out or page changed?) — prompt copied, paste manually':' · 目标页面无响应（可能未登录或页面改版），提示词已复制，请手动粘贴';
+    },20000);
     const panel=document.getElementById('ai-launcher');
     if(blocked && panel){panel.hidden=false;document.getElementById('ai-side-toggle')?.setAttribute('aria-expanded','true');}
     if (!webN && !dlN) return showToast(t('ai.fail'));

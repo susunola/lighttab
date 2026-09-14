@@ -1694,8 +1694,27 @@ assert(/let autoSend = false;/.test(injectSrc) && !/let autoSend = true/.test(in
   'autoSend defaults off; only a real nonce record from extension storage can enable it');
 assert(/Date\.now\(\) - armedAt > 1800000/.test(injectSrc),
   'a background-tab armed run expires with the 30-minute nonce horizon');
-assert(/location\.hostname==='chatgpt\.com'\|\|location\.hostname==='chat\.openai\.com'/.test(injectSrc),
-  'chat.openai.com is classified as the openai target, not doubao');
+// Target behaviour is table-driven: a site redesign should only mean editing TARGET_CFG.
+assert(/const TARGET_CFG = \{/.test(injectSrc)
+  && /doubao:\s*\{ hosts: \['www\.doubao\.com', 'www\.dola\.com'\]/.test(injectSrc)
+  && /openai:\s*\{ hosts: \['chatgpt\.com', 'chat\.openai\.com'\], enterFirst: true/.test(injectSrc)
+  && /deepseek:\s*\{ hosts: \['chat\.deepseek\.com'\], enterFirst: true/.test(injectSrc),
+  'TARGET_CFG maps doubao/openai/deepseek hosts; ChatGPT & DeepSeek submit Enter-first');
+assert(/Object\.entries\(TARGET_CFG\)\.find/.test(injectSrc),
+  'targetId (incl. chat.openai.com → openai) is derived from TARGET_CFG, not hardcoded');
+assert(/cfg\.extraInputs\.length \? \[cfg\.extraInputs, \.\.\.INPUT_TIERS\]/.test(injectSrc),
+  'target-specific composer selectors are tried before the shared tiers');
+assert(/if \(cfg\.enterFirst\)/.test(injectSrc) && /pressEnter\(input\);\s*\n\s*if \(await waitCleared\(input, 2500\)\) return true;/.test(injectSrc),
+  'enterFirst targets submit with Enter before send-button detection');
+{
+  const manifest2 = JSON.parse(read('manifest.json'));
+  assert(manifest2.content_scripts[0].matches.includes('https://chat.deepseek.com/*'),
+    'manifest content_scripts cover chat.deepseek.com');
+}
+assert(/\{ id: 'deepseek'[^}]*ai: true, injected: true \}/.test(appSrc) && !/'deepseek'[^}]*copyOnly/.test(appSrc),
+  'DeepSeek is a real injected target, no longer manual-paste-only');
+assert(/No answer from the target/.test(appSrc) && /},20000\)/.test(appSrc),
+  'the launcher flags targets that never answer within 20s and keeps the prompt on the clipboard');
 // newtab side: pointer written with every nonce; sweep treats it on its own TTL
 assert(/\[POINTER_KEY\]: \{ k: nonce, t: Date\.now\(\) \}/.test(appSrc), 'putPending writes the pointer next to the nonce');
 assert(/if \(k === POINTER_KEY\)/.test(appSrc), 'sweepPending handles the pointer record shape separately');

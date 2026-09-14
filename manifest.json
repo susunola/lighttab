@@ -33,7 +33,8 @@
         "https://www.doubao.com/chat*",
         "https://www.dola.com/chat*",
         "https://chatgpt.com/*",
-        "https://chat.openai.com/*"
+        "https://chat.openai.com/*",
+        "https://chat.deepseek.com/*"
       ],
       "js": [
         "js/inject-ai.js"
