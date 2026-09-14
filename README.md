@@ -31,13 +31,18 @@ turn it on.
 
 ## Screenshots
 
-<p>
-  <img src="docs/screenshots/calendar.webp" alt="Calendar page — month view with lunar labels, holiday badges and feed events" width="440">
-  <img src="docs/screenshots/ai-launcher.webp" alt="AI launcher — one prompt to several AI targets at once" width="440">
-</p>
-<p>
-  <img src="docs/screenshots/settings.webp" alt="Settings — theme, language, icon geometry and widgets" width="440">
-</p>
+<table>
+  <tr>
+    <td><img src="docs/screenshots/calendar.webp" alt="Calendar page — month view with lunar labels, holiday badges and feed events"></td>
+    <td><img src="docs/screenshots/ai-launcher.webp" alt="AI launcher — one prompt to several AI targets at once"></td>
+    <td><img src="docs/screenshots/settings.webp" alt="Settings — theme, language, icon geometry and widgets"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Calendar page</b><br>month / week / year, lunar labels, holiday feeds</td>
+    <td align="center"><b>AI launcher</b><br>one prompt to several targets, verified send</td>
+    <td align="center"><b>Settings</b><br>theme, language, icon geometry, widgets</td>
+  </tr>
+</table>
 
 ## Features
 
