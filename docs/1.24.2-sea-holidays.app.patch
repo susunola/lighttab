@@ -1,0 +1,14 @@
+--- a/js/app.js
++++ b/js/app.js
+@@ -121,7 +121,7 @@
+     // Left-column widgets the user kept. Removing one hides it in both the flow and canvas layouts;
+     // removing all three collapses the whole left column so the icon grid spans the full width.
+     // Lives inside settings on purpose — it then rides along with export / import / cloud sync for free.
+-    widgets: { wclock: true, wcal: false, wtodo: false, wmovie: true, wweather: false, wcount: false, wpomodoro: false },
++    widgets: { wclock: true, wcal: true, wtodo: false, wmovie: true, wweather: false, wcount: false, wpomodoro: false },
+@@ -312,7 +312,7 @@
+-  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup', diag: 'lt.diag', calendars: 'lt.calendars', calcache: 'lt.calcache', myevents: 'lt.myevents' };
++  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup', diag: 'lt.diag', calendars: 'lt.calendars', calcache: 'lt.calcache', myevents: 'lt.myevents', caldropped: 'lt.caldropped', calreveal: 'lt.calreveal', calseed: 'lt.calseed' };
+@@ -3391,7 +3391,7 @@
+-      version: '1.24.0',
++      version: '1.24.2',
