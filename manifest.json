@@ -16,19 +16,7 @@
     "tabs"
   ],
   "optional_host_permissions": [
-    "https://*.icloud.com/*",
-    "https://*.google.com/*",
-    "https://*.googleusercontent.com/*",
-    "https://*.outlook.com/*",
-    "https://*.office.com/*",
-    "https://*.live.com/*",
-    "https://*.calendar.yahoo.com/*",
-    "https://*.fastmail.com/*",
-    "https://*.nextcloud.com/*",
-    "https://*.office365.com/*",
-    "https://*.icloud.com.cn/*",
-    "https://*/*",
-    "http://*/*"
+    "https://*/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';"

@@ -41,7 +41,9 @@ window.LT_CAL = (function () {
     if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
     try {
       const x = new URL(u);
-      if (x.protocol !== 'http:' && x.protocol !== 'https:') return null;
+      // https only: the manifest no longer declares http://*/*, and a calendar feed is not a
+      // reason to fetch user data in plaintext. Scheme-less input is upgraded above.
+      if (x.protocol !== 'https:') return null;
       if (!x.hostname || x.hostname.indexOf('.') < 0) return null;
       return x.toString();
     } catch { return null; }

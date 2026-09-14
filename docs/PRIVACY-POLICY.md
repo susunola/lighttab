@@ -37,12 +37,11 @@ advertising.
   send the prompt you typed. They are not active otherwise.
 - **Host permissions**: the three search-suggestion endpoints (Baidu / Google / Bing). No page
   content is read.
-- **Optional host permissions**: the calendar-feed hosts (`*.icloud.com`, `*.google.com`,
-  `*.googleusercontent.com`, `*.outlook.com`, `*.office.com`, `*.live.com`,
-  `*.calendar.yahoo.com`, `*.fastmail.com`, `*.nextcloud.com`). They are declared as *optional* so
-  the install prompt never asks for them; each one is requested only when you subscribe to a feed on
-  that host, and only a read-only `GET` of the URL you pasted is ever made. If you never open
-  *Settings → Calendar*, they are never requested.
+- **Optional host permissions**: a single HTTPS wildcard (`https://*/*`), because calendar feeds can
+  live on any host. It is declared as *optional* so the install prompt never asks for it; a host is
+  requested only when you subscribe to a feed on it, and only a read-only `GET` of the URL you
+  pasted is ever made. Plaintext `http://` feeds are not supported. If you never open
+  *Settings → Calendar*, nothing is ever requested.
 - **Calendar feed URLs never leave the device.** A published calendar link is an unguessable
   capability, so it is deliberately excluded from cloud sync and from JSON exports; it is stored
   under its own local key (`lt.calendars`). Fetched events are cached locally under `lt.calcache`

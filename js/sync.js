@@ -16,7 +16,8 @@
   const hasChromeStorage = !!(window.chrome && chrome.storage && chrome.storage.local);
   const freshMeta = () => ({ lastServerTime: 0, docs: {}, conflicts: {}, initial: true });
   const S = { auth: null, meta: freshMeta(), backups: [], status: 'idle', lastSyncAt: 0,
-    lastError: '', pendingVerifyEmail: '', listeners: [], remoteApply: null, timer: 0 };
+    lastError: '', pendingVerifyEmail: '', listeners: [], remoteApply: null, timer: 0,
+    retryTimer: 0, retryMs: 0 };
   const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
   // Object key order is not a user-visible difference (sanitizers may reorder properties).
   const encode = value => value === undefined || value === null ? '' : JSON.stringify(value, (key, val) =>
@@ -207,15 +208,18 @@
       await pushDirty();
       S.lastSyncAt = Date.now();
       S.status = settledStatus();
+      clearRetry();
       return { ok: true };
     } catch (error) {
       if (error.status === 401) {
+        clearRetry();
         S.auth = null;
         await sSet({ [AUTH_KEY]: null });
         S.lastError = 'sync.err.expired'; S.status = 'error';
       } else {
         S.lastError = error.status === 0 ? 'sync.err.offline' : error.message;
         S.status = error.status === 0 ? 'offline' : 'error';
+        if (error.status === 0) scheduleRetry();
       }
       return { ok: false, error: S.lastError };
     } finally {
@@ -227,6 +231,21 @@
   function scheduleSync() {
     clearTimeout(S.timer);
     S.timer = setTimeout(() => { S.timer = 0; syncNow().catch(reportError); }, DEBOUNCE_MS);
+  }
+  // Offline retry with backoff. Without it a failed round left dirty documents parked until the
+  // next user write or a fresh tab — and a new-tab page can stay open for days. The 'online'
+  // event short-circuits the wait; any success or auth change resets the backoff.
+  const RETRY_MIN_MS = 30000, RETRY_MAX_MS = 10 * 60 * 1000;
+  function clearRetry() {
+    clearTimeout(S.retryTimer);
+    S.retryTimer = 0; S.retryMs = 0;
+  }
+  function scheduleRetry() {
+    clearTimeout(S.retryTimer);
+    S.retryMs = S.retryMs ? Math.min(S.retryMs * 2, RETRY_MAX_MS) : RETRY_MIN_MS;
+    const t = setTimeout(() => { S.retryTimer = 0; syncNow().catch(reportError); }, S.retryMs);
+    if (t && typeof t.unref === 'function') t.unref(); // Node harness: never hold the process open
+    S.retryTimer = t;
   }
   function reportError(error) { S.lastError = error.message; S.status = 'error'; emit(); }
   function writeLocal(key, value) {
@@ -302,6 +321,7 @@
   function logout() {
     return exclusive(async () => {
       clearTimeout(S.timer);
+      clearRetry();
       // Capture the old token; revoke after local sign-out without blocking writes.
       const token = S.auth?.token;
       S.auth = null; S.meta = freshMeta(); S.pendingVerifyEmail = '';
@@ -374,6 +394,7 @@
         const data = clone(entry.data);
         await backup('before-restore');
         clearTimeout(S.timer);
+        clearRetry();
         S.auth = null; S.meta = freshMeta();
         await sSet({ [AUTH_KEY]: null, [META_KEY]: S.meta });
         await writeDocuments(Object.fromEntries(SNAPSHOT_KEYS.map(key => [key, data[key]])));
@@ -404,6 +425,7 @@
       await loadState();
       if (!S.auth?.token || !password) return { ok: false, error: 'sync.err_email_pass' };
       clearTimeout(S.timer);
+      clearRetry();
       try {
         await request('/auth/account', { method: 'DELETE', body: { password } });
         S.auth = null; S.meta = freshMeta(); S.pendingVerifyEmail = '';
@@ -429,6 +451,12 @@
     },
     async init() {
       await exclusive(async () => { S.status = settledStatus(); emit(); });
+      // Reconnecting short-circuits the backoff wait (guarded: the offline test harness has no window).
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('online', () => {
+          if (S.auth?.token) { clearRetry(); syncNow().catch(reportError); }
+        });
+      }
       if (S.auth?.token) syncNow().catch(reportError);
     },
     writeLocal, login, register, resend, logout, syncNow, resolveConflict,

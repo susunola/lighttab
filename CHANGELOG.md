@@ -24,6 +24,13 @@
   defaults (leftover hardcoded lines), restores exported personal calendar events (`myevents`),
   keeps per-shortcut colour/tile size, and rejects non-http(s) shortcut URLs like the boot path.
   Custom-engine ids from crafted imports are now escaped before landing in HTML attributes.
+- Fix: cloud sync now recovers from offline failures on its own — a failed round retries with a
+  30s→10min backoff and the browser's `online` event short-circuits the wait (dirty documents used
+  to sit unsynced until the next write or a fresh tab). Retry state resets on success, 401, logout,
+  restore and account deletion.
+- Manifest hardening: `optional_host_permissions` is now a single HTTPS wildcard (`https://*/*`) —
+  the ten enumerated hosts were dead entries, and plaintext `http://*/*` is gone; feed URLs typed
+  as `http://` are rejected at normalization instead of being fetched unencrypted.
 - HK gazetted weekend substitutions modelled in the bundled calendar: Ching Ming 2026 observed
   Apr 6, Easter Monday 2026 displaced to Apr 7, Buddha's Birthday 2026 on May 25, LNY 2027
   fourth-day substitution on Feb 9, plus the 2027/2028 Sunday shifts for Tuen Ng, Chung Yeung,

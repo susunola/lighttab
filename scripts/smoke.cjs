@@ -1946,9 +1946,9 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   // A published feed URL is an unguessable capability: it must never be pushed to the cloud.
   assert(!/lt\.calendars/.test(read('js/sync.js')), 'feed URLs stay out of SYNC_KEYS (never uploaded)');
   const mf = JSON.parse(read('manifest.json'));
-  assert((mf.optional_host_permissions || []).some(p => p.includes('icloud.com'))
+  assert(JSON.stringify(mf.optional_host_permissions || []) === JSON.stringify(['https://*/*'])
     && !JSON.stringify(mf.permissions || []).includes('icloud'),
-    'calendar hosts are optional_host_permissions, not install-time permissions');
+    'calendar hosts: one https-only wildcard in optional_host_permissions (no plaintext http, nothing install-time)');
 
   // UI surface + wiring.
   assert(/data-tab="cal"/.test(html) && /data-pane="cal"/.test(html) && /id="cal-day"/.test(html)
@@ -2183,6 +2183,23 @@ console.log('[42] review fixes: doImport data loss, RRULE expansion, local feed 
     assert(on('香港·佛诞', '2026-05-25'), 'HK Buddha\'s Birthday 2026 (Sunday) observed May 25');
     assert(on('香港·农历新年年初四（补假）', '2027-02-09'), 'HK LNY 2027 fourth-day substitution present');
   }
+
+  // Offline retry: a failed round used to park dirty documents until the next write or fresh tab.
+  const syncSrc = read('js/sync.js');
+  assert(/RETRY_MIN_MS = 30000/.test(syncSrc) && /RETRY_MAX_MS = 10 \* 60 \* 1000/.test(syncSrc)
+    && /Math\.min\(S\.retryMs \* 2, RETRY_MAX_MS\)/.test(syncSrc),
+    'sync.js retries offline failures with a 30s→10min backoff');
+  assert(/if \(error\.status === 0\) scheduleRetry\(\);/.test(syncSrc)
+    && /addEventListener\('online',/.test(syncSrc),
+    'offline rounds schedule a retry; the online event short-circuits the wait');
+  assert((syncSrc.match(/clearRetry\(\)/g) || []).length >= 5,
+    'retry state is cleared on success, 401, logout, restore and account deletion');
+  // HTTPS-only calendar feeds: plaintext http is rejected at normalization, and the manifest
+  // declares a single https wildcard instead of http://*/*.
+  assert(/if \(x\.protocol !== 'https:'\) return null;/.test(calSrc),
+    'normalizeFeedUrl rejects http:// feed URLs');
+  assert(!JSON.stringify(JSON.parse(read('manifest.json')).optional_host_permissions || []).includes('http://'),
+    'manifest optional_host_permissions contains no http pattern');
 }
 
 console.log('');
