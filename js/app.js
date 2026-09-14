@@ -1184,7 +1184,7 @@
       <li data-id="${e.id}" class="${e.id === currentEngine.id ? 'active' : ''}">
         ${engLogoHtml(e)}
         <span>${escapeHtml(engName(e))}</span>${badge}
-        <button type="button" class="eng-del" data-eng-del="${e.id}" title="${escapeHtml(t('engm.del'))}" aria-label="${escapeHtml(t('engm.del'))}" ${lastOne ? 'disabled' : ''}>✕</button>
+        <button type="button" class="eng-del" data-eng-del="${escapeHtml(e.id)}" title="${escapeHtml(t('engm.del'))}" aria-label="${escapeHtml(t('engm.del'))}" ${lastOne ? 'disabled' : ''}>✕</button>
       </li>
     `;
     }).join('') + `
@@ -3480,7 +3480,6 @@
     try { data = JSON.parse(await file.text()); } catch { return showToast(t('toast.import_not_json')); }
     if (!data || typeof data !== 'object') return showToast(t('toast.import_bad'));
     if (data.app && data.app !== 'LightTab') return showToast(t('toast.import_not_lighttab'));
-    const hasLocal = state.items.length || state.todos.length || state.prompts.length;
     const preview = isEn()
       ? `Restore backup?\nShortcuts: ${Array.isArray(data.items) ? data.items.length : 0}\nTodos: ${Array.isArray(data.todos) ? data.todos.length : 0}\nSettings, templates and wallpaper are also restored. Existing data will be replaced. Export a backup first if needed.`
       : `确认恢复备份？\n快捷方式（含文件夹）：${Array.isArray(data.items) ? data.items.length : 0} 项\n待办：${Array.isArray(data.todos) ? data.todos.length : 0} 项\n同时恢复设置、模板和壁纸，现有数据将被替换。需要保留当前数据时，请先导出备份。`;
@@ -3510,11 +3509,6 @@
     state.settings.hideClock = state.settings.hideClock === true;
     state.settings.iconSize = clampIcon(state.settings.iconSize, ICON_SIZE_MIN, ICON_SIZE_MAX, DEFAULT_SETTINGS.iconSize);
     state.settings.iconRadius = clampIcon(state.settings.iconRadius, ICON_RADIUS_MIN, ICON_RADIUS_MAX, DEFAULT_SETTINGS.iconRadius);
-    state.settings.hideSearch = false;
-    state.settings.clock12h = false;
-    state.settings.clockSeconds = false;
-    state.settings.clockFont = 'modern';
-    state.settings.hideClock = false;
     state.settings.countdown = normalizeCountdown(state.settings.countdown);
     // Imported engine lists get the same validation as the add form: customs must be well-formed
     // http(s) URLs carrying {q}; hidden ids must name real built-ins.
@@ -3542,16 +3536,20 @@
           if (it && it.type === 'folder') {
             const fgroup = gids.has(it.group) ? it.group : '';
             const kids = (Array.isArray(it.children) ? it.children : [])
-              .filter(c => c && typeof c.url === 'string')
+              .filter(c => c && typeof c.url === 'string' && /^https?:\/\//i.test(c.url))
               .map(c => ({ id: c.id || nid(), title: String(c.title || '').slice(0, 32) || t('toast.unnamed'), url: c.url, icon: sanitizeIconDataUrl(c.icon) || undefined, color: safeColor(c.color) || undefined }));
             if (kids.length < 2) return kids.map(k => ({ ...k, group: fgroup }));
             return [{ id: it.id || nid(), type: 'folder', name: String(it.name || '').slice(0, 32) || t('folder.default_name'), group: fgroup, children: kids }];
           }
-          if (!it || typeof it.url !== 'string') return [];
-          return [{ id: it.id || nid(), shortTitle: String(it.shortTitle || '').slice(0,16), title: String(it.title || '').slice(0, 32) || t('toast.unnamed'), url: it.url, group: gids.has(it.group) ? it.group : '', icon: sanitizeIconDataUrl(it.icon) || undefined }];
+          if (!it || typeof it.url !== 'string' || !/^https?:\/\//i.test(it.url)) return [];
+          return [{ id: it.id || nid(), shortTitle: String(it.shortTitle || '').slice(0,16), title: String(it.title || '').slice(0, 32) || t('toast.unnamed'), url: it.url, group: gids.has(it.group) ? it.group : '', tileSize: tileSize(it.tileSize), icon: sanitizeIconDataUrl(it.icon) || undefined, color: safeColor(it.color) || undefined }];
         })
       : [];
     state.wallpaper = pickWallpaperFromData(migrated.wallpaper);
+    // Personal calendar events are exported (exportPayload.myevents) — restore them too, or a
+    // backup round-trip silently loses every one of them. Feed subscriptions stay out of backups
+    // on purpose (a published-calendar URL is an unguessable capability).
+    state.myEvents = normalizeMyEvents(data.myevents);
     state.todos = Array.isArray(migrated.todos)
       ? migrated.todos.filter(it => it && typeof it.text === 'string').map(it => ({
           id: it.id || nid(),
@@ -3582,6 +3580,10 @@
     await Store.set(K.todos, state.todos);
     await Store.set(K.prompts, state.prompts);
     Store.set(K.schema, SCHEMA_VERSION);
+    await localRawSet(K.myevents, state.myEvents);
+    rebuildCalIndex(); // personal events feed the month grid
+    renderCalendar();
+    renderUpcoming();
     applyWallpaper(state.wallpaper);
     applyTheme(); // an import may carry a different theme
     setEngine(state.settings.engine);
@@ -5133,9 +5135,14 @@
     let title = '';
     try { title = window.LT_ICS.parseCalendarName(text) || ''; } catch {}
     const name = (title || SEA_FEED.fallbackName).slice(0, 40);
-    calCache[SEA_FEED.id] = { fetchedAt: now, etag: '', title: name, error: '', events };
+    // The raw text goes into the cache too: syncFeed re-expands it as the render window moves.
+    calCache[SEA_FEED.id] = { fetchedAt: now, etag: '', title: name, error: '', events,
+      ics: text, winTo: now + window.LT_CAL.WINDOW_FORWARD_MS };
     const feeds = [{ id: SEA_FEED.id, name, url: SEA_FEED.url, color: window.LT_CAL.colorFor(SEA_FEED.id), on: true }];
-    await Store.set(K.calendars, feeds);
+    // localRawSet, not Store.set: seeding can run inside loadDataIntoState during a cloud-pull
+    // reload, where the sync write queue is already held — a Store.set there would self-deadlock.
+    // lt.calendars is not a SYNC_KEY, so routing through the sync layer buys nothing here anyway.
+    await localRawSet(K.calendars, feeds);
     await localRawSet(K.calcache, calCache);
     return feeds;
   }
@@ -5212,7 +5219,7 @@
       let changed = false;
       const now = Date.now();
       const results = await Promise.all(active.map(feed =>
-        window.LT_CAL.syncFeed(feed, force && !(window.LT_CAL.isLocalFeed && window.LT_CAL.isLocalFeed(feed.url)) ? null : calCache[feed.id], now)
+        window.LT_CAL.syncFeed(feed, calCache[feed.id], now, force)
           .then(next => ({ feed, next }))
           .catch(() => ({ feed, next: calCache[feed.id] || { events: [], error: 'network' } }))
       ));
@@ -5403,7 +5410,9 @@
     const id = nid();
     const url = 'local://ics/' + id;
     state.calendars.push({ id, name, url, color: window.LT_CAL.colorFor(id), on: true });
-    calCache[id] = { fetchedAt: now, etag: '', title: name, error: '', events };
+    // Keep the raw text (capped like remote feeds): syncFeed re-expands it as the window moves.
+    calCache[id] = { fetchedAt: now, etag: '', title: name, error: '', events,
+      ics: text.length <= 600000 ? text : undefined, winTo: now + window.LT_CAL.WINDOW_FORWARD_MS };
     await Store.set(K.calendars, state.calendars);
     await localRawSet(K.calcache, calCache);
     rebuildCalIndex();

@@ -7,6 +7,27 @@
 - Deleting it is sticky on this device (`lt.caldropped`). First launch of 1.24.2 replaces the default feed list with this single ICS.
 - Fix: the add/edit-shortcut dialog no longer closes on a backdrop click, which used to discard
   typed input — close it via ×, Cancel, submit, or Esc.
+- Security fix: a bare `?lt_auto=1&q=…` link (mintable by any website) no longer auto-sends into a
+  logged-in AI session. Auto-send now requires a nonce that resolves to a real extension storage
+  record; q-only links fill the composer but wait for the user to press send. Background-tab arming
+  expires with the 30-minute nonce horizon, and chat.openai.com is classified as an OpenAI target.
+- Fix: calendar feeds no longer freeze their expansion window. Local (`local://`) feeds and small
+  remote feeds keep their raw ICS in the cache and re-expand as time moves — recurring events used
+  to silently stop appearing ~400 days after the content last changed (holiday feeds that 304
+  forever were the worst case). A forced "Refresh now" keeps the last good events instead of
+  blanking the feed on a network error.
+- Fix: RRULE expansion honours BYDAY token order (BYDAY=SA,SU dropped occurrences), ordinal BYDAY
+  for MONTHLY/YEARLY (1FR, -1MO), BYMONTH and YEARLY BYMONTHDAY (all parsed but ignored before),
+  and DAILY;BYDAY. Out-of-range dates (20261340) are rejected, huge INTERVALs can no longer write
+  NaN timestamps into the cache, and a short timed event crossing midnight appears on both days.
+- Fix: restoring a backup no longer resets hideSearch/clock12h/clockSeconds/clockFont/hideClock to
+  defaults (leftover hardcoded lines), restores exported personal calendar events (`myevents`),
+  keeps per-shortcut colour/tile size, and rejects non-http(s) shortcut URLs like the boot path.
+  Custom-engine ids from crafted imports are now escaped before landing in HTML attributes.
+- HK gazetted weekend substitutions modelled in the bundled calendar: Ching Ming 2026 observed
+  Apr 6, Easter Monday 2026 displaced to Apr 7, Buddha's Birthday 2026 on May 25, LNY 2027
+  fourth-day substitution on Feb 9, plus the 2027/2028 Sunday shifts for Tuen Ng, Chung Yeung,
+  National Day and the day after Christmas; Singapore's 2027 CNY Monday in-lieu included.
 
 # 1.24.0 — calendar page, AI context menu, sync backups
 

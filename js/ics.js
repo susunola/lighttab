@@ -3,7 +3,8 @@
      * line unfolding, content-line params, TEXT escaping
      * DATE / DATE-TIME (floating, UTC, TZID) with real timezone maths via Intl
      * VEVENT with SUMMARY / LOCATION / DTSTART / DTEND / DURATION / RRULE / EXDATE
-     * RRULE expansion for DAILY / WEEKLY / MONTHLY / YEARLY + INTERVAL / COUNT / UNTIL / BYDAY / BYMONTHDAY
+     * RRULE expansion for DAILY / WEEKLY / MONTHLY / YEARLY + INTERVAL / COUNT / UNTIL /
+     *   BYDAY (plain, and ordinal like 1FR / -1MO for MONTHLY/YEARLY) / BYMONTHDAY / BYMONTH
    Out of scope, on purpose (a new-tab widget does not need them): VTODO / VJOURNAL, VALARM, ATTENDEE,
    VTIMEZONE definitions (we resolve TZID through the browser's own tz database instead), RDATE,
    BYSETPOS / BYWEEKNO and other exotic rule parts, and RECURRENCE-ID overrides (an edited instance
@@ -110,9 +111,11 @@ window.LT_ICS = (function () {
   // "20260910" | "20260910T100000" | "20260910T100000Z", optionally with TZID=…
   // `kind` records how to read the wall-clock fields back later, which recurrence needs.
   function parseDT(value, params) {
-    const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?/.exec(String(value || '').trim());
+    const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/.exec(String(value || '').trim());
     if (!m) return null;
     const p = { y: +m[1], m: +m[2], d: +m[3], hh: +(m[4] || 0), mm: +(m[5] || 0), ss: +(m[6] || 0) };
+    // Reject out-of-range fields instead of letting Date.UTC roll 20261340 over into 2027.
+    if (p.m < 1 || p.m > 12 || p.d < 1 || p.d > daysInMonth(p.y, p.m) || p.hh > 23 || p.mm > 59 || p.ss > 61) return null;
     const dateOnly = m[4] === undefined || (params && params.VALUE === 'DATE');
     const tzid = (params && params.TZID) || null;
     let kind, ms;
@@ -140,7 +143,7 @@ window.LT_ICS = (function () {
       const k = kv.slice(0, eq).toUpperCase().trim();
       const v = kv.slice(eq + 1).trim();
       if (k === 'FREQ') out.freq = v.toUpperCase();
-      else if (k === 'INTERVAL') out.interval = Math.max(1, parseInt(v, 10) || 1);
+      else if (k === 'INTERVAL') out.interval = Math.min(10000, Math.max(1, parseInt(v, 10) || 1));
       else if (k === 'COUNT') out.count = Math.max(0, parseInt(v, 10) || 0);
       else if (k === 'UNTIL') out.until = v;
       else if (k === 'BYDAY') out.byday = v.split(',').map(x => x.trim().toUpperCase()).filter(Boolean);
@@ -165,6 +168,19 @@ window.LT_ICS = (function () {
     const y = Math.floor(total / 12);
     const m = ((total % 12) + 12) % 12 + 1;
     return { y, m, d: Math.min(p.d, daysInMonth(y, m)) };
+  }
+  // All days-of-month in (y, m) falling on the given weekday (0 = Sunday).
+  function monthDowDays(y, m, dow) {
+    const out = [];
+    const n = daysInMonth(y, m);
+    for (let d = 1; d <= n; d++) if (new Date(Date.UTC(y, m - 1, d)).getUTCDay() === dow) out.push(d);
+    return out;
+  }
+  // "MO" | "1FR" | "-1TH" → { ord, dow }; ord 0 means every such weekday in the period.
+  function parseByDay(tok) {
+    const m = /^([+-]?\d{1,2})?(SU|MO|TU|WE|TH|FR|SA)$/.exec(String(tok || ''));
+    if (!m) return null;
+    return { ord: m[1] ? parseInt(m[1], 10) : 0, dow: WEEKDAY[m[2]] };
   }
 
   function partsOf(ms, kind, tz) {
@@ -282,9 +298,13 @@ window.LT_ICS = (function () {
       outer:
       for (let w = 0; steps < MAX_STEPS; w++, steps++) {
         const ws = addDays(weekStart, w * 7 * iv);
-        for (const dow of dows) {
+        // RRULE token order is arbitrary (BYDAY=SA,SU is legal) and the early exits below assume
+        // ascending candidates — sort each week's occurrences chronologically first.
+        const week = dows.map(dow => {
           const c = addDays(ws, dow);
-          const ms = toMs({ ...base, y: c.y, m: c.m, d: c.d }, kind, tz);
+          return toMs({ ...base, y: c.y, m: c.m, d: c.d }, kind, tz);
+        }).sort((a, b) => a - b);
+        for (const ms of week) {
           if (ms < d.ms) continue;          // never emit before DTSTART
           if (ms > stop) break outer;
           count++;
@@ -298,15 +318,54 @@ window.LT_ICS = (function () {
 
     const stepDays = r.freq === 'DAILY' ? iv : 0;
     const stepMonths = r.freq === 'MONTHLY' ? iv : r.freq === 'YEARLY' ? 12 * iv : 0;
-    const mdays = (r.freq === 'MONTHLY' && r.bymonthday && r.bymonthday.length) ? r.bymonthday : null;
+    const mdays = (r.bymonthday && r.bymonthday.length) ? r.bymonthday : null;
+    const bydays = (r.byday || []).map(parseByDay).filter(Boolean);
+    // YEARLY steps the anchor a year at a time; BYMONTH picks the months inside each year
+    // (default: DTSTART's month).
+    const yearMonths = r.freq === 'YEARLY'
+      ? ((r.bymonth && r.bymonth.length) ? r.bymonth.filter(m => m >= 1 && m <= 12) : [base.m])
+      : null;
+
+    // Day-of-month candidates for (y, m): BYMONTHDAY, else BYDAY (ordinal like 1FR / -1MO, or
+    // plain = every such weekday in the month), else DTSTART's day clamped into the month.
+    function monthDays(y, m) {
+      if (mdays) return mdays.map(n => (n > 0 ? n : daysInMonth(y, m) + n + 1));
+      if (bydays.length) {
+        const out = [];
+        for (const b of bydays) {
+          const all = monthDowDays(y, m, b.dow);
+          if (b.ord > 0) { if (all[b.ord - 1] !== undefined) out.push(all[b.ord - 1]); }
+          else if (b.ord < 0) { const i = all.length + b.ord; if (all[i] !== undefined) out.push(all[i]); }
+          else out.push(...all);
+        }
+        return out;
+      }
+      return [Math.min(base.d, daysInMonth(y, m))];
+    }
 
     for (let i = 0; steps < MAX_STEPS; i++, steps++) {
       const anchor = stepDays ? addDays(base, i * stepDays) : addMonths(base, i * stepMonths);
-      const days = mdays ? mdays.map(n => (n > 0 ? n : daysInMonth(anchor.y, anchor.m) + n + 1)) : [anchor.d];
+      // Terminate on the anchor itself: candidate lists can be empty (Feb 30, a 5th Friday in a
+      // 4-Friday month), so the per-candidate "past" break below is not guaranteed to fire.
+      const anchorMs = toMs({ ...base, y: anchor.y, m: anchor.m, d: Math.min(base.d, daysInMonth(anchor.y, anchor.m)) }, kind, tz);
+      if (anchorMs > stop) break;
+      let cands = [];
+      if (stepDays) {
+        // FREQ=DAILY;BYDAY=MO,TU,… keeps only matching weekdays.
+        if (!bydays.length || bydays.some(b => b.dow === dowOf(anchor))) {
+          cands = [toMs({ ...base, y: anchor.y, m: anchor.m, d: anchor.d }, kind, tz)];
+        }
+      } else {
+        for (const m of (yearMonths || [anchor.m])) {
+          for (const day of monthDays(anchor.y, m)) {
+            if (day < 1 || day > daysInMonth(anchor.y, m)) continue;
+            cands.push(toMs({ ...base, y: anchor.y, m, d: day }, kind, tz));
+          }
+        }
+        cands.sort((x, y2) => x - y2);
+      }
       let past = false;
-      for (const day of days) {
-        if (day < 1 || day > daysInMonth(anchor.y, anchor.m)) continue;
-        const ms = toMs({ ...base, y: anchor.y, m: anchor.m, d: day }, kind, tz);
+      for (const ms of cands) {
         if (ms > stop) { past = true; break; }
         if (ms < d.ms) continue;
         count++;
@@ -315,8 +374,6 @@ window.LT_ICS = (function () {
         if (out.length >= limit) return out;
       }
       if (past) break;
-      // A yearly/monthly rule can step far past the window; stop as soon as the anchor itself is out.
-      if (!mdays && toMs({ ...base, y: anchor.y, m: anchor.m, d: anchor.d }, kind, tz) > stop) break;
     }
     return out;
   }
@@ -363,18 +420,18 @@ window.LT_ICS = (function () {
   function occurrenceDays(occ) {
     const days = [];
     const endExclusive = occ.endMs > occ.startMs ? occ.endMs : occ.startMs + 1;
+    const last = dayKey(endExclusive - 1, occ.allDay);
     let cursor = occ.startMs;
     for (let guard = 0; guard < 400; guard++) {
       const key = dayKey(cursor, occ.allDay);
       if (days.indexOf(key) < 0) days.push(key);
-      // Advance in the same calendar the keys are read from, or the step and the key disagree.
-      const stepMs = DAY_MS;
-      cursor += stepMs;
-      if (cursor >= endExclusive) break;
-      if (occ.allDay) {
-        // all-day: compare UTC dates
-        if (dayKey(cursor, true) > dayKey(endExclusive - 1, true)) break;
-      } else if (dayKey(cursor, false) > dayKey(endExclusive - 1, false)) break;
+      // Compare keys, not elapsed time: a short timed event can cross midnight (23:00 → 01:00)
+      // and a fixed +24h step would jump straight past the end without emitting the second day.
+      if (key >= last) break;
+      cursor += DAY_MS;
+      // A DST-long day (25h) can leave the cursor on the same key; step again if so. A short day
+      // (23h) still lands on the next key with a single step, so this never skips a day.
+      if (dayKey(cursor, occ.allDay) === key) cursor += DAY_MS;
     }
     return days;
   }

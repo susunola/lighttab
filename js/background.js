@@ -67,23 +67,29 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg.etag) headers['If-None-Match'] = msg.etag;
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 15000);
-      const res = await fetch(String(msg.url), {
-        signal: ctrl.signal,
-        credentials: 'omit',
-        redirect: 'follow',
-        cache: 'no-store',
-        headers
-      });
-      clearTimeout(timer);
-      if (res.status === 304) { sendResponse({ ok: true, notModified: true }); return; }
-      if (!res.ok) { sendResponse({ ok: false, error: 'http' + res.status }); return; }
-      const buf = await res.arrayBuffer();
-      if (buf.byteLength > 2 * 1024 * 1024) { sendResponse({ ok: false, error: 'too_large' }); return; }
-      sendResponse({
-        ok: true,
-        ics: new TextDecoder('utf-8').decode(buf),
-        etag: res.headers.get('ETag') || ''
-      });
+      let res;
+      try {
+        res = await fetch(String(msg.url), {
+          signal: ctrl.signal,
+          credentials: 'omit',
+          redirect: 'follow',
+          cache: 'no-store',
+          headers
+        });
+        if (res.status === 304) { sendResponse({ ok: true, notModified: true }); return; }
+        if (!res.ok) { sendResponse({ ok: false, error: 'http' + res.status }); return; }
+        // Keep the abort armed while the body streams in: a slow-drip response must not park the
+        // worker past the 15s budget just because the headers arrived in time.
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength > 2 * 1024 * 1024) { sendResponse({ ok: false, error: 'too_large' }); return; }
+        sendResponse({
+          ok: true,
+          ics: new TextDecoder('utf-8').decode(buf),
+          etag: res.headers.get('ETag') || ''
+        });
+      } finally {
+        clearTimeout(timer);
+      }
     } catch (err) {
       sendResponse({ ok: false, error: (err && err.name === 'AbortError') ? 'timeout' : 'network' });
     }

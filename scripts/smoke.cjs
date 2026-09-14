@@ -1687,6 +1687,15 @@ assert(/POINTER_KEY = PENDING_PREFIX \+ 'current'/.test(injectSrc) && /POINTER_T
 assert(/function clearPointer\(\)/.test(injectSrc) && /main\(text\)\.finally\(clearPointer\)/.test(injectSrc),
   'the pointer is cleared when an armed run finishes (a mid-flight redirect never finishes, by design)');
 assert(/armed via storage pointer/.test(injectSrc), 'inject-ai.js can arm from the pointer alone');
+// Auto-send requires a validated storage nonce: a bare ?q= URL (mintable by any website) fills
+// the composer but never sends by itself, and a fake lt_k cannot unlock sending either.
+assert(/let autoSend = false;/.test(injectSrc) && !/let autoSend = true/.test(injectSrc)
+  && /if\(rec\)autoSend=rec\.autoSend!==false/.test(injectSrc),
+  'autoSend defaults off; only a real nonce record from extension storage can enable it');
+assert(/Date\.now\(\) - armedAt > 1800000/.test(injectSrc),
+  'a background-tab armed run expires with the 30-minute nonce horizon');
+assert(/location\.hostname==='chatgpt\.com'\|\|location\.hostname==='chat\.openai\.com'/.test(injectSrc),
+  'chat.openai.com is classified as the openai target, not doubao');
 // newtab side: pointer written with every nonce; sweep treats it on its own TTL
 assert(/\[POINTER_KEY\]: \{ k: nonce, t: Date\.now\(\) \}/.test(appSrc), 'putPending writes the pointer next to the nonce');
 assert(/if \(k === POINTER_KEY\)/.test(appSrc), 'sweepPending handles the pointer record shape separately');
@@ -2077,6 +2086,103 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   // URL inside that window silently wrote into the Name field, truncated by its maxlength.
   assert(/if \(active && active !== document\.body && modal\.contains\(active\)\) return;/.test(appSrc),
     'the shortcut modal only takes focus while it does not already hold it');
+}
+
+// ---------- 42) review round: import/restore, RRULE correctness, feed-cache lifecycle ----------
+console.log('[42] review fixes: doImport data loss, RRULE expansion, local feed re-expansion');
+{
+  // doImport must not overwrite validated settings with hardcoded defaults (the five literal
+  // assignments used to sit right after the coercion lines, silently discarding them).
+  const importBlock = appSrc.slice(appSrc.indexOf('const migrated = migrateSchema({'), appSrc.indexOf('setLangOnly(state.settings.lang)'));
+  assert(importBlock.length > 100, 'doImport validation block located');
+  for (const bad of ['state.settings.hideSearch = false', 'state.settings.clock12h = false',
+    'state.settings.clockSeconds = false', "state.settings.clockFont = 'modern'", 'state.settings.hideClock = false']) {
+    assert(!importBlock.includes(bad), `doImport no longer hardcodes ${bad} over the backup value`);
+  }
+  // Exported personal events must survive a backup round-trip.
+  assert(/state\.myEvents = normalizeMyEvents\(data\.myevents\)/.test(appSrc)
+    && /localRawSet\(K\.myevents, state\.myEvents\)/.test(appSrc),
+    'doImport restores exported myevents (and persists them)');
+  // Import keeps per-card colour/size and rejects non-http(s) URLs like the read path does.
+  assert(/tileSize: tileSize\(it\.tileSize\), icon: sanitizeIconDataUrl\(it\.icon\)/.test(appSrc)
+    && /color: safeColor\(it\.color\)/.test(appSrc.slice(appSrc.indexOf('state.items = Array.isArray(migrated.items)'))),
+    'doImport keeps tileSize/color on top-level shortcuts');
+  assert(/!it \|\| typeof it\.url !== 'string' \|\| !\/\^https\?:/.test(appSrc.replace(/\n/g, ' ')),
+    'doImport rejects javascript:/data: URLs like sanitizeItems does');
+  // Custom-engine ids come from crafted imports too — they must be escaped into attributes.
+  assert(/data-eng-del="\$\{escapeHtml\(e\.id\)\}"/.test(appSrc), 'engine-delete button escapes the (possibly imported) engine id');
+
+  // RRULE expansion regressions (all reproduced against the pre-fix ics.js before locking here).
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(read('js/ics.js'), sandbox, { filename: 'ics.js' });
+  const ICS2 = sandbox.window.LT_ICS;
+  const mk = (lines) => ['BEGIN:VCALENDAR', ...lines, 'END:VCALENDAR'].join('\r\n');
+  const isoDay = (o) => new Date(o.startMs).toISOString().slice(0, 10);
+  if (ICS2) {
+    // BYDAY token order must not matter (BYDAY=SA,SU used to drop the in-window Sunday).
+    let raw = ICS2.parseICS(mk(['BEGIN:VEVENT', 'UID:a@x', 'SUMMARY:W', 'DTSTART:20260104T090000Z',
+      'RRULE:FREQ=WEEKLY;BYDAY=SA,SU;UNTIL=20260111T235959Z', 'END:VEVENT']));
+    assert(JSON.stringify(ICS2.expandAll(raw, Date.UTC(2026, 0, 1), Date.UTC(2026, 0, 31), 50).map(isoDay))
+      === JSON.stringify(['2026-01-04', '2026-01-10', '2026-01-11']),
+      'WEEKLY BYDAY=SA,SU expands chronologically, not in token order');
+    // Ordinal BYDAY for MONTHLY (used to echo DTSTART's day-of-month).
+    raw = ICS2.parseICS(mk(['BEGIN:VEVENT', 'UID:b@x', 'SUMMARY:M', 'DTSTART:20260102T090000Z',
+      'RRULE:FREQ=MONTHLY;BYDAY=1FR;COUNT=3', 'END:VEVENT']));
+    assert(JSON.stringify(ICS2.expandAll(raw, Date.UTC(2026, 0, 1), Date.UTC(2026, 3, 1), 50).map(isoDay))
+      === JSON.stringify(['2026-01-02', '2026-02-06', '2026-03-06']),
+      'MONTHLY;BYDAY=1FR yields first Fridays');
+    raw = ICS2.parseICS(mk(['BEGIN:VEVENT', 'UID:b2@x', 'SUMMARY:LM', 'DTSTART:20260126T090000Z',
+      'RRULE:FREQ=MONTHLY;BYDAY=-1MO;COUNT=3', 'END:VEVENT']));
+    assert(JSON.stringify(ICS2.expandAll(raw, Date.UTC(2026, 0, 1), Date.UTC(2026, 3, 15), 50).map(isoDay))
+      === JSON.stringify(['2026-01-26', '2026-02-23', '2026-03-30']),
+      'MONTHLY;BYDAY=-1MO yields last Mondays');
+    // BYMONTH was parsed but never applied.
+    raw = ICS2.parseICS(mk(['BEGIN:VEVENT', 'UID:c@x', 'SUMMARY:Y', 'DTSTART:20260101T090000Z',
+      'RRULE:FREQ=YEARLY;BYMONTH=6;COUNT=2', 'END:VEVENT']));
+    assert(JSON.stringify(ICS2.expandAll(raw, Date.UTC(2026, 0, 1), Date.UTC(2028, 0, 1), 50).map(isoDay))
+      === JSON.stringify(['2026-06-01', '2027-06-01']),
+      'YEARLY;BYMONTH=6 recurs in June, not DTSTART month');
+    // Pathological input: huge INTERVAL must not emit NaN timestamps, and invalid dates are dropped.
+    raw = ICS2.parseICS(mk(['BEGIN:VEVENT', 'UID:d@x', 'SUMMARY:N', 'DTSTART:20260101T090000Z',
+      'RRULE:FREQ=DAILY;INTERVAL=100000000000000', 'END:VEVENT']));
+    assert(ICS2.expandAll(raw, Date.UTC(2026, 0, 1), Date.UTC(2027, 0, 1), 50).every(o => Number.isFinite(o.startMs)),
+      'a huge RRULE INTERVAL never produces NaN occurrences');
+    raw = ICS2.parseICS(mk(['BEGIN:VEVENT', 'UID:e@x', 'SUMMARY:BAD', 'DTSTART:20261340', 'END:VEVENT']));
+    assert(raw.length === 0 || ICS2.expandAll(raw, Date.UTC(2026, 0, 1), Date.UTC(2027, 6, 1), 50).length === 0,
+      'an out-of-range DTSTART (20261340) is rejected instead of rolling into 2027');
+    // A short timed event crossing midnight touches both days.
+    assert(JSON.stringify(ICS2.occurrenceDays({ startMs: Date.UTC(2026, 3, 13, 23, 0), endMs: Date.UTC(2026, 3, 14, 1, 0), allDay: true }))
+      === JSON.stringify(['2026-04-13', '2026-04-14']),
+      'occurrenceDays covers a midnight-crossing event on both days');
+  }
+
+  // Feed-cache lifecycle: local feeds keep their raw ICS and re-expand as the window moves;
+  // a forced refresh reuses the cache instead of blanking the feed on failure.
+  const calSrc = read('js/calendar.js');
+  assert(/async function syncFeed\(feed, cached, nowMs, force\)/.test(calSrc)
+    && /!force && prev\.fetchedAt/.test(calSrc),
+    'syncFeed takes force without dropping the cached events');
+  assert(/windowLow = \(\)/.test(calSrc) && /expandCached\(prev\.ics/.test(calSrc),
+    'local feeds re-expand their stored ICS before the cached window runs out');
+  assert(/LT_CAL\.syncFeed\(feed, calCache\[feed\.id\], now, force\)/.test(appSrc),
+    'syncCalendars passes the cache through on force refresh');
+  assert(/calCache\[SEA_FEED\.id\] = \{ fetchedAt: now, etag: '', title: name, error: '', events,/.test(appSrc)
+    && /ics: text, winTo/.test(appSrc), 'the SEA seed stores the raw ICS + window for re-expansion');
+  assert(/ics: text\.length <= 600000 \? text : undefined/.test(appSrc),
+    'user-imported .ics files keep their raw text (capped) for re-expansion');
+
+  // HK gazetted weekend substitutions in the bundled data.
+  if (ICS2) {
+    const seaRaw = ICS2.parseICS(read('assets/sea-holidays.ics'));
+    const seaOcc = ICS2.expandAll(seaRaw, Date.UTC(2026, 0, 1), Date.UTC(2029, 0, 1), 600);
+    const on = (summary, ymd) => seaOcc.some(o => o.summary === summary && isoDay(o) === ymd);
+    assert(on('香港·清明节', '2026-04-06') && !on('香港·清明节', '2026-04-05'),
+      'HK Ching Ming 2026 (Sunday) is observed on Apr 6');
+    assert(on('香港·复活节星期一', '2026-04-07'), 'HK Easter Monday 2026 displaced to Apr 7');
+    assert(on('香港·佛诞', '2026-05-25'), 'HK Buddha\'s Birthday 2026 (Sunday) observed May 25');
+    assert(on('香港·农历新年年初四（补假）', '2027-02-09'), 'HK LNY 2027 fourth-day substitution present');
+  }
 }
 
 console.log('');

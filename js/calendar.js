@@ -159,44 +159,84 @@ window.LT_CAL = (function () {
 
   /* ---------- sync ---------- */
 
+  // Re-expand a stored raw ICS text into cache-entry events for the window ending at winTo.
+  function expandCached(icsText, winFrom, winTo) {
+    const raw = window.LT_ICS.parseICS(icsText);
+    return window.LT_ICS.expandAll(raw, winFrom, winTo, 400).map(o => ({
+      s: o.startMs, e: o.endMs, d: o.allDay ? 1 : 0,
+      t: o.summary.slice(0, 120), l: o.location.slice(0, 80)
+    }));
+  }
+
   // Fetch (or reuse the cache), parse, and expand into the render window. Returns a cache entry
-  // shaped { fetchedAt, etag, events, error } — never throws, so a dead feed cannot break the page.
-  async function syncFeed(feed, cached, nowMs) {
+  // shaped { fetchedAt, etag, title, error, events, ics?, winTo? } — never throws, so a dead feed
+  // cannot break the page. All constructors below use this exact key order: the caller compares
+  // JSON strings to decide whether to persist, and a stable shape keeps "nothing changed" cheap.
+  // force bypasses the freshness window without dropping the cached events (a failed refresh keeps
+  // the last good data). Both local feeds and small remote feeds carry their raw ICS in the cache
+  // entry (`ics`) so the expansion window keeps moving; without re-expansion a recurring feed
+  // would silently run out of occurrences winTo days after its content last changed.
+  async function syncFeed(feed, cached, nowMs, force) {
     const now = nowMs || Date.now();
     const prev = cached || {};
+    const winTo = now + WINDOW_FORWARD_MS;
+    const entry = (over) => ({ fetchedAt: prev.fetchedAt || 0, etag: prev.etag || '',
+      title: prev.title || '', error: '', events: prev.events || [], ics: prev.ics, winTo: prev.winTo, ...over });
+    // Re-expand when the cached window has less than a month of road left.
+    const windowLow = () => !Number(prev.winTo) || Number(prev.winTo) < winTo - 30 * 86400000;
+
     if (isLocalFeed(feed && feed.url)) {
-      return { fetchedAt: prev.fetchedAt || now, etag: '', events: prev.events || [], title: prev.title || feed.name || '', error: '' };
+      if (prev.ics && Array.isArray(prev.events) && windowLow()) {
+        try {
+          return entry({ fetchedAt: now, title: prev.title || feed.name || '',
+            events: expandCached(prev.ics, now - WINDOW_BACK_MS, winTo), winTo });
+        } catch { /* fall through to the stale-but-present cache below */ }
+      }
+      if (Array.isArray(prev.events) && prev.events.length) return prev; // unchanged — no churn
+      return entry({ fetchedAt: now, title: prev.title || feed.name || '' });
     }
-    const fresh = prev.fetchedAt && (now - prev.fetchedAt) < REFRESH_AFTER_MS;
+    const fresh = !force && prev.fetchedAt && (now - prev.fetchedAt) < REFRESH_AFTER_MS;
     if (fresh && !prev.error && prev.events) return prev;
 
     const res = await fetchFeed(feed.url, prev.etag);
     if (!res.ok) {
       // Keep the last good events: a flaky network should not blank out the user's calendar.
-      return { fetchedAt: prev.fetchedAt || 0, etag: prev.etag || '', events: prev.events || [], error: res.error };
+      return entry({ error: res.error });
     }
     if (res.notModified) {
-      return { fetchedAt: now, etag: prev.etag || '', events: prev.events || [], error: '' };
+      // 304 means the content is unchanged, but wall-clock time still moves: a static feed (most
+      // holiday calendars 304 forever) must be re-expanded from its stored ICS before the cached
+      // window runs out, or recurring events silently stop appearing.
+      if (prev.ics && Array.isArray(prev.events) && windowLow()) {
+        try {
+          return entry({ fetchedAt: now, events: expandCached(prev.ics, now - WINDOW_BACK_MS, winTo), winTo });
+        } catch { /* keep the stale window rather than blanking the feed */ }
+      }
+      return entry({ fetchedAt: now });
     }
 
     let raw = [];
     try { raw = window.LT_ICS.parseICS(res.ics); }
-    catch { return { fetchedAt: prev.fetchedAt || 0, etag: prev.etag || '', events: prev.events || [], title: prev.title || '', error: 'parse' }; }
+    catch { return entry({ error: 'parse' }); }
 
-    const events = window.LT_ICS.expandAll(raw, now - WINDOW_BACK_MS, now + WINDOW_FORWARD_MS, 200);
+    const events = window.LT_ICS.expandAll(raw, now - WINDOW_BACK_MS, winTo, 200);
     // X-WR-CALNAME is the feed's own display name — nicer than showing the user a hostname.
     let title = '';
     try { title = window.LT_ICS.parseCalendarName(res.ics); } catch {}
-    return {
+    // Keep the raw text only when small: it powers re-expansion on later 304s, but a multi-MB
+    // feed would eat chrome.storage.local quota just to sit next to its own expansion.
+    const keepRaw = res.ics.length <= 600000;
+    return entry({
       fetchedAt: now,
       etag: res.etag || '',
       title: title || prev.title || '',
-      error: '',
       events: events.map(o => ({
         s: o.startMs, e: o.endMs, d: o.allDay ? 1 : 0,
         t: o.summary.slice(0, 120), l: o.location.slice(0, 80)
-      }))
-    };
+      })),
+      ics: keepRaw ? res.ics : undefined,
+      winTo
+    });
   }
 
   // Feed events, indexed by local day key, so the month grid is a map lookup instead of a scan.

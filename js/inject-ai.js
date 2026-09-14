@@ -41,9 +41,12 @@
   const q = (qs.get('q') || '').trim();
   const ltK = qs.get('lt_k') || '';
   let activeNonce=ltK;
-  const targetId=location.hostname==='chatgpt.com'?'openai':'doubao';
+  const targetId=(location.hostname==='chatgpt.com'||location.hostname==='chat.openai.com')?'openai':'doubao';
   function report(status){try{if(activeNonce)chrome.storage.local.set({['lt.delivery.'+activeNonce+'.'+targetId]:{status,t:Date.now()}});}catch(_){}}
-  let autoSend = true;
+  // Auto-send is earned, not defaulted: only a nonce that resolves to a real storage record (set by
+  // the extension) may flip it on. A bare q= URL — which ANY website can mint, e.g.
+  // chatgpt.com/?lt_auto=1&lt_k=fake&q=<attacker prompt> — fills the box but the user presses send.
+  let autoSend = false;
   log('url state: lt_auto =', armed, ', q =', q.length, ', lt_k =', ltK ? 'yes' : 'no');
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -392,8 +395,12 @@
     }
     if (!text) { log('no prompt text, abort'); clearParams(); clearPointer(); return; }
     let started = false;
+    const armedAt = Date.now();
     const start = () => {
       if (started || document.visibilityState !== 'visible') return;
+      // A background tab can sit armed for hours; the nonce itself expires after 30 min, so the
+      // plaintext-q path gets the same horizon instead of firing long after the user forgot.
+      if (Date.now() - armedAt > 1800000) { clearParams(); clearPointer(); return; }
       started = true;
       main(text).finally(clearPointer);
     };
