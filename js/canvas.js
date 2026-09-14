@@ -150,7 +150,9 @@
   // Single track width (under auto-fill, 1fr splits the remaining space evenly) - matches the real CSS column width.
   function getCardTrackW(gridW) {
     const cols = getCardCols(gridW);
-    return cardMinWidth();
+    const minW = cardMinWidth();
+    if (cols <= 1) return Math.max(minW, gridW);
+    return Math.max(minW, (gridW - (cols - 1) * CARD_GAP) / cols);
   }
 
   // Cell size: column width is derived from the container width, because once cards are absolutely positioned

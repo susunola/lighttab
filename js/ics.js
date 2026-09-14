@@ -379,9 +379,64 @@ window.LT_ICS = (function () {
     return days;
   }
 
+  function escapeText(s) {
+    return String(s || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+  }
+  function icsDate(ymd) {
+    return String(ymd || '').replace(/-/g, '');
+  }
+  function icsStamp(ms) {
+    const d = new Date(ms);
+    const p = n => (n < 10 ? '0' : '') + n;
+    return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) + 'T' +
+      p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds()) + 'Z';
+  }
+  function buildICS(events, calName) {
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//LightTab//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'X-WR-CALNAME:' + escapeText(calName || 'LightTab')
+    ];
+    const now = icsStamp(Date.now());
+    for (const ev of (events || [])) {
+      if (!ev || !ev.day) continue;
+      const uid = String(ev.id || ev.day) + '@lighttab';
+      lines.push('BEGIN:VEVENT');
+      lines.push('UID:' + uid);
+      lines.push('DTSTAMP:' + now);
+      if (ev.allDay !== false && !ev.s) {
+        const end = ev.day.split('-').map(Number);
+        const nx = new Date(Date.UTC(end[0], end[1] - 1, end[2] + 1));
+        const endDay = nx.getUTCFullYear() + '-' + pad(nx.getUTCMonth() + 1) + '-' + pad(nx.getUTCDate());
+        lines.push('DTSTART;VALUE=DATE:' + icsDate(ev.day));
+        lines.push('DTEND;VALUE=DATE:' + icsDate(endDay));
+      } else {
+        const [y, m, d] = ev.day.split('-').map(Number);
+        const [sh, sm] = String(ev.s || '09:00').split(':').map(Number);
+        const start = new Date(y, m - 1, d, sh || 0, sm || 0);
+        let end = new Date(start.getTime() + 3600000);
+        if (ev.e) {
+          const [eh, em] = String(ev.e).split(':').map(Number);
+          end = new Date(y, m - 1, d, eh || 0, em || 0);
+          if (end <= start) end = new Date(start.getTime() + 3600000);
+        }
+        lines.push('DTSTART:' + icsStamp(start.getTime()));
+        lines.push('DTEND:' + icsStamp(end.getTime()));
+      }
+      lines.push('SUMMARY:' + escapeText(ev.t || ''));
+      if (ev.l) lines.push('LOCATION:' + escapeText(ev.l));
+      lines.push('END:VEVENT');
+    }
+    lines.push('END:VCALENDAR');
+    return lines.join('\r\n');
+  }
+
   return {
     parseICS, parseCalendarName, expandEvent, expandAll, occurrenceDays, dayKey,
-    parseDT, parseDuration, parseRRule, unfold, unescapeText,
+    parseDT, parseDuration, parseRRule, unfold, unescapeText, buildICS,
     wallToUTC, partsInZone, DAY_MS
   };
 })();

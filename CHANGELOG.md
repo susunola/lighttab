@@ -1,3 +1,26 @@
+# 1.24.0 — calendar page, AI context menu, sync backups
+
+- Calendar grows into its own page (Settings / navigation → **Calendar**): month, week and year
+  views, an upcoming-events side list, and personal calendar management — add your own calendars,
+  import `.ics` files with a preview banner, export, rename, recolor and delete them.
+- New **LightTab · AI** right-click context menu sends the current selection to your chosen AI
+  site; temporary selection/delivery storage entries are swept after 30 minutes by the background
+  worker.
+- Sync backups: export, restore and delete cloud backup snapshots from Settings → Sync.
+- Search engine manager: add custom engines and restore the built-in list.
+- Weather now paints into a dedicated `#clock-weather` element next to the clock instead of being
+  appended to the date line.
+- Daily wallpaper rotation picks a random pool entry (previously always the head); the picker takes
+  an injectable `rand` for tests.
+- Settings gains an **About** section (GitHub link, optional Alipay / WeChat donate QR codes),
+  avatar upload hints, a second-timezone city editor, bookmark import, data import/export,
+  diagnostics export and a full reset button.
+- Manifest: broader host permissions for calendar/ICS providers (incl. office365.com and
+  icloud.com.cn) and a content script for chat.openai.com alongside chatgpt.com.
+- Version strings agree at 1.24.0 across `manifest.json`, `js/i18n.js`, `newtab.html`,
+  `js/app.js` (`exportPayload`) and the smoke assertion; smoke tests updated for the random
+  wallpaper pick and the `#clock-weather` paint path.
+
 # 1.23.5 — the free canvas comes up when you switch to it
 
 - Fix: choosing **Above search** in Settings → Widgets did not actually switch the layout engine

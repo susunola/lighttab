@@ -50,7 +50,14 @@
   // Rich editors outrank a bare textarea: Doubao/Dola mount a decoy textarea before the real
   // tiptap ProseMirror composer, and ChatGPT's #prompt-textarea is contenteditable too.
   const INPUT_TIERS = [
-    ['#prompt-textarea', 'div[contenteditable="true"][role="textbox"]', 'div[contenteditable="true"]', '[role="textbox"]'],
+    [
+      '#prompt-textarea',
+      '[data-testid="prompt-textarea"]',
+      'div.ProseMirror[contenteditable="true"]',
+      'div[contenteditable="true"][role="textbox"]',
+      'div[contenteditable="true"]',
+      '[role="textbox"]'
+    ],
     ['textarea']
   ];
   const PENDING_PREFIX = 'lt.pending.';
@@ -384,8 +391,20 @@
       else log('nonce not found in storage, fallback to url q');
     }
     if (!text) { log('no prompt text, abort'); clearParams(); clearPointer(); return; }
-    const start = () => { main(text).finally(clearPointer); };
+    let started = false;
+    const start = () => {
+      if (started || document.visibilityState !== 'visible') return;
+      started = true;
+      main(text).finally(clearPointer);
+    };
     if (document.visibilityState === 'visible') start();
-    else document.addEventListener('visibilitychange', start, { once: true });
+    else {
+      const onVis = () => {
+        if (document.visibilityState !== 'visible') return;
+        document.removeEventListener('visibilitychange', onVis);
+        start();
+      };
+      document.addEventListener('visibilitychange', onVis);
+    }
   })();
 })();

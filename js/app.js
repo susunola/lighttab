@@ -100,7 +100,7 @@
     hideSearch: false,
     hideClock: false,
     // Icon tile geometry, driven by the Settings → General sliders onto the --icon-size /
-    // --icon-radius CSS custom properties. 64px tiles with a 28% corner radius are the shipped look.
+    // --icon-radius CSS custom properties. 88px tiles with a 28% corner radius are the shipped look.
     iconSize: 88,
     iconRadius: 28,
     wallpaper: { ...BUNDLED_WALL },
@@ -178,7 +178,12 @@
   }
 
   // ---------- Utilities ----------
-  function nid() { return 's_' + Math.random().toString(36).slice(2, 10); }
+  function nid() {
+    try {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) return 's_' + crypto.randomUUID().replace(/-/g, '').slice(0, 10);
+    } catch (_) { /* fall through */ }
+    return 's_' + Math.random().toString(36).slice(2, 10);
+  }
   function hostnameOf(url) {
     try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
   }
@@ -307,7 +312,7 @@
   // ---------- Store (chrome.storage.local, with a localStorage fallback) ----------
   // Data-model schema version: +1 on any structural change (added / renamed / reinterpreted field), then update MIGRATIONS.
   const SCHEMA_VERSION = 5;
-  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup', diag: 'lt.diag', calendars: 'lt.calendars', calcache: 'lt.calcache' };
+  const K = { settings: 'lt.settings', items: 'lt.items', wallpaper: 'lt.wallpaper', todos: 'lt.todos', prompts: 'lt.prompts', walllib: 'lt.walllib', rot: 'lt.rot', schema: 'lt.schema', history: 'lt.history', backup: 'lt.backup', diag: 'lt.diag', calendars: 'lt.calendars', calcache: 'lt.calcache', myevents: 'lt.myevents' };
   // Key prefix for the temporary prompt channel: lt.pending.<nonce> = { p, t }. Hands the prompt
   // to the content script across tabs without ever putting it in the URL.
   const PENDING_PREFIX = 'lt.pending.';
@@ -409,6 +414,7 @@
     // through its own key because an Apple "public calendar" link is an unguessable capability —
     // see the note above rebuildCalIndex() for why it must never reach cloud sync.
     calendars: [],
+    myEvents: [],
     view: VIEW_ALL
   };
   let calCache = {};              // feedId → { fetchedAt, etag, title, events[], error }
@@ -677,10 +683,14 @@
   }
   // Pure picker (exported for offline smoke): prefer the first pool image that differs from the current
   // one so two consecutive days never show the same photo; fall back to pool[0]; null when pool is empty.
-  function pickRotateCandidate(pool, currentUrl) {
-    const arr = Array.isArray(pool) ? pool : [];
-    const hit = arr.find(im => im && im.url && im.url !== currentUrl);
-    return hit || arr[0] || null;
+  function pickRotateCandidate(pool, currentUrl, rand) {
+    const arr = (Array.isArray(pool) ? pool : []).filter(im => im && im.url);
+    if (!arr.length) return null;
+    const others = arr.filter(im => im.url !== currentUrl);
+    const pickFrom = others.length ? others : arr;
+    const r = typeof rand === 'function' ? rand() : Math.random();
+    const i = Math.min(pickFrom.length - 1, Math.max(0, Math.floor(Number(r) * pickFrom.length)));
+    return pickFrom[i] || null;
   }
   async function maybeAutoRotate() {
     try {
@@ -714,24 +724,24 @@
 
   // ---------- Plum blossom (bottom-right): rotate wallpaper + show an inspirational quote ----------
   const QUOTES = [
-    { zh: '宝剑锋从磨砺出，梅花香自苦寒来。', en: 'A sword\'s edge comes from whetting; plum-blossom fragrance from bitter cold.', src: { zh: '《警世贤文》', en: 'Warnings to the World' } },
-    { zh: '路漫漫其修远兮，吾将上下而求索。', en: 'The road ahead is long and far; I shall search high and low.', src: { zh: '屈原《离骚》', en: 'Qu Yuan · Li Sao' } },
-    { zh: '天行健，君子以自强不息。', en: 'As heaven moves with vigor, the noble never cease to strengthen themselves.', src: { zh: '《周易》', en: 'Book of Changes' } },
-    { zh: '不积跬步，无以至千里。', en: 'Without small steps, one cannot cover a thousand miles.', src: { zh: '《荀子·劝学》', en: 'Xunzi' } },
-    { zh: '千里之行，始于足下。', en: 'A thousand-mile journey begins with a single step.', src: { zh: '《老子》', en: 'Laozi' } },
-    { zh: '长风破浪会有时，直挂云帆济沧海。', en: 'A time will come to ride the wind and cleave the waves; I\'ll hoist my sail and cross the vast sea.', src: { zh: '李白《行路难》', en: 'Li Bai' } },
-    { zh: '会当凌绝顶，一览众山小。', en: 'When I stand on the summit, all other peaks look small.', src: { zh: '杜甫《望岳》', en: 'Du Fu' } },
-    { zh: '纸上得来终觉浅，绝知此事要躬行。', en: 'What comes from books is shallow; true mastery comes from doing.', src: { zh: '陆游《冬夜读书示子聿》', en: 'Lu You' } },
-    { zh: '山重水复疑无路，柳暗花明又一村。', en: 'Where hills and streams seem to block the way, a new village blooms beyond the willows.', src: { zh: '陆游《游山西村》', en: 'Lu You' } },
-    { zh: '千磨万击还坚劲，任尔东西南北风。', en: 'Battered by a thousand blows, I stand firm against winds from every quarter.', src: { zh: '郑板桥《竹石》', en: 'Zheng Xie' } },
-    { zh: '少壮不努力，老大徒伤悲。', en: 'Idle in youth, grieving in old age.', src: { zh: '《长歌行》', en: 'The Long Ballad' } },
-    { zh: '星光不问赶路人，时光不负有心人。', en: 'The stars do not question the traveler; time rewards the devoted.', src: { zh: '佚名', en: 'Anonymous' } },
-    { zh: '学而不思则罔，思而不学则殆。', en: 'Learning without thought is labour lost; thought without learning is perilous.', src: { zh: '《论语·为政》', en: 'The Analects' } },
-    { zh: '知之者不如好之者，好之者不如乐之者。', en: 'Those who know it are not as good as those who love it; those who love it are not as good as those who delight in it.', src: { zh: '《论语·雍也》', en: 'The Analects' } },
-    { zh: '问渠那得清如许？为有源头活水来。', en: 'How can the pond stay so clear? Living water keeps flowing in from its source.', src: { zh: '朱熹《观书有感》', en: 'Zhu Xi · Reading' } },
-    { zh: '博观而约取，厚积而薄发。', en: 'Look widely, take selectively; store deeply, release sparingly.', src: { zh: '苏轼《稼说送张琥》', en: 'Su Shi' } },
-    { zh: '业精于勤，荒于嬉；行成于思，毁于随。', en: 'Mastery comes from diligence and withers with play; conduct is shaped by thought and ruined by ease.', src: { zh: '韩愈《进学解》', en: 'Han Yu' } },
-    { zh: '苟日新，日日新，又日新。', en: 'If you can renew yourself in a day, renew yourself day after day.', src: { zh: '《大学》', en: 'The Great Learning' } },
+    { zh: '回首向来萧瑟处，归去，也无风雨也无晴。', en: 'I look back on the wind and rain — going home, there is neither storm nor fair weather.', src: { zh: '苏轼《定风波》', en: 'Su Shi' } },
+    { zh: '一蓑烟雨任平生。', en: 'In a coir cloak I walk through mist and rain, content for a lifetime.', src: { zh: '苏轼《定风波》', en: 'Su Shi' } },
+    { zh: '此心安处是吾乡。', en: 'Wherever this heart is at rest, that place is home.', src: { zh: '苏轼《定风波·南海归赠王定国侍人寓娘》', en: 'Su Shi' } },
+    { zh: '人生如逆旅，我亦是行人。', en: 'Life is an inn on the road, and I too am only passing through.', src: { zh: '苏轼《临江仙》', en: 'Su Shi' } },
+    { zh: '小舟从此逝，江海寄余生。', en: 'The little boat slips away; I leave the rest of my years to the rivers and the sea.', src: { zh: '苏轼《临江仙》', en: 'Su Shi' } },
+    { zh: '莫听穿林打叶声，何妨吟啸且徐行。', en: 'Never mind the rain through the woods; chant on, and walk slowly.', src: { zh: '苏轼《定风波》', en: 'Su Shi' } },
+    { zh: '竹杖芒鞋轻胜马，谁怕？', en: 'A bamboo staff and straw sandals feel lighter than a horse — who is afraid?', src: { zh: '苏轼《定风波》', en: 'Su Shi' } },
+    { zh: '纵浪大化中，不喜亦不惧。', en: 'I drift with the great transformation, neither delighted nor afraid.', src: { zh: '陶渊明《形影神》', en: 'Tao Yuanming' } },
+    { zh: '采菊东篱下，悠然见南山。', en: 'Picking chrysanthemums by the eastern fence, I see the southern hills in ease.', src: { zh: '陶渊明《饮酒》', en: 'Tao Yuanming' } },
+    { zh: '行到水穷处，坐看云起时。', en: 'Walk until the stream runs out; sit and watch the clouds rise.', src: { zh: '王维《终南别业》', en: 'Wang Wei' } },
+    { zh: '人生到处知何似，应似飞鸿踏雪泥。', en: 'What is a life of wandering like? A wild goose’s print on melting snow.', src: { zh: '苏轼《和子由渑池怀旧》', en: 'Su Shi' } },
+    { zh: '天地与我并生，而万物与我为一。', en: 'Heaven and earth were born with me; the ten thousand things and I are one.', src: { zh: '《庄子·齐物论》', en: 'Zhuangzi' } },
+    { zh: '宠辱不惊，闲看庭前花开花落。', en: 'Unmoved by favor or disgrace, I watch the courtyard flowers bloom and fall.', src: { zh: '《菜根谭》', en: 'Caigentan' } },
+    { zh: '去留无意，漫随天外云卷云舒。', en: 'To stay or go is nothing; I follow clouds as they gather and drift.', src: { zh: '《菜根谭》', en: 'Caigentan' } },
+    { zh: '潮平两岸阔，风正一帆悬。', en: 'The tide is even, the banks open wide; a fair wind holds a single sail.', src: { zh: '王湾《次北固山下》', en: 'Wang Wan' } },
+    { zh: '海阔凭鱼跃，天高任鸟飞。', en: 'The sea is wide for the fish to leap; the sky is high for the birds to fly.', src: { zh: '阮阅《诗话总龟》', en: 'Ruan Yue' } },
+    { zh: '山高自有客行路，水深自有渡船人。', en: 'The mountain is high, yet a path remains; the water is deep, yet a ferryman waits.', src: { zh: '《西游记》', en: 'Journey to the West' } },
+    { zh: '且将新火试新茶，诗酒趁年华。', en: 'Light a new fire for new tea; spend the years on verse and wine.', src: { zh: '苏轼《望江南》', en: 'Su Shi' } },
     { zh: '天将降大任于是人也，必先苦其心志，劳其筋骨。', en: 'When Heaven entrusts a great task, it first steels the will and wearies the body.', src: { zh: '《孟子·告子下》', en: 'Mencius' } },
     { zh: '玉不琢，不成器；人不学，不知道。', en: 'Unpolished jade cannot shine; untaught people cannot know the Way.', src: { zh: '《礼记·学记》', en: 'Book of Rites' } },
   ];
@@ -921,15 +931,21 @@
     if (btn) { btn.classList.remove('spin'); void btn.offsetWidth; btn.classList.add('spin'); }
     petalBurst();
     // Ensure a pool exists (silent network attempt, cached pool as fallback).
-    if (!Array.isArray(wallLibImages) || !wallLibImages.length) {
-      await fetchWallLib({ silent: true });
+    if (!Array.isArray(wallLibImages) || wallLibImages.length < 3) {
+      await fetchWallLib({ silent: true, shuffle: true });
     }
-    const pool = Array.isArray(wallLibImages) ? wallLibImages : [];
+    let pool = Array.isArray(wallLibImages) ? wallLibImages.filter(im => im && im.url) : [];
+    if (pool.length < 2) {
+      pool = WALLPAPERS.map(w => w.img
+        ? { url: w.img, kind: 'image' }
+        : { url: w.css, kind: 'gradient' }).filter(x => x.url);
+    }
     if (pool.length) {
-      const cur = (state.wallpaper && state.wallpaper.type === 'image') ? state.wallpaper.value : '';
+      const cur = state.wallpaper && state.wallpaper.value ? state.wallpaper.value : '';
       const next = pickRotateCandidate(pool, cur);
       if (next && next.url) {
-        await setWallpaper({ type: 'image', value: next.url });
+        const kind = next.kind || (String(next.url).indexOf('linear-gradient') === 0 ? 'gradient' : 'image');
+        await setWallpaper({ type: kind === 'gradient' ? 'gradient' : 'image', value: next.url });
         markManualPickToday();
         renderSwatches();
         renderWallLibGrid();
@@ -976,12 +992,84 @@
         timeZone: zone
       });
     } catch (_) { el.hidden = true; return; }
-    const city = zone.split('/').pop().replace(/_/g, ' ');
-    el.textContent = `${city} · ${fmt.format(now || new Date())}`;
+    const city = (state.settings.clockTz2City || zone.split('/').pop().replace(/_/g, ' '));
+    el.textContent = `${city} · ${fmt.format(now || new Date())}${tz2WeatherText()}`;
     el.hidden = false;
   }
   function validTz(zone) {
     try { new Intl.DateTimeFormat('en-US', { timeZone: zone }); return true; } catch (_) { return false; }
+  }
+  const TZ_CITIES = [
+    ['北京','北平','beijing','peking'], 'Asia/Shanghai',
+    ['上海','shanghai'], 'Asia/Shanghai',
+    ['深圳','广州','广州','guangzhou','shenzhen','canton'], 'Asia/Shanghai',
+    ['香港','hong kong','hongkong'], 'Asia/Hong_Kong',
+    ['台北','taiwan','taipei'], 'Asia/Taipei',
+    ['东京','tokyo','東京'], 'Asia/Tokyo',
+    ['大阪','osaka'], 'Asia/Tokyo',
+    ['首尔','seoul','서울'], 'Asia/Seoul',
+    ['新加坡','singapore'], 'Asia/Singapore',
+    ['曼谷','bangkok'], 'Asia/Bangkok',
+    ['河内','hanoi'], 'Asia/Bangkok',
+    ['雅加达','jakarta'], 'Asia/Jakarta',
+    ['马尼拉','manila'], 'Asia/Manila',
+    ['胡志明','saigon','ho chi minh'], 'Asia/Ho_Chi_Minh',
+    ['新德里','delhi','new delhi'], 'Asia/Kolkata',
+    ['孟买','mumbai','bombay'], 'Asia/Kolkata',
+    ['迪拜','dubai'], 'Asia/Dubai',
+    ['利雅得','riyadh'], 'Asia/Riyadh',
+    ['莫斯科','moscow'], 'Europe/Moscow',
+    ['伊斯坦布尔','istanbul'], 'Europe/Istanbul',
+    ['伦敦','london'], 'Europe/London',
+    ['巴黎','paris'], 'Europe/Paris',
+    ['柏林','berlin'], 'Europe/Berlin',
+    ['法兰克福','frankfurt'], 'Europe/Berlin',
+    ['阿姆斯特丹','amsterdam'], 'Europe/Amsterdam',
+    ['罗马','rome'], 'Europe/Rome',
+    ['马德里','madrid'], 'Europe/Madrid',
+    ['苏黎世','zurich'], 'Europe/Zurich',
+    ['斯德哥尔摩','stockholm'], 'Europe/Stockholm',
+    ['纽约','new york','nyc'], 'America/New_York',
+    ['华盛顿','washington'], 'America/New_York',
+    ['波士顿','boston'], 'America/New_York',
+    ['芝加哥','chicago'], 'America/Chicago',
+    ['休斯顿','houston'], 'America/Chicago',
+    ['丹佛','denver'], 'America/Denver',
+    ['洛杉矶','los angeles','la'], 'America/Los_Angeles',
+    ['旧金山','san francisco','sf'], 'America/Los_Angeles',
+    ['西雅图','seattle'], 'America/Los_Angeles',
+    ['温哥华','vancouver'], 'America/Vancouver',
+    ['多伦多','toronto'], 'America/Toronto',
+    ['墨西哥城','mexico city'], 'America/Mexico_City',
+    ['圣保罗','sao paulo','são paulo'], 'America/Sao_Paulo',
+    ['布宜诺斯艾利斯','buenos aires'], 'America/Argentina/Buenos_Aires',
+    ['悉尼','sydney'], 'Australia/Sydney',
+    ['墨尔本','melbourne'], 'Australia/Melbourne',
+    ['奥克兰','auckland'], 'Pacific/Auckland',
+    ['开罗','cairo'], 'Africa/Cairo',
+    ['约翰内斯堡','johannesburg'], 'Africa/Johannesburg',
+    ['内罗毕','nairobi'], 'Africa/Nairobi'
+  ];
+  const TZ_CITY_ROWS = [];
+  for (let i = 0; i < TZ_CITIES.length; i += 2) {
+    const names = TZ_CITIES[i], zone = TZ_CITIES[i + 1];
+    TZ_CITY_ROWS.push({ names, zone, label: names[0] });
+  }
+  function resolveCityTz(raw) {
+    const q = String(raw || '').trim().toLowerCase();
+    if (!q) return null;
+    if (validTz(raw.trim())) return { zone: raw.trim(), label: raw.trim().split('/').pop().replace(/_/g, ' ') };
+    const hits = TZ_CITY_ROWS.filter(r => r.names.some(n => n.toLowerCase() === q));
+    if (hits.length) return { zone: hits[0].zone, label: hits[0].label };
+    const soft = TZ_CITY_ROWS.filter(r => r.names.some(n => n.toLowerCase().includes(q)));
+    if (soft.length === 1) return { zone: soft[0].zone, label: soft[0].label };
+    if (soft.length) return { zone: soft[0].zone, label: soft[0].label, guess: true };
+    return null;
+  }
+  function suggestCityTz(raw) {
+    const q = String(raw || '').trim().toLowerCase();
+    if (!q) return TZ_CITY_ROWS.slice(0, 8);
+    return TZ_CITY_ROWS.filter(r => r.names.some(n => n.toLowerCase().includes(q))).slice(0, 8);
   }
   function startClock() {
     const hhmmEl = document.getElementById('clock-hhmm');
@@ -1020,7 +1108,9 @@
         lastDay = dayKey;
         // Lifted above the search box: one compact line. Left-column card: the full date + lunar pair.
         const top = clockIsTop();
-        dateEl.textContent = (top ? compactDateLine(d) : dateLine(d)) + clockWeatherText();
+        dateEl.textContent = top ? compactDateLine(d) : dateLine(d);
+        paintClockWeather();
+        renderTz2(d);
         if (lunarEl) lunarEl.textContent = top ? '' : lunarLine(d);
         // Runs on boot (lastDay starts empty) and again on every midnight rollover, so a tab left open
         // across days still rotates the wallpaper. Guarded internally by settings + the today marker.
@@ -1089,14 +1179,24 @@
           ? `<span class="eng-state on" title="${escapeHtml(t('wb.running', { v: wbStatus.version || '?' }))}"></span>`
           : `<span class="eng-state off" title="${escapeHtml(t('wb.not_running'))}"></span>`;
       }
+      const lastOne = allEngines().length === 1;
       return `
       <li data-id="${e.id}" class="${e.id === currentEngine.id ? 'active' : ''}">
         ${engLogoHtml(e)}
         <span>${escapeHtml(engName(e))}</span>${badge}
-        <span class="eng-key">${i + 1}</span>
+        <button type="button" class="eng-del" data-eng-del="${e.id}" title="${escapeHtml(t('engm.del'))}" aria-label="${escapeHtml(t('engm.del'))}" ${lastOne ? 'disabled' : ''}>✕</button>
       </li>
     `;
-    }).join('');
+    }).join('') + `
+      <li class="eng-add" data-eng-add>
+        <span class="eng-add-mark">＋</span>
+        <span>${escapeHtml(t('engm.add'))}</span>
+      </li>
+      <li class="eng-add-form" data-eng-form hidden>
+        <input type="text" id="eng-home-name" maxlength="12" placeholder="${escapeHtml(t('engm.name_ph'))}">
+        <input type="text" id="eng-home-url" spellcheck="false" placeholder="${escapeHtml(t('engm.url_ph'))}">
+        <button type="button" class="eng-add-go" data-eng-save>${escapeHtml(t('engm.add'))}</button>
+      </li>`;
   }
 
   // ---------- Engine manager (settings → general): add your own, remove built-ins ----------
@@ -1154,9 +1254,10 @@
       enginesChanged();
     });
   }
-  function addCustomEngine() {
-    const nameEl = document.getElementById('engm-name');
-    const urlEl = document.getElementById('engm-url');
+  function addCustomEngine(fromHome) {
+    const nameEl = document.getElementById(fromHome ? 'eng-home-name' : 'engm-name');
+    const urlEl = document.getElementById(fromHome ? 'eng-home-url' : 'engm-url');
+    if (!nameEl || !urlEl) return;
     const name = (nameEl.value || '').trim().slice(0, 12);
     const url = (urlEl.value || '').trim();
     // The URL must be a real web search template: http(s) and carrying the {q} placeholder.
@@ -3290,14 +3391,15 @@
   function exportPayload() {
     return {
       app: 'LightTab',
-      version: '1.23.5',
+      version: '1.24.0',
       exportedAt: new Date().toISOString(),
       schema: SCHEMA_VERSION,
       settings: state.settings,
       items: state.items,
       wallpaper: state.wallpaper,
       todos: state.todos,
-      prompts: state.prompts
+      prompts: state.prompts,
+      myevents: state.myEvents
     };
   }
   // Backup reminders live in their own local key (lt.backup) — never in lt.settings, so they stay
@@ -3407,6 +3509,11 @@
     state.settings.hideClock = state.settings.hideClock === true;
     state.settings.iconSize = clampIcon(state.settings.iconSize, ICON_SIZE_MIN, ICON_SIZE_MAX, DEFAULT_SETTINGS.iconSize);
     state.settings.iconRadius = clampIcon(state.settings.iconRadius, ICON_RADIUS_MIN, ICON_RADIUS_MAX, DEFAULT_SETTINGS.iconRadius);
+    state.settings.hideSearch = false;
+    state.settings.clock12h = false;
+    state.settings.clockSeconds = false;
+    state.settings.clockFont = 'modern';
+    state.settings.hideClock = false;
     state.settings.countdown = normalizeCountdown(state.settings.countdown);
     // Imported engine lists get the same validation as the add form: customs must be well-formed
     // http(s) URLs carrying {q}; hidden ids must name real built-ins.
@@ -3754,16 +3861,103 @@
       applySearchVis();
     });
     // Second timezone (General): IANA name; invalid values are rejected and the old one kept.
-    const tz2Input = document.getElementById('f-tz2');
-    if (tz2Input) tz2Input.addEventListener('change', async () => {
-      const v = tz2Input.value.trim();
-      if (v && !validTz(v)) {
-        tz2Input.value = state.settings.clockTz2 || '';
-        return showToast(t('toast.tz2_invalid'));
-      }
+    const applyTz2 = async (raw, label) => {
+      const v = String(raw || '').trim();
+      if (v && !validTz(v)) return showToast(t('toast.tz2_invalid'));
       state.settings.clockTz2 = v;
+      state.settings.clockTz2City = label || '';
+      if (!v) state.settings.clockTz2Weather = null;
+      else await bindTz2Weather(label || v);
       await Store.set(K.settings, state.settings);
+      const hidden = document.getElementById('f-tz2');
+      if (hidden) hidden.value = v;
       renderTz2();
+    };
+    const applyTz2FromCity = async (raw) => {
+      const q = String(raw || '').trim();
+      if (!q) { await applyTz2(''); return true; }
+      const hit = resolveCityTz(q);
+      if (!hit) { showToast(t('toast.tz2_city')); return false; }
+      await applyTz2(hit.zone, hit.label);
+      return true;
+    };
+    const paintTzSuggest = () => {
+      const box = document.getElementById('clock-tz2-suggest');
+      if (!box || !tzHome) return;
+      const rows = suggestCityTz(tzHome.value);
+      box.innerHTML = rows.map(r => `<button type="button" class="clock-tz2-opt" data-zone="${r.zone}" data-label="${r.label}">${r.label}</button>`).join('');
+      box.hidden = !rows.length;
+    };
+    const tz2Input = document.getElementById('f-tz2');
+    if (tz2Input) tz2Input.addEventListener('change', () => applyTz2(tz2Input.value));
+    const tzEdit = document.getElementById('clock-tz2-edit');
+    const tzHome = document.getElementById('clock-tz2-input');
+    const closeTzEdit = () => {
+      if (tzEdit) tzEdit.hidden = true;
+      const box = document.getElementById('clock-tz2-suggest');
+      if (box) box.hidden = true;
+    };
+    const openTzEdit = () => {
+      if (!tzEdit) return;
+      tzEdit.hidden = false;
+      if (tzHome) {
+        tzHome.value = state.settings.clockTz2City || '';
+        tzHome.placeholder = isEn() ? 'City, e.g. Tokyo' : '城市，如 东京、纽约';
+        tzHome.focus();
+        paintTzSuggest();
+      }
+    };
+    const clockEl = document.querySelector('.widget.wclock');
+    if (clockEl) {
+      clockEl.style.cursor = 'pointer';
+      clockEl.title = isEn() ? 'Click to set a second timezone' : '点击设置第二时区';
+      clockEl.addEventListener('click', e => {
+        if (e.target.closest('.w-del') || e.target.closest('#clock-tz2-edit')) return;
+        if (e.target.closest('#clock-weather')) {
+          e.stopPropagation();
+          openSettingsTab('gen');
+          const city = document.getElementById('f-weather-city');
+          if (city) setTimeout(() => city.focus(), 50);
+          return;
+        }
+        if (!e.target.closest('.clock-row') && !e.target.closest('#clock-tz2')) return;
+        if (tzEdit && !tzEdit.hidden) { closeTzEdit(); return; }
+        openTzEdit();
+      });
+    }
+    if (tzHome) tzHome.addEventListener('input', paintTzSuggest);
+    if (tzEdit) tzEdit.addEventListener('click', e => {
+      const opt = e.target.closest('.clock-tz2-opt');
+      if (!opt) return;
+      e.preventDefault();
+      e.stopPropagation();
+      applyTz2(opt.dataset.zone, opt.dataset.label);
+      closeTzEdit();
+    });
+    if (tzEdit) tzEdit.addEventListener('submit', e => {
+      e.preventDefault();
+      applyTz2FromCity(tzHome && tzHome.value).then(ok => { if (ok) closeTzEdit(); });
+    });
+    const tzClear = document.getElementById('clock-tz2-clear');
+    if (tzClear) tzClear.addEventListener('click', e => {
+      e.stopPropagation();
+      applyTz2('');
+      closeTzEdit();
+    });
+    const tzCancel = document.getElementById('clock-tz2-cancel');
+    if (tzCancel) tzCancel.addEventListener('click', e => {
+      e.stopPropagation();
+      closeTzEdit();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && tzEdit && !tzEdit.hidden) {
+        e.stopPropagation();
+        closeTzEdit();
+      }
+    });
+    document.addEventListener('click', e => {
+      if (!tzEdit || tzEdit.hidden) return;
+      if (!e.target.closest('.widget.wclock')) closeTzEdit();
     });
     const hideClockCb = document.getElementById('f-hideclock');
     if (hideClockCb) hideClockCb.addEventListener('change', async () => {
@@ -3811,6 +4005,29 @@
 
     document.getElementById('btn-wall').addEventListener('click', () => openSet('wall'));
     document.getElementById('btn-set').addEventListener('click', () => openSet('gen'));
+    (function bindCalendarPage() {
+      const root = document.documentElement;
+      if (!root.getAttribute('data-view')) root.setAttribute('data-view', 'home');
+      const btn = document.getElementById('btn-cal-page');
+      if (!btn) return;
+      const sync = () => {
+        const on = root.getAttribute('data-view') === 'calendar';
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.title = on ? t('page.home') : t('page.calendar');
+        btn.setAttribute('aria-label', btn.title);
+        applyWidgets();
+        if (on && typeof renderCalendar === 'function') renderCalendar();
+        if (on && typeof renderUpcoming === 'function') renderUpcoming();
+        if (on && typeof syncCalendars === 'function') syncCalendars(false);
+      };
+      btn.addEventListener('click', () => {
+        root.setAttribute('data-view', root.getAttribute('data-view') === 'calendar' ? 'home' : 'calendar');
+        sync();
+      });
+      const manage = document.getElementById('cal-open-settings');
+      if (manage) manage.addEventListener('click', () => openSet('cal'));
+      sync();
+    })();
 
     function openSet(tab) {
       const tabBtn = modal.querySelector(`.tab[data-tab="${tab}"]`);
@@ -3951,14 +4168,16 @@
           </div>
         </div>`).join('')}</section>`);
     }
-    panel.insertAdjacentHTML('beforeend', `<section class="sync-data" aria-label="${t('sync.backups')}">
+    panel.insertAdjacentHTML('beforeend', `<section class="sync-data sync-backups" aria-label="${t('sync.backups')}">
       <h3>${t('sync.backups')}</h3><p class="form-tip">${t('sync.backups_tip')}</p>
       ${(st.backups || []).map(entry => `<div class="sync-backup">
-        <strong>${escapeHtml(new Date(entry.createdAt).toLocaleString(isEn() ? 'en-US' : 'zh-CN'))}</strong>
-        <p class="form-tip">${escapeHtml(t('sync.reason.' + entry.reason))} · ${t('sync.backup_counts', { items: entry.counts[0], todos: entry.counts[1], prompts: entry.counts[2] })}</p>
+        <div class="sync-backup-main">
+          <strong>${escapeHtml(new Date(entry.createdAt).toLocaleString(isEn() ? 'en-US' : 'zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</strong>
+          <span class="form-tip">${escapeHtml(t('sync.reason.' + (entry.reason || 'before-local')))}</span>
+        </div>
         <div class="sync-actions">
+          <button type="button" class="btn primary sm" data-sync="restore-backup" data-id="${escapeHtml(entry.id)}">${t('sync.restore_backup')}</button>
           <button type="button" class="btn ghost sm" data-sync="export-backup" data-id="${escapeHtml(entry.id)}">${t('sync.export_backup')}</button>
-          <button type="button" class="btn ghost sm" data-sync="restore-backup" data-id="${escapeHtml(entry.id)}">${t('sync.restore_backup')}</button>
           <button type="button" class="btn ghost sm" data-sync="delete-backup" data-id="${escapeHtml(entry.id)}">${t('sync.delete_backup')}</button>
         </div>
       </div>`).join('') || `<p class="form-tip">${t('sync.no_backups')}</p>`}
@@ -4397,7 +4616,8 @@
     }
     return null;
   }
-  const calCursor = { y: 0, m: 0 }; // currently displayed year/month; 0 = follow today
+  const calCursor = { y: 0, m: 0, d: 1 }; // currently displayed year/month/day; 0 = follow today
+  let calView = 'month';             // 'month' | 'year'
   const CAL_MAX_DOTS = 4;           // per cell; a fifth feed colour would just read as noise
   let calSelected = null;           // 'YYYY-MM-DD' of the day whose detail popover is open
 
@@ -4414,8 +4634,120 @@
     const grid = document.getElementById('cal-grid');
     if (!title || !grid) return;
     const now = new Date();
-    if (!calCursor.y) { calCursor.y = now.getFullYear(); calCursor.m = now.getMonth() + 1; }
+    if (!calCursor.y) { calCursor.y = now.getFullYear(); calCursor.m = now.getMonth() + 1; calCursor.d = now.getDate(); }
+    if (!calCursor.d) calCursor.d = 1;
     const y = calCursor.y, m = calCursor.m;
+    const monthBoard = document.getElementById('cal-month-board');
+    const yearBoard = document.getElementById('cal-year-board');
+    const weekBoard = document.getElementById('cal-week-board');
+    const viewWeekBtn = document.getElementById('cal-view-week');
+    const viewMonthBtn = document.getElementById('cal-view-month');
+    const viewYearBtn = document.getElementById('cal-view-year');
+    if (viewWeekBtn) viewWeekBtn.classList.toggle('on', calView === 'week');
+    if (viewMonthBtn) viewMonthBtn.classList.toggle('on', calView === 'month');
+    if (viewYearBtn) viewYearBtn.classList.toggle('on', calView === 'year');
+    const showHolidayLine = () => {
+      const nhElY = document.getElementById('cal-next-holiday');
+      if (!nhElY) return;
+      const H = window.LT_HOLIDAYS;
+      const today = todayStr();
+      const yNow = +today.slice(0, 4);
+      const tbl = H ? Object.assign({}, H.approxTable && H.approxTable(yNow), H.approxTable && H.approxTable(yNow + 1), H.table) : null;
+      const nh = tbl ? nextHoliday(today, tbl) : null;
+      if (nh) {
+        nhElY.textContent = nh.days === 0 ? t('cal.holiday_today', { name: t('hol.' + nh.key) }) : t('cal.next_holiday', { name: t('hol.' + nh.key), n: nh.days });
+        nhElY.hidden = false;
+      } else nhElY.hidden = true;
+    };
+    if (calView === 'week') {
+      if (monthBoard) monthBoard.hidden = true;
+      if (yearBoard) yearBoard.hidden = true;
+      if (weekBoard) {
+        weekBoard.hidden = false;
+        const anchor = new Date(calCursor.y, calCursor.m - 1, calCursor.d);
+        const start = new Date(anchor);
+        start.setDate(anchor.getDate() - anchor.getDay());
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        const fmt = (dt) => isEn()
+          ? `${EN_MONTHS[dt.getMonth()]} ${dt.getDate()}`
+          : `${dt.getMonth() + 1}月${dt.getDate()}日`;
+        title.textContent = start.getFullYear() === end.getFullYear()
+          ? (isEn() ? `${fmt(start)} – ${fmt(end)}, ${end.getFullYear()}` : `${start.getFullYear()}年 ${fmt(start)} – ${fmt(end)}`)
+          : (isEn() ? `${fmt(start)}, ${start.getFullYear()} – ${fmt(end)}, ${end.getFullYear()}` : `${fmt(start)} – ${fmt(end)}`);
+        const dow = [t('cal.d0'), t('cal.d1'), t('cal.d2'), t('cal.d3'), t('cal.d4'), t('cal.d5'), t('cal.d6')];
+        const cols = [];
+        for (let i = 0; i < 7; i++) {
+          const dt = new Date(start);
+          dt.setDate(start.getDate() + i);
+          const yy = dt.getFullYear(), mm = dt.getMonth() + 1, dd = dt.getDate();
+          const key = `${yy}-${pad2(mm)}-${pad2(dd)}`;
+          const isToday = key === todayStr();
+          let lday = '';
+          if (window.LT_LUNAR) {
+            const lu = window.LT_LUNAR.toLunar(yy, mm, dd);
+            if (lu) lday = isEn() ? window.LT_LUNAR.dayNameEn(lu.day) : window.LT_LUNAR.dayName(lu.day);
+          }
+          const hol = window.LT_HOLIDAYS && window.LT_HOLIDAYS.lookup && window.LT_HOLIDAYS.lookup(key);
+          const holName = hol && hol.h ? t('hol.' + hol.h) : (hol && hol.work ? t('cal.badge_work') : '');
+          const hits = (typeof calIndex !== 'undefined' && calIndex.get) ? (calIndex.get(key) || []) : [];
+          const ev = hits.slice(0, 4).map(h => `<em>${escapeHtml((h.ev && (h.ev.t || h.ev.title || h.ev.summary)) || t('cal.unnamed'))}</em>`).join('');
+          cols.push(`<div class="cal-week-col${isToday ? ' today' : ''}${hol && hol.h ? ' holiday' : ''}" data-ymd="${key}" role="button" tabindex="0">` +
+            `<span class="cw-dow">${escapeHtml(dow[i])}</span>` +
+            `<span class="cw-num">${dd}</span>` +
+            `<span class="cw-lunar">${escapeHtml(lday)}</span>` +
+            (holName ? `<span class="cw-hol">${escapeHtml(holName)}</span>` : '') +
+            (ev ? `<span class="cw-evs">${ev}</span>` : '') +
+            `</div>`);
+        }
+        weekBoard.innerHTML = cols.join('');
+      }
+      showHolidayLine();
+      return;
+    }
+    if (calView === 'year') {
+      title.textContent = isEn() ? String(y) : `${y}年`;
+      if (monthBoard) monthBoard.hidden = true;
+      if (weekBoard) weekBoard.hidden = true;
+      if (yearBoard) {
+        yearBoard.hidden = false;
+        const mini = [];
+        for (let mm = 1; mm <= 12; mm++) {
+          const startDow = new Date(y, mm - 1, 1).getDay();
+          const dim = new Date(y, mm, 0).getDate();
+          const isCur = y === now.getFullYear() && mm === now.getMonth() + 1;
+          let days = '';
+          for (let i = 0; i < startDow; i++) days += '<i></i>';
+          for (let d = 1; d <= dim; d++) {
+            const today = isCur && d === now.getDate();
+            const key = `${y}-${pad2(mm)}-${pad2(d)}`;
+            const hol = window.LT_HOLIDAYS && window.LT_HOLIDAYS.lookup && window.LT_HOLIDAYS.lookup(key);
+            days += `<i class="${today ? 'today' : ''}${hol && hol.h ? ' hol' : ''}" data-ymd="${key}">${d}</i>`;
+          }
+          mini.push(`<button type="button" class="cal-mini${isCur ? ' current' : ''}" data-month="${mm}">` +
+            `<strong>${isEn() ? EN_MONTHS[mm - 1] : mm + '月'}</strong>` +
+            `<span class="cal-mini-week"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></span>` +
+            `<span class="cal-mini-days">${days}</span></button>`);
+        }
+        yearBoard.innerHTML = mini.join('');
+      }
+      const nhElY = document.getElementById('cal-next-holiday');
+      if (nhElY) {
+        const H = window.LT_HOLIDAYS;
+        const today = todayStr();
+        const yNow = +today.slice(0, 4);
+        const tbl = H ? Object.assign({}, H.approxTable && H.approxTable(yNow), H.approxTable && H.approxTable(yNow + 1), H.table) : null;
+        const nh = tbl ? nextHoliday(today, tbl) : null;
+        if (nh) {
+          nhElY.textContent = nh.days === 0 ? t('cal.holiday_today', { name: t('hol.' + nh.key) }) : t('cal.next_holiday', { name: t('hol.' + nh.key), n: nh.days });
+          nhElY.hidden = false;
+        } else nhElY.hidden = true;
+      }
+      return;
+    }
+    if (monthBoard) monthBoard.hidden = false;
+    if (yearBoard) yearBoard.hidden = true;
+    if (weekBoard) weekBoard.hidden = true;
     title.textContent = isEn() ? `${EN_MONTHS[m - 1]} ${y}` : `${y}年${m}月`;
     const startDow = new Date(y, m - 1, 1).getDay(); // 0 = Sunday
     const daysInMonth = new Date(y, m, 0).getDate();
@@ -4437,7 +4769,9 @@
       const key = `${y}-${pad2(m)}-${pad2(d)}`;
       // Statutory-holiday markers (js/holidays.js): a corner badge — 休/Off for holidays,
       // 班/Work for 调休 make-up workdays. The today highlight always wins visually.
-      const hol = window.LT_HOLIDAYS && window.LT_HOLIDAYS.table[key];
+      const hol = window.LT_HOLIDAYS && (window.LT_HOLIDAYS.lookup
+        ? window.LT_HOLIDAYS.lookup(key)
+        : window.LT_HOLIDAYS.table[key]);
       const badge = !hol ? '' : hol.work
         ? `<em class="cal-badge work">${escapeHtml(t('cal.badge_work'))}</em>`
         : `<em class="cal-badge hol">${escapeHtml(t('cal.badge_rest'))}</em>`;
@@ -4448,19 +4782,17 @@
       for (const hit of hits) if (feedIds.indexOf(hit.feed.id) < 0) feedIds.push(hit.feed.id);
       const dots = feedIds.slice(0, CAL_MAX_DOTS)
         .map(id => {
-          const f = state.calendars.find(x => x.id === id);
+          const f = id === 'mine' ? MY_FEED : state.calendars.find(x => x.id === id);
           return `<i class="cal-dot" style="background:${(f && f.color) || '#8a8f98'}"></i>`;
         }).join('');
       const cls = 'cal-cell' + (isToday ? ' today' : '')
         + (hol ? (hol.work ? ' workday' : ' holiday') : '')
         + (dueSet.has(key) ? ' due' : '')
-        + (hits.length ? ' has-ev' : '');
-      if (hits.length) {
-        cells.push(`<span class="${cls}" data-day="${d}" role="button" tabindex="0" aria-label="${escapeHtml(t('cal.events_n', { n: hits.length }))}">` +
-          `<b>${d}</b><i>${lday}</i>${badge}<span class="cal-dots">${dots}</span></span>`);
-      } else {
-        cells.push(`<span class="${cls}"><b>${d}</b><i>${lday}</i>${badge}</span>`);
-      }
+        + (hits.length ? ' has-ev' : '') + (calSelected === key ? ' sel' : '');
+      cells.push(`<span class="${cls}" data-day="${d}" data-ymd="${key}" role="button" tabindex="0">` +
+        `<b>${d}</b><i>${lday}</i>${badge}` +
+        (dots ? `<span class="cal-dots">${dots}</span>` : '') +
+        `</span>`);
     }
     grid.innerHTML = cells.join('');
     renderCalDay(); // the popover is anchored to a specific day, so re-resolve it against the new grid
@@ -4468,8 +4800,19 @@
     // viewed month). Hidden once the dataset's year has run out (see the note in js/holidays.js).
     const nhEl = document.getElementById('cal-next-holiday');
     if (nhEl) {
-      const tbl = window.LT_HOLIDAYS && window.LT_HOLIDAYS.table;
-      const nh = tbl ? nextHoliday(todayStr(), tbl) : null;
+      const H = window.LT_HOLIDAYS;
+      const today = todayStr();
+      const yNow = +today.slice(0, 4);
+      const tbl = (function mergeHolidayTables() {
+        if (!H) return null;
+        const out = {};
+        if (typeof H.approxTable === 'function') {
+          Object.assign(out, H.approxTable(yNow), H.approxTable(yNow + 1));
+        }
+        if (H.table) Object.assign(out, H.table); // official 2026 rows win
+        return out;
+      })();
+      const nh = tbl ? nextHoliday(today, tbl) : null;
       // Coverage year is derived from the table (js/holidays.js is refreshed yearly). Once the
       // calendar year runs past it there is no data at all — say so instead of silently hiding.
       let cov = 0;
@@ -4502,50 +4845,31 @@
   // nothing, falling back to the least-bad one. Must run after the box is visible: a hidden box
   // measures 0.
   function placeCalDay(box) {
-    const host = box.offsetParent; // .widget.wcal, the nearest positioned ancestor
+    const host = box.offsetParent;
     if (!host) return;
+    const cell = document.querySelector('[data-ymd="' + calSelected + '"]')
+      || document.querySelector('.cal-cell.sel')
+      || document.querySelector('.cal-week-col.today');
     const hb = host.getBoundingClientRect();
-    const w = box.offsetWidth, h = box.offsetHeight;
-    const gap = 10, pad = 8;
-
-    const cands = [];
-    for (const t of [0, hb.height / 2 - h / 2, hb.height - h]) cands.push({ left: hb.width + gap, top: t }); // right
-    for (const t of [0, hb.height / 2 - h / 2, hb.height - h]) cands.push({ left: -w - gap, top: t });        // left
-    for (const l of [0, hb.width / 2 - w / 2, hb.width - w]) cands.push({ left: l, top: hb.height + gap });  // below
-    for (const l of [0, hb.width / 2 - w / 2, hb.width - w]) cands.push({ left: l, top: -h - gap });         // above
-
-    // Things the popover must not sit on top of.
-    const obstacles = [];
-    for (const sel of ['#search', '.search-wrap', '.searchbox']) {
-      const el = document.querySelector(sel);
-      if (el) { obstacles.push(el.getBoundingClientRect()); break; }
-    }
-    // The month grid (so another day stays clickable) and the shortcut area. The latter is not
-    // cosmetic: the movie card is a `#grid > .wmovie` child rather than a left-column sibling, so
-    // "the card's siblings" misses it entirely and a naive beside-the-card slot lands right on it.
-    for (const sel of ['#cal-grid', '#grid']) {
-      const el = document.querySelector(sel);
-      if (el) obstacles.push(el.getBoundingClientRect());
-    }
-    const parent = host.parentElement;
-    if (parent) for (const sib of parent.children) {
-      if (sib !== host && !sib.contains(host) && sib.offsetParent) obstacles.push(sib.getBoundingClientRect());
-    }
-
-    const overlapArea = (a, b) =>
-      Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
-      Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
-
-    let best = null;
+    const ab = (cell || host).getBoundingClientRect();
+    const w = box.offsetWidth || 260, h = box.offsetHeight || 160;
+    const gap = 10, pad = 12;
+    const toHost = (left, top) => ({ left: left - hb.left, top: top - hb.top });
+    const cands = [
+      toHost(ab.left, ab.bottom + gap),
+      toHost(ab.right - w, ab.bottom + gap),
+      toHost(ab.right + gap, ab.top),
+      toHost(ab.left - w - gap, ab.top),
+      toHost(ab.left, ab.top - h - gap)
+    ];
+    let best = cands[0];
     for (const c of cands) {
-      // Clamp into the viewport, expressed as an offset from the card's own top-left.
       const left = Math.max(pad - hb.left, Math.min(c.left, window.innerWidth - pad - w - hb.left));
       const top = Math.max(pad - hb.top, Math.min(c.top, window.innerHeight - pad - h - hb.top));
-      const rect = { left: hb.left + left, top: hb.top + top, right: hb.left + left + w, bottom: hb.top + top + h };
-      let cost = 0;
-      for (const ob of obstacles) cost += overlapArea(rect, ob);
-      if (best === null || cost < best.cost) best = { cost, left, top };
-      if (cost === 0) break;
+      const vr = { left: hb.left + left, top: hb.top + top, right: hb.left + left + w, bottom: hb.top + top + h };
+      const inView = vr.left >= pad && vr.top >= pad && vr.right <= window.innerWidth - pad && vr.bottom <= window.innerHeight - pad;
+      best = { left, top };
+      if (inView) break;
     }
     box.style.left = Math.round(best.left) + 'px';
     box.style.top = Math.round(best.top) + 'px';
@@ -4558,14 +4882,24 @@
     const parts = calSelected.split('-');
     const yy = +parts[0], mm = +parts[1], dd = +parts[2];
     // The cursor may have moved to another month while the popover was open; hide rather than lie.
-    if (yy !== calCursor.y || mm !== calCursor.m) { box.hidden = true; box.innerHTML = ''; return; }
     const hits = calIndex.get(calKey(yy, mm, dd)) || [];
+    const key = calKey(yy, mm, dd);
+    const hol = window.LT_HOLIDAYS && window.LT_HOLIDAYS.lookup && window.LT_HOLIDAYS.lookup(key);
+    let lunar = '';
+    if (window.LT_LUNAR) {
+      const lu = window.LT_LUNAR.toLunar(yy, mm, dd);
+      if (lu) lunar = isEn()
+        ? (window.LT_LUNAR.monthNameEn(lu.month) + ' ' + window.LT_LUNAR.dayNameEn(lu.day))
+        : ((lu.leap ? '闰' : '') + window.LT_LUNAR.monthName(lu.month) + window.LT_LUNAR.dayName(lu.day));
+    }
     const label = isEn() ? `${EN_MONTHS[mm - 1]} ${dd}` : `${mm}月${dd}日`;
-    let body;
-    if (!hits.length) {
-      body = `<p class="cal-day-empty">${escapeHtml(t('cal.no_events'))}</p>`;
-    } else {
-      body = '<ul class="cal-day-list">' + hits.map(hit => {
+    const bits = [label];
+    if (lunar) bits.push(lunar);
+    if (hol && hol.h) bits.push(t('hol.' + hol.h) + (hol.work ? '' : ' · ' + t('cal.badge_rest')));
+    else if (hol && hol.work) bits.push(t('cal.badge_work'));
+    let evs = '';
+    if (hits.length) {
+      evs = '<ul class="cal-day-list">' + hits.map(hit => {
         const ev = hit.ev;
         let time;
         if (ev.d) {
@@ -4575,15 +4909,18 @@
           time = (b && b !== a) ? a + '–' + b : a;
         }
         const loc = ev.l ? `<span class="cal-day-loc">${escapeHtml(ev.l)}</span>` : '';
+        const del = ev._mine ? `<button type="button" class="cal-day-del" data-my-del="${escapeHtml(ev._id)}">${escapeHtml(t('cal.mine_del_short'))}</button>` : '';
         return `<li><i class="cal-dot" style="background:${hit.feed.color}"></i>` +
           `<span class="cal-day-time">${escapeHtml(time)}</span>` +
-          `<span class="cal-day-title">${escapeHtml(ev.t || t('cal.unnamed'))}</span>${loc}</li>`;
+          `<span class="cal-day-title">${escapeHtml(ev.t || t('cal.unnamed'))}</span>${loc}${del}</li>`;
       }).join('') + '</ul>';
+    } else {
+      evs = `<p class="cal-day-empty">${escapeHtml(t('cal.no_events'))}</p>`;
     }
-    box.innerHTML = `<div class="cal-day-head"><span>${escapeHtml(label)}</span>` +
-      `<button type="button" class="icon-btn" data-cal-day-close aria-label="${escapeHtml(t('cal.close'))}">✕</button></div>` + body;
+    box.innerHTML = `<div class="cal-day-kicker">${escapeHtml(bits.join('  ·  '))}</div>` + evs;
     box.hidden = false;
-    placeCalDay(box);
+    const addDay = document.querySelector('#cal-add-form input[name="day"]');
+    if (addDay) addDay.value = calSelected;
   }
 
   function bindCalendar() {
@@ -4591,36 +4928,146 @@
     const next = document.getElementById('cal-next');
     if (!prev || !next) return;
     const go = (dm) => {
-      calSelected = null; // the popover belongs to the old month
-      calCursor.m += dm;
-      if (calCursor.m < 1) { calCursor.m = 12; calCursor.y--; }
-      if (calCursor.m > 12) { calCursor.m = 1; calCursor.y++; }
+      calSelected = null;
+      if (calView === 'year') calCursor.y += dm;
+      else if (calView === 'week') {
+        const dt = new Date(calCursor.y, calCursor.m - 1, calCursor.d || 1);
+        dt.setDate(dt.getDate() + dm * 7);
+        calCursor.y = dt.getFullYear();
+        calCursor.m = dt.getMonth() + 1;
+        calCursor.d = dt.getDate();
+      } else {
+        calCursor.m += dm;
+        if (calCursor.m < 1) { calCursor.m = 12; calCursor.y--; }
+        if (calCursor.m > 12) { calCursor.m = 1; calCursor.y++; }
+        calCursor.d = 1;
+      }
       renderCalendar();
     };
     prev.addEventListener('click', () => go(-1));
     next.addEventListener('click', () => go(1));
+    const todayBtn = document.getElementById('cal-today');
+    if (todayBtn) todayBtn.addEventListener('click', () => {
+      const n = new Date();
+      calCursor.y = n.getFullYear();
+      calCursor.m = n.getMonth() + 1;
+      calCursor.d = n.getDate();
+      calSelected = null;
+      renderCalendar();
+    });
+    const vw = document.getElementById('cal-view-week');
+    const vm = document.getElementById('cal-view-month');
+    const vy = document.getElementById('cal-view-year');
+    if (vw) vw.addEventListener('click', () => { calView = 'week'; calSelected = null; renderCalendar(); });
+    if (vm) vm.addEventListener('click', () => { calView = 'month'; renderCalendar(); });
+    if (vy) vy.addEventListener('click', () => { calView = 'year'; calSelected = null; renderCalendar(); });
+    const titleBtn = document.getElementById('cal-title');
+    if (titleBtn) titleBtn.addEventListener('click', () => {
+      calView = calView === 'week' ? 'month' : calView === 'month' ? 'year' : 'week';
+      renderCalendar();
+    });
+    const selectYmd = (key) => {
+      if (!key || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
+      const parts = key.split('-');
+      calCursor.y = +parts[0];
+      calCursor.m = +parts[1];
+      calCursor.d = +parts[2];
+      calSelected = (calSelected === key) ? null : key;
+      renderCalDay();
+    };
+    const yearBoard = document.getElementById('cal-year-board');
+    if (yearBoard) yearBoard.addEventListener('click', e => {
+      const dayEl = e.target.closest('[data-ymd]');
+      if (dayEl && dayEl.dataset.ymd) {
+        e.stopPropagation();
+        const key = dayEl.dataset.ymd;
+        const parts = key.split('-');
+        calCursor.y = +parts[0];
+        calCursor.m = +parts[1];
+        calCursor.d = +parts[2];
+        calView = 'month';
+        calSelected = key;
+        renderCalendar();
+        return;
+      }
+      const mini = e.target.closest('.cal-mini');
+      if (!mini) return;
+      calCursor.m = +mini.dataset.month;
+      calView = 'month';
+      renderCalendar();
+    });
+    const weekBoard = document.getElementById('cal-week-board');
+    if (weekBoard) {
+      weekBoard.addEventListener('click', e => {
+        const col = e.target.closest('[data-ymd]');
+        if (col) selectYmd(col.dataset.ymd);
+      });
+    }
 
     const grid = document.getElementById('cal-grid');
     if (grid) {
       const toggleDay = (cell) => {
-        if (!cell || !cell.dataset.day) return;
-        const key = calKey(calCursor.y, calCursor.m, +cell.dataset.day);
-        calSelected = (calSelected === key) ? null : key;
-        renderCalDay();
+        if (!cell) return;
+        const key = cell.dataset.ymd || (cell.dataset.day ? calKey(calCursor.y, calCursor.m, +cell.dataset.day) : '');
+        selectYmd(key);
       };
       grid.addEventListener('click', e => toggleDay(e.target.closest('.cal-cell')));
       grid.addEventListener('keydown', e => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         const cell = e.target.closest('.cal-cell');
-        if (!cell || !cell.dataset.day) return;
+        if (!cell) return;
         e.preventDefault();
         toggleDay(cell);
       });
     }
     const day = document.getElementById('cal-day');
-    if (day) day.addEventListener('click', e => {
-      if (e.target.closest('[data-cal-day-close]') || e.target === day) { calSelected = null; renderCalDay(); }
-    });
+    if (day) {
+      day.addEventListener('click', e => {
+        const del = e.target.closest('[data-my-del]');
+        if (del) {
+          const id = del.getAttribute('data-my-del');
+          state.myEvents = state.myEvents.filter(ev => ev.id !== id);
+          localRawSet(K.myevents, state.myEvents);
+          rebuildCalIndex();
+          if (calSelected && !(calIndex.get(calSelected) || []).length) calSelected = null;
+          renderCalendar();
+          renderUpcoming();
+          renderCalDay();
+          return;
+        }
+        if (e.target.closest('[data-cal-day-close]') || e.target === day) { calSelected = null; renderCalDay(); }
+      });
+    }
+    const addOpen = document.getElementById('cal-add-open');
+    const addForm = document.getElementById('cal-add-form');
+    if (addOpen && addForm) {
+      addOpen.addEventListener('click', () => {
+        addForm.hidden = !addForm.hidden;
+        const dayIn = addForm.querySelector('input[name="day"]');
+        if (dayIn && !dayIn.value) dayIn.value = calSelected || todayStr();
+        const titleIn = addForm.querySelector('input[name="title"]');
+        if (!addForm.hidden && titleIn) titleIn.focus();
+      });
+      addForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const title = (addForm.title && addForm.title.value || '').trim().slice(0, 80);
+        const day = (addForm.day && addForm.day.value) || calSelected || todayStr();
+        if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+        const time = (addForm.time && addForm.time.value) || '';
+        state.myEvents.push({ id: nid(), t: title, day, s: time, e: '', l: '' });
+        await localRawSet(K.myevents, state.myEvents);
+        addForm.reset();
+        addForm.hidden = true;
+        calSelected = day;
+        const parts = day.split('-');
+        calCursor.y = +parts[0]; calCursor.m = +parts[1]; calCursor.d = +parts[2];
+        rebuildCalIndex();
+        renderCalendar();
+        renderUpcoming();
+        renderCalDay();
+        showToast(t('toast.cal_mine_added'));
+      });
+    }
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && calSelected) { calSelected = null; renderCalDay(); }
     });
@@ -4654,8 +5101,54 @@
 
   // Day-key → [{ feed, ev }]. Rebuilt whenever the cache or the enabled set changes; the month grid
   // then renders from a map lookup instead of scanning every event.
+  const MY_FEED = { id: 'mine', name: 'LightTab', color: '#7dd3fc' };
+  function normalizeMyEvents(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const ev of raw) {
+      if (!ev || typeof ev !== 'object') continue;
+      const day = String(ev.day || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+      const t0 = String(ev.t || '').trim().slice(0, 80);
+      if (!t0) continue;
+      out.push({
+        id: String(ev.id || nid()),
+        t: t0,
+        day,
+        s: /^\d{1,2}:\d{2}$/.test(String(ev.s || '')) ? ev.s : '',
+        e: /^\d{1,2}:\d{2}$/.test(String(ev.e || '')) ? ev.e : '',
+        l: String(ev.l || '').slice(0, 80)
+      });
+      if (out.length >= 400) break;
+    }
+    return out;
+  }
+  function myOcc(ev) {
+    const parts = ev.day.split('-');
+    const y = +parts[0], m = +parts[1], d = +parts[2];
+    if (!ev.s) {
+      return { s: Date.UTC(y, m - 1, d), e: Date.UTC(y, m - 1, d + 1), d: 1, t: ev.t, l: ev.l || '' };
+    }
+    const hm = ev.s.split(':').map(Number);
+    const start = new Date(y, m - 1, d, hm[0] || 0, hm[1] || 0).getTime();
+    let end = start + 3600000;
+    if (ev.e) {
+      const em = ev.e.split(':').map(Number);
+      end = new Date(y, m - 1, d, em[0] || 0, em[1] || 0).getTime();
+      if (end <= start) end = start + 3600000;
+    }
+    return { s: start, e: end, d: 0, t: ev.t, l: ev.l || '' };
+  }
   function rebuildCalIndex() {
     calIndex = new Map();
+    const mineFeed = { id: MY_FEED.id, name: t('cal.mine'), color: MY_FEED.color, on: true };
+    for (const ev of state.myEvents) {
+      const occ = myOcc(ev);
+      occ._id = ev.id;
+      occ._mine = 1;
+      if (!calIndex.has(ev.day)) calIndex.set(ev.day, []);
+      calIndex.get(ev.day).push({ feed: mineFeed, ev: occ });
+    }
     if (!window.LT_CAL) return;
     for (const feed of state.calendars) {
       if (!feed.on) continue;
@@ -4675,21 +5168,37 @@
   async function syncCalendars(force) {
     if (calBusy || !window.LT_CAL || !window.LT_ICS) return;
     const active = state.calendars.filter(c => c.on);
-    if (!active.length) { rebuildCalIndex(); renderCalendar(); renderCalList(); renderCalStatus(); return; }
+    if (!active.length) { rebuildCalIndex(); renderCalendar(); renderUpcoming(); renderCalList(); renderCalStatus(); return; }
     calBusy = true;
     renderCalStatus();
     try {
       let changed = false;
-      for (const feed of active) {
-        const next = await window.LT_CAL.syncFeed(feed, force ? null : calCache[feed.id], Date.now());
+      const now = Date.now();
+      const results = await Promise.all(active.map(feed =>
+        window.LT_CAL.syncFeed(feed, force && !(window.LT_CAL.isLocalFeed && window.LT_CAL.isLocalFeed(feed.url)) ? null : calCache[feed.id], now)
+          .then(next => ({ feed, next }))
+          .catch(() => ({ feed, next: calCache[feed.id] || { events: [], error: 'network' } }))
+      ));
+      for (const { feed, next } of results) {
+        if (!next) continue;
         if (JSON.stringify(next) !== JSON.stringify(calCache[feed.id] || null)) {
           calCache[feed.id] = next;
           changed = true;
         }
       }
-      if (changed) await localRawSet(K.calcache, calCache);
+      if (changed) {
+        await localRawSet(K.calcache, calCache);
+        // Adopt the feed's own name once we have it.
+        let named = false;
+        for (const feed of state.calendars) {
+          const title = (calCache[feed.id] || {}).title;
+          if (title && !feed.name) { feed.name = String(title).slice(0, 40); named = true; }
+        }
+        if (named) await Store.set(K.calendars, state.calendars);
+      }
       rebuildCalIndex();
       renderCalendar();
+      renderUpcoming();
     } finally {
       calBusy = false;
       renderCalList();
@@ -4702,34 +5211,53 @@
     if (!code) return '';
     const http = /^http(\d+)$/.exec(code);
     if (http) return t('cal.err_http', { code: http[1] });
-    const known = { timeout: 'cal.err_timeout', network: 'cal.err_network', parse: 'cal.err_parse', too_large: 'cal.err_too_large' };
+    const known = { timeout: 'cal.err_timeout', network: 'cal.err_network', parse: 'cal.err_parse', too_large: 'cal.err_too_large', preview: 'cal.err_preview' };
     return t(known[code] || 'cal.err_network');
   }
 
+  function paintCalExtNote() {
+    const el = document.getElementById('cal-ext-note');
+    if (!el || !window.LT_CAL) return;
+    try {
+      if (typeof window.LT_CAL.isExtensionPage === 'function' ? !window.LT_CAL.isExtensionPage() : false) {
+        el.textContent = t('cal.preview_banner');
+        el.classList.add('err');
+        return;
+      }
+    } catch (_) {}
+    el.textContent = t('cal.sub_help');
+    el.classList.remove('err');
+  }
   function renderCalStatus() {
-    const el = document.getElementById('cal-status');
-    if (!el) return;
-    if (calBusy) { el.textContent = t('cal.status_syncing'); el.className = 'cal-status'; return; }
-    const active = state.calendars.filter(c => c.on);
-    if (!active.length) { el.textContent = ''; el.className = 'cal-status'; return; }
-    const bad = active.find(c => (calCache[c.id] || {}).error);
-    if (bad) { el.textContent = t('cal.status_err', { why: calErrorMessage(calCache[bad.id]) }); el.className = 'cal-status err'; return; }
-    const last = active.reduce((mx, c) => Math.max(mx, (calCache[c.id] || {}).fetchedAt || 0), 0);
-    if (!last) { el.textContent = t('cal.status_never'); el.className = 'cal-status'; return; }
-    let n = 0;
-    for (const c of active) n += ((calCache[c.id] || {}).events || []).length;
-    el.textContent = t('cal.status_ok', { n });
-    el.className = 'cal-status ok';
+    const paint = (el) => {
+      if (!el) return;
+      if (calBusy) { el.textContent = t('cal.status_syncing'); el.className = 'cal-status'; return; }
+      const active = state.calendars.filter(c => c.on);
+      if (!active.length) { el.textContent = ''; el.className = 'cal-status'; return; }
+      const bad = active.find(c => (calCache[c.id] || {}).error);
+      if (bad) {
+        const err = (calCache[bad.id] || {}).error;
+        el.textContent = err === 'preview' ? t('cal.status_preview') : t('cal.status_fail');
+        el.className = 'cal-status err';
+        return;
+      }
+      const last = active.reduce((mx, c) => Math.max(mx, (calCache[c.id] || {}).fetchedAt || 0), 0);
+      if (!last) { el.textContent = t('cal.status_never'); el.className = 'cal-status'; return; }
+      let n = 0;
+      for (const c of active) n += ((calCache[c.id] || {}).events || []).length;
+      el.textContent = t('cal.status_ok', { n });
+      el.className = 'cal-status ok';
+    };
+    paint(document.getElementById('cal-status'));
+    paint(document.getElementById('cal-status-page'));
+    paintCalExtNote();
   }
 
-  function renderCalList() {
-    const box = document.getElementById('cal-list');
-    if (!box) return;
+  function calListHtml() {
     if (!state.calendars.length) {
-      box.innerHTML = `<p class="cal-empty">${escapeHtml(t('cal.empty'))}</p>`;
-      return;
+      return `<p class="cal-empty">${escapeHtml(t('cal.empty'))}</p>`;
     }
-    box.innerHTML = state.calendars.map(feed => {
+    return state.calendars.map(feed => {
       let host = '';
       try { host = new URL(feed.url).hostname; } catch { host = ''; }
       const entry = calCache[feed.id] || {};
@@ -4737,33 +5265,80 @@
       const stateHtml = entry.error
         ? `<span class="cal-item-state err">${escapeHtml(calErrorMessage(entry))}</span>`
         : `<span class="cal-item-state">${escapeHtml(entry.fetchedAt ? t('cal.status_ok', { n }) : t('cal.status_never'))}</span>`;
+      const canRetry = entry.error && entry.error !== 'preview';
+      const retry = canRetry
+        ? `<button type="button" class="cal-act" data-cal-retry title="${escapeHtml(t('cal.retry'))}" aria-label="${escapeHtml(t('cal.retry'))}">` +
+          `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>`
+        : '';
       return `<div class="cal-item" data-cal-id="${feed.id}">` +
-        `<i class="cal-dot" style="background:${feed.color}"></i>` +
+        `<button type="button" class="cal-dot" data-cal-color style="background:${feed.color}" title="${escapeHtml(t('cal.recolor'))}" aria-label="${escapeHtml(t('cal.recolor'))}"></button>` +
         `<div class="cal-item-main">` +
-          `<div class="cal-item-name">${escapeHtml(feed.name || entry.title || host || t('cal.unnamed'))}</div>` +
+          `<input class="cal-item-name" data-cal-name maxlength="40" spellcheck="false" value="${escapeHtml(feed.name || entry.title || '')}" placeholder="${escapeHtml(host || t('cal.unnamed'))}" title="${escapeHtml(t('cal.rename'))}">` +
           `<div class="cal-item-url">${escapeHtml(host)}</div>${stateHtml}` +
         `</div>` +
-        `<label class="cal-item-toggle" title="${escapeHtml(t('cal.enable'))}">` +
-          `<input type="checkbox" data-cal-on${feed.on ? ' checked' : ''}>` +
-        `</label>` +
-        `<button type="button" class="icon-btn" data-cal-del aria-label="${escapeHtml(t('cal.remove'))}" title="${escapeHtml(t('cal.remove'))}">✕</button>` +
+        `<div class="cal-item-actions">` +
+          `<button type="button" class="cal-switch${feed.on ? ' on' : ''}" data-cal-on aria-pressed="${feed.on ? 'true' : 'false'}" title="${escapeHtml(t('cal.enable'))}" aria-label="${escapeHtml(t('cal.enable'))}"><i></i></button>` +
+          retry +
+          `<button type="button" class="cal-act danger" data-cal-del aria-label="${escapeHtml(t('cal.remove'))}" title="${escapeHtml(t('cal.remove'))}">` +
+          `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` +
+        `</div>` +
       `</div>`;
     }).join('');
   }
+  function renderCalList() {
+    const html = calListHtml();
+    for (const id of ['cal-list', 'cal-list-page']) {
+      const box = document.getElementById(id);
+      if (box) box.innerHTML = html;
+    }
+  }
+  function renderUpcoming() {
+    const box = document.getElementById('cal-upcoming');
+    if (!box) return;
+    const today = todayStr();
+    const items = [];
+    const seen = new Set();
+    const keys = [...calIndex.keys()].filter(k => k >= today).sort();
+    for (const key of keys) {
+      for (const hit of calIndex.get(key) || []) {
+        const sig = key + '|' + hit.feed.id + '|' + (hit.ev.t || '') + '|' + hit.ev.s;
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        items.push({ key, hit });
+        if (items.length >= 8) break;
+      }
+      if (items.length >= 8) break;
+    }
+    if (!items.length) {
+      box.innerHTML = `<p class="cal-empty">${escapeHtml(t('cal.upcoming_empty'))}</p>`;
+      return;
+    }
+    box.innerHTML = items.map(({ key, hit }) => {
+      const parts = key.split('-');
+      const label = isEn() ? `${EN_MONTHS[+parts[1] - 1]} ${+parts[2]}` : `${+parts[1]}月${+parts[2]}日`;
+      const time = hit.ev.d ? t('cal.all_day') : hhmm(hit.ev.s);
+      return `<button type="button" class="cal-up-item" data-up-day="${key}">` +
+        `<i class="cal-dot" style="background:${hit.feed.color}"></i>` +
+        `<span class="cal-up-when">${escapeHtml(label)} · ${escapeHtml(time)}</span>` +
+        `<span class="cal-up-title">${escapeHtml(hit.ev.t || t('cal.unnamed'))}</span>` +
+      `</button>`;
+    }).join('');
+  }
 
-  async function addCalendarFeed() {
-    const input = document.getElementById('f-cal-url');
+  async function addCalendarFeed(fromId) {
+    const input = document.getElementById(fromId || 'f-cal-url') || document.getElementById('f-cal-url-page') || document.getElementById('f-cal-url');
     if (!input || !window.LT_CAL) return;
     const url = window.LT_CAL.normalizeFeedUrl(input.value);
     if (!url) return showToast(t('toast.cal_bad_url'));
     if (state.calendars.some(c => c.url === url)) return showToast(t('toast.cal_dup'));
     if (state.calendars.length >= window.LT_CAL.MAX_FEEDS) return showToast(t('toast.cal_limit', { n: window.LT_CAL.MAX_FEEDS }));
-    // Chrome refuses to prompt for an origin that is not declared in optional_host_permissions, and
-    // that refusal is indistinguishable from a user "no" — so check first and say something useful.
-    if (!window.LT_CAL.isDeclared(url)) return showToast(t('toast.cal_host'));
+    if (window.LT_CAL.isLocalFeed && window.LT_CAL.isLocalFeed(url)) return showToast(t('toast.cal_bad_url'));
     const perm = await window.LT_CAL.permissionState(url);
-    if (perm === 'unsupported') return showToast(t('toast.cal_host'));
-    if (perm !== 'granted' && !(await window.LT_CAL.requestAccess(url))) return showToast(t('toast.cal_denied'));
+    if (perm === 'prompt' || perm === 'granted') {
+      if (!window.LT_CAL.isDeclared(url)) return showToast(t('toast.cal_host'));
+      if (perm !== 'granted' && !(await window.LT_CAL.requestAccess(url))) return showToast(t('toast.cal_denied'));
+    }
+    // Preview / no chrome.permissions: still save the feed and try a plain fetch.
 
     const id = nid();
     state.calendars.push({ id, name: '', url, color: window.LT_CAL.colorFor(id), on: true });
@@ -4774,49 +5349,172 @@
     await syncCalendars(true); // a brand-new feed has nothing cached, so skip the freshness window
   }
 
+  async function importCalendarFile(file) {
+    if (!file || !window.LT_ICS || !window.LT_CAL) return;
+    if (state.calendars.length >= window.LT_CAL.MAX_FEEDS) return showToast(t('toast.cal_limit', { n: window.LT_CAL.MAX_FEEDS }));
+    let text = '';
+    try { text = await file.text(); } catch { return showToast(t('cal.err_parse')); }
+    let raw = [];
+    try { raw = window.LT_ICS.parseICS(text); } catch { return showToast(t('cal.err_parse')); }
+    if (!raw.length) return showToast(t('cal.err_parse'));
+    const now = Date.now();
+    const events = window.LT_ICS.expandAll(raw, now - window.LT_CAL.WINDOW_BACK_MS, now + window.LT_CAL.WINDOW_FORWARD_MS, 400)
+      .map(o => ({ s: o.startMs, e: o.endMs, d: o.allDay ? 1 : 0, t: String(o.summary || '').slice(0, 120), l: String(o.location || '').slice(0, 80) }));
+    let title = '';
+    try { title = window.LT_ICS.parseCalendarName(text) || ''; } catch {}
+    const name = (title || file.name.replace(/\.ics$/i, '') || t('cal.unnamed')).slice(0, 40);
+    const id = nid();
+    const url = 'local://ics/' + id;
+    state.calendars.push({ id, name, url, color: window.LT_CAL.colorFor(id), on: true });
+    calCache[id] = { fetchedAt: now, etag: '', title: name, error: '', events };
+    await Store.set(K.calendars, state.calendars);
+    await localRawSet(K.calcache, calCache);
+    rebuildCalIndex();
+    renderCalendar();
+    renderUpcoming();
+    renderCalList();
+    renderCalStatus();
+    showToast(t('toast.cal_imported', { n: events.length }));
+  }
+
   function bindCalSettings() {
-    const input = document.getElementById('f-cal-url');
-    const addBtn = document.getElementById('f-cal-add');
-    if (addBtn) addBtn.addEventListener('click', addCalendarFeed);
-    if (input) input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); addCalendarFeed(); }
+    const bindAdd = (inputId, btnId) => {
+      const input = document.getElementById(inputId);
+      const addBtn = document.getElementById(btnId);
+      if (addBtn) addBtn.addEventListener('click', () => addCalendarFeed(inputId));
+      if (input) {
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); addCalendarFeed(inputId); }
+        });
+        input.addEventListener('paste', () => {
+          setTimeout(() => {
+            if (window.LT_CAL && window.LT_CAL.normalizeFeedUrl(input.value)) input.classList.add('cal-url-ok');
+          }, 0);
+        });
+      }
+    };
+    bindAdd('f-cal-url', 'f-cal-add');
+    bindAdd('f-cal-url-page', 'f-cal-add-page');
+    const bindFile = (inputId, btnId) => {
+      const input = document.getElementById(inputId);
+      const btn = document.getElementById(btnId);
+      if (btn && input) btn.addEventListener('click', () => input.click());
+      if (input) input.addEventListener('change', () => {
+        const f = input.files && input.files[0];
+        input.value = '';
+        if (f) importCalendarFile(f);
+      });
+    };
+    bindFile('f-cal-file', 'f-cal-import');
+    bindFile('f-cal-file-page', 'f-cal-import-page');
+    const exp = document.getElementById('f-cal-export-mine');
+    if (exp) exp.addEventListener('click', () => {
+      if (!window.LT_ICS || !window.LT_ICS.buildICS) return;
+      const ics = window.LT_ICS.buildICS(state.myEvents, t('cal.mine'));
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'LightTab.ics';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      showToast(t('toast.cal_ics_exported'));
     });
     const refresh = document.getElementById('f-cal-refresh');
     if (refresh) refresh.addEventListener('click', () => syncCalendars(true));
-    const list = document.getElementById('cal-list');
-    if (!list) return;
-
-    list.addEventListener('click', async e => {
-      const del = e.target.closest('[data-cal-del]');
-      if (!del) return;
-      const id = (del.closest('[data-cal-id]') || {}).dataset?.calId;
-      const at = state.calendars.findIndex(c => c.id === id);
-      if (at < 0) return;
-      state.calendars.splice(at, 1);
-      delete calCache[id];
-      await Store.set(K.calendars, state.calendars);
-      await localRawSet(K.calcache, calCache);
-      rebuildCalIndex();
+    const refreshPage = document.getElementById('f-cal-refresh-page');
+    if (refreshPage) refreshPage.addEventListener('click', () => syncCalendars(true));
+    const upcoming = document.getElementById('cal-upcoming');
+    if (upcoming) upcoming.addEventListener('click', e => {
+      const row = e.target.closest('[data-up-day]');
+      if (!row) return;
+      const key = row.getAttribute('data-up-day');
+      const parts = (key || '').split('-');
+      if (parts.length !== 3) return;
+      calCursor.y = +parts[0];
+      calCursor.m = +parts[1];
+      calCursor.d = +parts[2];
+      calView = 'month';
+      calSelected = key;
       renderCalendar();
-      renderCalList();
-      renderCalStatus();
-      showToast(t('toast.cal_removed'));
+      renderCalDay();
     });
-
-    list.addEventListener('change', async e => {
-      const cb = e.target.closest('[data-cal-on]');
-      if (!cb) return;
-      const id = (cb.closest('[data-cal-id]') || {}).dataset?.calId;
+    const onListClick = async (e) => {
+      const sw = e.target.closest('[data-cal-on]');
+      if (sw) { await toggleFeed(sw); return; }
+      const item = e.target.closest('[data-cal-id]');
+      if (!item) return;
+      const id = item.dataset.calId;
+      if (e.target.closest('[data-cal-del]')) {
+        const at = state.calendars.findIndex(c => c.id === id);
+        if (at < 0) return;
+        state.calendars.splice(at, 1);
+        delete calCache[id];
+        await Store.set(K.calendars, state.calendars);
+        await localRawSet(K.calcache, calCache);
+        rebuildCalIndex();
+        renderCalendar();
+        renderUpcoming();
+        renderCalList();
+        renderCalStatus();
+        showToast(t('toast.cal_removed'));
+        return;
+      }
+      if (e.target.closest('[data-cal-retry]')) {
+        const feed = state.calendars.find(c => c.id === id);
+        if (feed && window.LT_CAL && window.LT_CAL.requestAccess) {
+          await window.LT_CAL.requestAccess(feed.url);
+        }
+        await syncCalendars(true);
+        return;
+      }
+      if (e.target.closest('[data-cal-color]')) {
+        const feed = state.calendars.find(c => c.id === id);
+        if (!feed || !window.LT_CAL) return;
+        const colors = window.LT_CAL.COLORS;
+        const i = colors.findIndex(c => c.toLowerCase() === String(feed.color).toLowerCase());
+        feed.color = colors[(i + 1) % colors.length];
+        await Store.set(K.calendars, state.calendars);
+        rebuildCalIndex();
+        renderCalendar();
+        renderUpcoming();
+        renderCalList();
+      }
+    };
+    const toggleFeed = async (btn) => {
+      const id = (btn.closest('[data-cal-id]') || {}).dataset?.calId;
       const feed = state.calendars.find(c => c.id === id);
       if (!feed) return;
-      feed.on = cb.checked;
+      feed.on = !feed.on;
       await Store.set(K.calendars, state.calendars);
       rebuildCalIndex();
       renderCalendar();
+      renderUpcoming();
       renderCalList();
       renderCalStatus();
-      if (feed.on) syncCalendars(false); // re-enabling a feed should not wait for the next boot
-    });
+      if (feed.on) syncCalendars(false);
+    };
+    const saveFeedName = async (nameEl) => {
+      if (!nameEl) return;
+      const id = (nameEl.closest('[data-cal-id]') || {}).dataset?.calId;
+      const feed = state.calendars.find(c => c.id === id);
+      if (!feed) return;
+      const next = String(nameEl.value || '').trim().slice(0, 40);
+      if (next === (feed.name || '')) return;
+      feed.name = next;
+      await Store.set(K.calendars, state.calendars);
+    };
+    const onListBlur = (e) => saveFeedName(e.target.closest('[data-cal-name]'));
+    const onListChange = (e) => saveFeedName(e.target.closest('[data-cal-name]'));
+    for (const id of ['cal-list', 'cal-list-page']) {
+      const list = document.getElementById(id);
+      if (!list) continue;
+      list.addEventListener('click', onListClick);
+      list.addEventListener('change', onListChange);
+      list.addEventListener('focusout', onListBlur);
+    }
   }
 
   // ---------- Movie-of-the-day widget (route C: built-in Douban annual-best list, zero network) ----------
@@ -5222,11 +5920,81 @@
   }
   // Compact weather tail on the clock's date line, shown only when the weather widget itself is
   // hidden — configuring a city is the opt-in, so a hidden widget should not waste the data.
+  function clockWeatherOn() {
+    return !!(state.settings.widgets && state.settings.widgets.wweather);
+  }
   function clockWeatherText() {
     if (widgetVisible('wweather')) return '';
+    if (!clockWeatherOn()) return '';
     const w = state.settings.weather;
     if (!w || !w.last || typeof w.last.temp !== 'number') return '';
     return ` · ${w.name} ${w.last.temp}° ${weatherText(w.last.code)}`;
+  }
+  function paintClockWeather() {
+    const el = document.getElementById('clock-weather');
+    if (!el) return;
+    const w = state.settings.weather;
+    if (!clockWeatherOn() || !w || !w.last || typeof w.last.temp !== 'number') { el.hidden = true; el.textContent = ''; return; }
+    el.innerHTML = weatherIcon(w.last.code) + `<span>${escapeHtml(String(Math.round(w.last.temp)))}° ${escapeHtml(weatherText(w.last.code))}${w.name ? ' · ' + escapeHtml(w.name) : ''}</span>`;
+    el.hidden = false;
+  }
+
+  function tz2WeatherText() {
+    const w = state.settings.clockTz2Weather;
+    if (!w || !w.last || typeof w.last.temp !== 'number') return '';
+    return ` · ${Math.round(w.last.temp)}° ${weatherText(w.last.code)}`;
+  }
+  let tz2WeatherBusy = false;
+  async function maybeFetchTz2Weather() {
+    const w = state.settings.clockTz2Weather;
+    if (!w || typeof w.lat !== 'number') return;
+    if (w.fetchedAt && Date.now() - w.fetchedAt < WEATHER_REFRESH_MS) return;
+    if (tz2WeatherBusy) return;
+    tz2WeatherBusy = true;
+    try {
+      w.last = await fetchWeatherNow(w);
+      w.fetchedAt = Date.now();
+      await Store.set(K.settings, state.settings);
+    } catch (_) {}
+    tz2WeatherBusy = false;
+    renderTz2();
+  }
+  async function bindTz2Weather(label) {
+    const name = String(label || '').trim();
+    if (!name) {
+      state.settings.clockTz2Weather = null;
+      return;
+    }
+    try {
+      const geo = await resolveWeatherCity(name);
+      if (!geo) { state.settings.clockTz2Weather = null; return; }
+      state.settings.clockTz2Weather = { name: geo.name, lat: geo.lat, lon: geo.lon, last: null, fetchedAt: 0 };
+      maybeFetchTz2Weather();
+    } catch (_) {
+      state.settings.clockTz2Weather = null;
+    }
+  }
+  async function autoDetectWeather() {
+    if (weatherConfigured()) return;
+    if (!navigator.geolocation) return;
+    await new Promise(resolve => {
+      navigator.geolocation.getCurrentPosition(async pos => {
+        try {
+          const lat = pos.coords.latitude, lon = pos.coords.longitude;
+          const url = 'https://geocoding-api.open-meteo.com/v1/reverse?latitude=' + lat + '&longitude=' + lon +
+            '&language=' + (isEn() ? 'en' : 'zh') + '&format=json';
+          const j = await weatherFetchJson(url);
+          const r = j && j.results && j.results[0];
+          const name = (r && (r.name || r.admin1)) || (isEn() ? 'Local' : '本地');
+          state.settings.weather = { name, lat, lon, last: null, fetchedAt: 0 };
+          await Store.set(K.settings, state.settings);
+          const input = document.getElementById('f-weather-city');
+          if (input) input.value = name;
+          maybeFetchWeather();
+        } catch (_) {}
+        resolve();
+      }, () => resolve(), { maximumAge: 86400000, timeout: 8000 });
+    });
   }
   // Fetch only when a city is configured AND the cache is stale or missing (a city change drops
   // the old cache, so it counts as stale too). A hidden widget means the clock line shows the
@@ -5253,6 +6021,8 @@
     }
     weatherBusy = false;
     renderWeather();
+    paintClockWeather();
+    maybeFetchTz2Weather();
   }
   // Settings → General: the city input resolves a name to coordinates once, on commit.
   async function saveWeatherCity(rawName) {
@@ -5738,6 +6508,7 @@
     // Calendar subscriptions read through their own keys (Store.getAll covers a fixed key set): the
     // feed list is user data, the fetched events are a device-local cache that is never exported.
     state.calendars = normalizeCalendars(await localRawGet(K.calendars));
+    state.myEvents = normalizeMyEvents(await localRawGet(K.myevents));
     calCache = (await localRawGet(K.calcache)) || {};
     rebuildCalIndex();
     return { raw, data };
@@ -5905,6 +6676,10 @@
     if (syncLabelEl) syncLabelEl.textContent = s.syncLabel;
     const syncItem = document.getElementById('avatar-sync');
     if (syncItem) syncItem.classList.toggle('danger', s.loggedIn);
+    const rmMenu = document.getElementById('avatar-remove');
+    if (rmMenu) rmMenu.hidden = !s.avatar;
+    const hint = document.getElementById('avatar-hint');
+    if (hint) hint.textContent = s.avatar ? t('avatar.change_hint') : t('avatar.upload_hint');
     renderAvatarPreview();
   }
   function renderAvatarPreview() {
@@ -5956,6 +6731,14 @@
     });
     // Avatar upload (Settings → General): reuse the content-aware square crop, then bake to a 96px round.
     const avatarInput = document.getElementById('f-avatar');
+    const big = document.getElementById('avatar-big');
+    if (big && avatarInput) {
+      big.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        avatarInput.click();
+      });
+    }
     if (avatarInput) avatarInput.addEventListener('change', async e => {
       const f = e.target.files && e.target.files[0];
       e.target.value = '';
@@ -5970,13 +6753,16 @@
         showToast(t('toast.icon_invalid'));
       }
     });
-    const rmEl = document.getElementById('f-avatar-remove');
-    if (rmEl) rmEl.addEventListener('click', async () => {
+    const clearAvatar = async () => {
       state.settings.avatar = '';
       await Store.set(K.settings, state.settings);
       renderAvatar();
       showToast(t('toast.avatar_removed'));
-    });
+    };
+    const rmEl = document.getElementById('f-avatar-remove');
+    if (rmEl) rmEl.addEventListener('click', clearAvatar);
+    const rmMenuEl = document.getElementById('avatar-remove');
+    if (rmMenuEl) rmMenuEl.addEventListener('click', () => { close(); clearAvatar(); });
     document.addEventListener('click', e => {
       if (!menu.hidden && !e.target.closest('.profile')) close();
     });
@@ -6068,26 +6854,33 @@
     return out;
   }
   function widgetVisible(id) {
+    if (id === 'wtodo' || id === 'wweather' || id === 'wpomodoro' || id === 'wcount') return false;
+    if (id === 'wcal') return document.documentElement.getAttribute('data-view') === 'calendar';
     return normalizeWidgets(state.settings && state.settings.widgets)[id];
   }
   function applyWidgets() {
     const vis = normalizeWidgets(state.settings && state.settings.widgets);
+    if (!state.settings.weatherUiMigrated) {
+      if (weatherConfigured()) vis.wweather = true;
+      state.settings.weatherUiMigrated = true;
+    }
     state.settings.widgets = vis;
     applyWidgetPos();
     for (const id of WIDGETS) {
       const el = document.querySelector('.widget.' + id);
       // The hideClock preference (Settings → General) hides the clock card on top of the registry.
-      if (el) el.hidden = !vis[id] || (id === 'wclock' && state.settings.hideClock === true);
+      if (el) el.hidden = !widgetVisible(id) || (id === 'wclock' && state.settings.hideClock === true);
       const box = document.getElementById('f-w-' + id);
-      if (box) box.checked = vis[id];
+      if (box) box.checked = (id === 'wweather') ? !!vis.wweather : widgetVisible(id);
     }
     // All three gone → drop the column entirely so .right (flex:1) reclaims the full width.
     // A clock lifted above the search box no longer counts towards keeping the column alive,
     // and neither does a clock hidden via the hideClock preference.
     const left = document.querySelector('.layout > .left');
     if (left) {
-      left.hidden = !WIDGETS.some((id) =>
-        vis[id] && !(id === 'wclock' && state.settings.hideClock === true) &&
+      const onCal = document.documentElement.getAttribute('data-view') === 'calendar';
+      left.hidden = !onCal && !WIDGETS.some((id) =>
+        widgetVisible(id) && !(id === 'wclock' && state.settings.hideClock === true) &&
         document.querySelector('.widget.' + id)?.closest('.left'));
     }
     // In free-canvas mode the block coordinates are frozen: toggling a widget without a reflow
@@ -6100,6 +6893,7 @@
     // The weather widget is opt-in and network-gated: (re)render on every visibility change and
     // fetch only if it just became visible with a stale cache (maybeFetchWeather decides).
     renderWeather();
+    paintClockWeather();
     maybeFetchWeather();
     // Countdown / pomodoro are pure-local: just re-render on visibility changes.
     renderCountdown();
@@ -6318,7 +7112,11 @@
     renderMovie();
     refreshHotMovies();
     renderWeather();
-    maybeFetchWeather(); // boot-time refresh, only when the cache is stale (30 min TTL)
+    autoDetectWeather().then(async () => {
+      maybeFetchWeather();
+      if (state.settings.clockTz2City && !state.settings.clockTz2Weather) await bindTz2Weather(state.settings.clockTz2City);
+      else maybeFetchTz2Weather();
+    });
     setInterval(maybeFetchWeather, WEATHER_REFRESH_MS); // page-open refresh cadence
     bindTodo();
     // Countdown / pomodoro widgets: render once, then keep them live on a 1s tick
@@ -6354,8 +7152,40 @@
       list.hidden = !open;
       engineBtn.setAttribute('aria-expanded', String(open));
     });
+    document.getElementById('engine-list').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target && (e.target.id === 'eng-home-url' || e.target.id === 'eng-home-name')) {
+        e.preventDefault();
+        addCustomEngine(true);
+      }
+    });
     document.getElementById('engine-list').addEventListener('click', e => {
-      const li = e.target.closest('li');
+      const del = e.target.closest('[data-eng-del]');
+      if (del) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!del.disabled) removeEngine(del.getAttribute('data-eng-del'));
+        return;
+      }
+      if (e.target.closest('[data-eng-save]')) {
+        e.preventDefault();
+        e.stopPropagation();
+        addCustomEngine(true);
+        return;
+      }
+      if (e.target.closest('[data-eng-add]')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const form = document.querySelector('[data-eng-form]');
+        const addRow = document.querySelector('[data-eng-add]');
+        if (form) {
+          form.hidden = false;
+          if (addRow) addRow.hidden = true;
+          const n = document.getElementById('eng-home-name');
+          if (n) n.focus();
+        }
+        return;
+      }
+      const li = e.target.closest('li[data-id]');
       if (!li) return;
       setEngine(li.dataset.id);
       state.settings.engine = li.dataset.id;
@@ -6446,6 +7276,7 @@
     // Subscribed calendars: render from the local cache immediately so the dots are on first paint,
     // then refresh in the background (syncFeed skips feeds fetched within the freshness window).
     renderCalList();
+    renderUpcoming();
     renderCalStatus();
     syncCalendars(false).catch(() => {});
 
@@ -6457,8 +7288,18 @@
       window.LT_SYNC.init();
     }
 
-    // Plum blossom: rotate the wallpaper and show an inspirational quote along the bottom.
     bindPlumSecret();
+    if (QUOTES.length) {
+      const day = Math.floor(Date.now() / 86400000);
+      quoteIndex = day % QUOTES.length;
+      showQuote(QUOTES[quoteIndex]);
+    }
+    const quoteEl = document.getElementById('quote');
+    if (quoteEl) quoteEl.addEventListener('click', () => {
+      if (!QUOTES.length) return;
+      quoteIndex = pickQuoteIndex(QUOTES.length, quoteIndex);
+      showQuote(QUOTES[quoteIndex]);
+    });
 
     // Free canvas layout (draggable blocks): initialised last, once every block has rendered.
     window.LT_CANVAS.initCanvasLayout();

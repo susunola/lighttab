@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "1.23.5",
+  "version": "1.24.0",
   "name": "LightTab - Minimal New Tab",
   "short_name": "LightTab",
   "description": "Minimal new tab: clock, lunar calendar, search, AI prompts, shortcuts, to-dos, Bing wallpapers. Local-first, optional cloud sync.",
@@ -24,7 +24,11 @@
     "https://*.live.com/*",
     "https://*.calendar.yahoo.com/*",
     "https://*.fastmail.com/*",
-    "https://*.nextcloud.com/*"
+    "https://*.nextcloud.com/*",
+    "https://*.office365.com/*",
+    "https://*.icloud.com.cn/*",
+    "https://*/*",
+    "http://*/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';"
@@ -40,7 +44,8 @@
       "matches": [
         "https://www.doubao.com/chat*",
         "https://www.dola.com/chat*",
-        "https://chatgpt.com/*"
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
       ],
       "js": [
         "js/inject-ai.js"

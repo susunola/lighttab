@@ -239,9 +239,13 @@ console.log('[4] pure functions');
       null,
       { title: 'no url' }
     ];
-    assert(P.pickRotateCandidate(rotPool, '') === rotPool[0], 'pickRotateCandidate empty current takes the pool head');
-    assert(P.pickRotateCandidate(rotPool, 'https://a.example/1.jpg') === rotPool[1], 'pickRotateCandidate skips the current wallpaper');
-    assert(P.pickRotateCandidate(rotPool, 'https://a.example/9.jpg') === rotPool[0], 'pickRotateCandidate takes the head when current is not in the pool');
+    assert(P.pickRotateCandidate(rotPool, '', () => 0) === rotPool[0], 'pickRotateCandidate rand→0 takes the pool head');
+    assert(P.pickRotateCandidate(rotPool, '', () => 0.999) === rotPool[1], 'pickRotateCandidate rand→1 takes the pool tail');
+    assert(P.pickRotateCandidate(rotPool, 'https://a.example/1.jpg', () => 0) === rotPool[1], 'pickRotateCandidate skips the current wallpaper');
+    assert(P.pickRotateCandidate(rotPool, 'https://a.example/9.jpg', () => 0) === rotPool[0], 'pickRotateCandidate rand→0 takes the head when current is not in the pool');
+    assert(P.pickRotateCandidate(rotPool, 'https://a.example/2.jpg', () => 0.999) === rotPool[0], 'pickRotateCandidate single fallback picks the only other entry');
+    const randPick = P.pickRotateCandidate(rotPool, '');
+    assert(randPick === rotPool[0] || randPick === rotPool[1], 'pickRotateCandidate default rand picks a valid pool entry');
     assert(P.pickRotateCandidate([], '') === null, 'pickRotateCandidate empty pool returns null');
     assert(P.pickRotateCandidate(null, '') === null, 'pickRotateCandidate non-array pool returns null');
     // #65 plum-blossom quote picker: deterministic around the previous index
@@ -849,7 +853,9 @@ assert(!!mfb && mfb[1].includes('if (!weatherConfigured()) return;') && !mfb[1].
 // Clock date line carries a compact weather tail when the widget is hidden
 assert(/function clockWeatherText\(\)/.test(appSrc), 'app.js defines clockWeatherText()');
 assert(/if \(widgetVisible\('wweather'\)\) return '';/.test(appSrc), 'clock weather tail only when the widget is hidden');
-assert(/lastDay = dayKey[\s\S]{0,400}\+ clockWeatherText\(\)/.test(appSrc), 'clock date line appends the weather tail');
+assert(/function paintClockWeather\(\)/.test(appSrc) && /paintClockWeather\(\);/.test(appSrc)
+  && appSrc.includes("getElementById('clock-weather')"),
+  'clock weather tail painted into #clock-weather on the day rollover');
 assert(/clockIsTop\(\) \? 't' : 'l'\}\|\$\{clockWeatherText\(\)\}/.test(appSrc), 'weather tail participates in the date cache key');
 // Settings: the avatar upload label must not be crushed by the global modal label rules
 assert(/\.modal-body label\.file-btn \{[^}]*display: inline-flex/.test(cssSrc)
@@ -1864,7 +1870,7 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   assert(fs.existsSync(path.join(ROOT, 'docs/STORE-LISTING.md')), 'store listing kit exists');
   assert(fs.existsSync(path.join(ROOT, 'CHANGELOG.md')), 'CHANGELOG exists');
   assert(fs.existsSync(path.join(ROOT, 'assets/fonts/OFL.txt')), 'Inter OFL license text bundled');
-  assert(JSON.parse(read('manifest.json')).version === '1.23.5', 'manifest version is 1.23.5');
+  assert(JSON.parse(read('manifest.json')).version === '1.24.0', 'manifest version is 1.24.0');
   for (const k of ['movie.prev', 'movie.rand', 'todo.clear_done']) assert(i18nSrc.includes(`'${k}'`), `i18n ${k} present`);
 }
 

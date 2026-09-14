@@ -10,10 +10,17 @@
  * Entries mark either a holiday (h: name key, resolved via the hol.<key> i18n entries) or a
  * 调休 make-up workday (work: true — a weekend day everyone works to pay for a longer break).
  *
- * Exposes window.LT_HOLIDAYS = { table }, table: { 'YYYY-MM-DD': { h } | { work: true } }.
+ * Years without an official notice fall back to lookup()/approxTable(): the festival *day*
+ * itself (元旦 / 春节初一 / 清明 / 五一 / 端午 / 中秋 / 十一), never invented 调休. Official
+ * 2026 rows always win when both exist.
+ *
+ * Exposes window.LT_HOLIDAYS = { table, officialYear, lookup, approxTable },
+ * table: { 'YYYY-MM-DD': { h } | { work: true } }.
  */
 (function () {
   'use strict';
+
+  var OFFICIAL_YEAR = 2026;
 
   // Holiday ranges [from, to, nameKey], both ends inclusive.
   var RANGES = [
@@ -48,5 +55,59 @@
   });
   WORKDAYS.forEach(function (d) { table[d] = { work: true }; });
 
-  window.LT_HOLIDAYS = { table: table };
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function iso(y, m, d) { return y + '-' + pad2(m) + '-' + pad2(d); }
+
+  // 21st-century Qingming day-of-April (solar-term approximation).
+  function qingmingAprilDay(year) {
+    var Y = year % 100;
+    return Math.floor(Y * 0.2422 + 4.81) - Math.floor(Y / 4);
+  }
+
+  function gregorianOfLunar(ly, lm, ld) {
+    var L = window.LT_LUNAR;
+    if (!L || typeof L.toLunar !== 'function') return null;
+    var start = Date.UTC(ly - 1, 11, 1);
+    var end = Date.UTC(ly + 1, 2, 31);
+    for (var t = start; t <= end; t += 86400000) {
+      var dt = new Date(t);
+      var y = dt.getUTCFullYear(), m = dt.getUTCMonth() + 1, d = dt.getUTCDate();
+      var lu = L.toLunar(y, m, d);
+      if (lu && !lu.isLeap && lu.year === ly && lu.month === lm && lu.day === ld) return iso(y, m, d);
+    }
+    return null;
+  }
+
+  function approxTable(year) {
+    year = +year;
+    var out = {};
+    if (!Number.isInteger(year) || year < 1900 || year > 2100) return out;
+    out[iso(year, 1, 1)] = { h: 'newyear', approx: true };
+    out[iso(year, 5, 1)] = { h: 'labour', approx: true };
+    out[iso(year, 10, 1)] = { h: 'national', approx: true };
+    var qd = qingmingAprilDay(year);
+    if (qd >= 4 && qd <= 6) out[iso(year, 4, qd)] = { h: 'qingming', approx: true };
+    var spring = gregorianOfLunar(year, 1, 1);
+    if (spring) out[spring] = { h: 'spring', approx: true };
+    var boat = gregorianOfLunar(year, 5, 5);
+    if (boat) out[boat] = { h: 'dragonboat', approx: true };
+    var moon = gregorianOfLunar(year, 8, 15);
+    if (moon) out[moon] = { h: 'midautumn', approx: true };
+    return out;
+  }
+
+  function lookup(key) {
+    if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return null;
+    if (table[key]) return table[key];
+    var year = +key.slice(0, 4);
+    if (year === OFFICIAL_YEAR) return null;
+    return approxTable(year)[key] || null;
+  }
+
+  window.LT_HOLIDAYS = {
+    table: table,
+    officialYear: OFFICIAL_YEAR,
+    lookup: lookup,
+    approxTable: approxTable
+  };
 })();

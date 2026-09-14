@@ -14,9 +14,9 @@ window.LT_CAL = (function () {
   const TIMEOUT_MS = 15000;
   const MAX_BYTES = 2 * 1024 * 1024;   // a published calendar far past this is not a new-tab concern
   const MAX_FEEDS = 8;
-  const REFRESH_AFTER_MS = 30 * 60 * 1000;
+  const REFRESH_AFTER_MS = 15 * 60 * 1000;
   const WINDOW_BACK_MS = 14 * 86400000;   // keep a fortnight of history so "yesterday" still renders
-  const WINDOW_FORWARD_MS = 150 * 86400000;
+  const WINDOW_FORWARD_MS = 400 * 86400000;
 
   // Feed dot colours. Chosen to stay legible on both themes; the index is stable per feed id.
   const COLORS = ['#e11d48', '#2563eb', '#059669', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d'];
@@ -30,9 +30,13 @@ window.LT_CAL = (function () {
   /* ---------- URL handling ---------- */
 
   // Apple hands out webcal:// links from the Share menu; they are plain https underneath.
+  function isLocalFeed(url) {
+    return /^local:\/\//i.test(String(url || ''));
+  }
   function normalizeFeedUrl(raw) {
     let u = String(raw || '').trim();
     if (!u) return null;
+    if (isLocalFeed(u)) return u.slice(0, 200);
     u = u.replace(/^webcal:\/\//i, 'https://').replace(/^webcals:\/\//i, 'https://');
     if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
     try {
@@ -111,7 +115,21 @@ window.LT_CAL = (function () {
 
   /* ---------- fetch ---------- */
 
+  function isExtensionPage() {
+    try { return !!(window.chrome && chrome.runtime && chrome.runtime.id); } catch { return false; }
+  }
+  async function fetchViaBackground(url, etag) {
+    if (!isExtensionPage() || !chrome.runtime.sendMessage) return null;
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'lt.cal.fetch', url, etag: etag || '' });
+      if (res && typeof res === 'object') return res;
+    } catch (_) { /* worker asleep */ }
+    return null;
+  }
   async function fetchFeed(url, etag) {
+    const viaSw = await fetchViaBackground(url, etag);
+    if (viaSw) return viaSw;
+    if (!isExtensionPage()) return { ok: false, error: 'preview' };
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
     try {
@@ -146,6 +164,9 @@ window.LT_CAL = (function () {
   async function syncFeed(feed, cached, nowMs) {
     const now = nowMs || Date.now();
     const prev = cached || {};
+    if (isLocalFeed(feed && feed.url)) {
+      return { fetchedAt: prev.fetchedAt || now, etag: '', events: prev.events || [], title: prev.title || feed.name || '', error: '' };
+    }
     const fresh = prev.fetchedAt && (now - prev.fetchedAt) < REFRESH_AFTER_MS;
     if (fresh && !prev.error && prev.events) return prev;
 
@@ -194,7 +215,7 @@ window.LT_CAL = (function () {
 
   return {
     normalizeFeedUrl, originPattern, permissionState, requestAccess, isDeclared, patternCovers,
-    fetchFeed, syncFeed, groupByDay, colorFor,
+    isLocalFeed, isExtensionPage, fetchFeed, syncFeed, groupByDay, colorFor,
     COLORS, MAX_FEEDS, REFRESH_AFTER_MS, WINDOW_BACK_MS, WINDOW_FORWARD_MS
   };
 })();

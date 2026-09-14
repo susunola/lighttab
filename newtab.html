@@ -11,6 +11,9 @@
 
   <header id="topbar">
     <nav class="top-actions" aria-label="actions">
+      <button class="icon-btn" id="btn-cal-page" data-i18n-title="page.calendar" data-i18n-aria="page.calendar" title="Calendar" aria-label="Calendar">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </button>
       <button class="icon-btn" id="btn-wall" data-i18n-title="top.wallpaper" data-i18n-aria="top.wallpaper" title="Wallpaper" aria-label="Wallpaper">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="m21 17-5-5-9 9"/></svg>
       </button>
@@ -25,7 +28,8 @@
         </button>
         <div class="avatar-menu" id="avatar-menu" role="menu" hidden>
           <div class="avatar-menu-head">
-            <span class="avatar-big" id="avatar-big" aria-hidden="true"></span>
+            <button type="button" class="avatar-big" id="avatar-big" data-i18n-title="avatar.upload" title="Upload avatar" aria-label="Upload avatar"></button>
+            <span class="avatar-hint" id="avatar-hint" data-i18n="avatar.upload_hint">Click to upload</span>
           </div>
           <button type="button" class="avatar-item" id="avatar-open-set" role="menuitem">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 4.3 17l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.7 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7.1 4.3l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1A2 2 0 1 1 19.7 7l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
@@ -57,37 +61,72 @@
           <span class="clock-ampm" id="clock-ampm" hidden></span>
         </div>
         <div class="clock-date" id="clock-date"></div>
+        <div class="clock-weather" id="clock-weather" hidden></div>
         <div class="clock-tz2" id="clock-tz2" hidden></div>
+        <form class="clock-tz2-edit" id="clock-tz2-edit" hidden>
+          <input id="clock-tz2-input" type="text" autocomplete="off" spellcheck="false" maxlength="64" placeholder="东京 / Tokyo">
+          <div id="clock-tz2-suggest" class="clock-tz2-suggest" hidden></div>
+          <button type="submit" class="btn primary sm">OK</button>
+          <button type="button" class="btn ghost sm" id="clock-tz2-cancel">取消</button>
+          <button type="button" class="btn ghost sm" id="clock-tz2-clear">清除</button>
+        </form>
         <div class="clock-lunar" id="clock-lunar"></div>
         <div class="clock-greet" id="clock-greet"></div>
       </section>
 
-      <section class="widget wcal" data-i18n-aria="widget.calendar" aria-label="Calendar">
+      <section class="widget wcal" data-i18n-aria="widget.calendar" aria-label="Calendar" hidden>
         <button type="button" class="w-del" data-widget="wcal" data-i18n-aria="widget.remove" aria-label="Remove this widget">
           <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
         </button>
-        <div class="w-head">
-          <span class="w-title">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span data-i18n="widget.calendar">Calendar</span>
-          </span>
-          <div class="cal-nav">
-            <button id="cal-prev" class="cal-nav-btn" data-i18n-aria="cal.prev" aria-label="Previous month">‹</button>
-            <span id="cal-title" class="cal-title"></span>
-            <button id="cal-next" class="cal-nav-btn" data-i18n-aria="cal.next" aria-label="Next month">›</button>
+        <div class="w-head cal-page-head">
+          <div class="cal-head-left">
+            <span class="w-title">
+              <span data-i18n="widget.calendar">Calendar</span>
+            </span>
+            <div class="cal-nav">
+              <button id="cal-prev" class="cal-nav-btn" data-i18n-aria="cal.prev" aria-label="Previous month">‹</button>
+              <button type="button" id="cal-title" class="cal-title" aria-label="Year view"></button>
+              <button id="cal-next" class="cal-nav-btn" data-i18n-aria="cal.next" aria-label="Next month">›</button>
+            </div>
+          </div>
+          <div class="cal-head-right">
+            <button type="button" id="cal-today" class="cal-chip" data-i18n="cal.today">Today</button>
+            <div class="cal-view-switch" role="tablist">
+              <button type="button" id="cal-view-week" class="cal-chip" data-i18n="cal.view_week">Week</button>
+              <button type="button" id="cal-view-month" class="cal-chip on" data-i18n="cal.view_month">Month</button>
+              <button type="button" id="cal-view-year" class="cal-chip" data-i18n="cal.view_year">Year</button>
+            </div>
           </div>
         </div>
-        <div class="cal-week" aria-hidden="true">
-          <span data-i18n="cal.d0">Su</span><span data-i18n="cal.d1">Mo</span><span data-i18n="cal.d2">Tu</span><span data-i18n="cal.d3">We</span><span data-i18n="cal.d4">Th</span><span data-i18n="cal.d5">Fr</span><span data-i18n="cal.d6">Sa</span>
+        <div class="cal-month-board" id="cal-month-board">
+          <div class="cal-week" aria-hidden="true">
+            <span data-i18n="cal.d0">Su</span><span data-i18n="cal.d1">Mo</span><span data-i18n="cal.d2">Tu</span><span data-i18n="cal.d3">We</span><span data-i18n="cal.d4">Th</span><span data-i18n="cal.d5">Fr</span><span data-i18n="cal.d6">Sa</span>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
         </div>
-        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-week-board" id="cal-week-board" hidden></div>
+        <div class="cal-year-board" id="cal-year-board" hidden></div>
         <div class="cal-next-holiday" id="cal-next-holiday" hidden></div>
-        <!-- Day detail for subscribed feeds. Absolutely positioned against the widget (see
-             placeCalDay() in app.js) rather than the clicked cell, so it never covers the grid. -->
-        <div class="cal-day" id="cal-day" role="dialog" hidden></div>
+        <div class="cal-day" id="cal-day" hidden></div>
+        <aside class="cal-side" id="cal-side">
+          <div class="cal-side-block">
+            <button type="button" class="btn primary sm cal-add-open" id="cal-add-open" data-i18n="cal.mine_new">New event</button>
+            <form class="cal-add-panel" id="cal-add-form" hidden>
+              <input name="day" type="date" required>
+              <input name="title" maxlength="80" required data-i18n-ph="cal.mine_ph" placeholder="Add an event…">
+              <input name="time" type="time">
+              <button type="submit" class="btn primary sm" data-i18n="cal.mine_add">Add</button>
+            </form>
+          </div>
+          <div class="cal-side-block">
+            <div class="cal-side-label" data-i18n="cal.upcoming">Upcoming</div>
+            <div class="cal-upcoming" id="cal-upcoming"></div>
+            <button type="button" class="cal-manage-link" id="cal-open-settings" data-i18n="cal.manage">Manage in Settings</button>
+          </div>
+        </aside>
       </section>
 
-      <section class="widget wtodo" id="todo-widget" data-i18n-aria="widget.todo" aria-label="To-dos">
+      <section class="widget wtodo" id="todo-widget" data-i18n-aria="widget.todo" aria-label="To-dos" hidden>
         <button type="button" class="w-del" data-widget="wtodo" data-i18n-aria="widget.remove" aria-label="Remove this widget">
           <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
         </button>
@@ -121,7 +160,7 @@
         <div class="movie-card" id="movie-card"></div>
       </section>
 
-      <section class="widget wweather" data-i18n-aria="widget.weather" aria-label="Weather">
+      <section class="widget wweather" data-i18n-aria="widget.weather" aria-label="Weather" hidden>
         <button type="button" class="w-del" data-widget="wweather" data-i18n-aria="widget.remove" aria-label="Remove this widget">
           <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
         </button>
@@ -329,24 +368,26 @@
     <div class="modal-card wide">
       <div class="modal-head">
         <div class="tabs">
-          <button class="tab active" data-tab="wall" data-i18n="set.wall">Wallpaper</button>
-          <button class="tab" data-tab="gen" data-i18n="set.general">General</button>
-          <button class="tab" data-tab="prompt" data-i18n="set.prompt">Templates</button>
+          <button class="tab active" data-tab="gen" data-i18n="set.general">General</button>
+          <button class="tab" data-tab="wall" data-i18n="set.wall">Wallpaper</button>
           <button class="tab" data-tab="cal" data-i18n="set.calendar">Calendar</button>
+          <button class="tab" data-tab="prompt" data-i18n="set.prompt">Templates</button>
           <button class="tab" data-tab="sync" data-i18n="set.sync">Sync</button>
+          <button class="tab" data-tab="about" data-i18n="set.about">About</button>
         </div>
         <button class="icon-btn close-btn" data-close data-i18n-aria="set.close" aria-label="Close">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div class="modal-body">
-        <div class="tab-pane" data-pane="wall">
+        <div class="tab-pane" data-pane="wall" hidden>
+          <section class="set-sec">
           <div class="swatches" id="swatches"></div>
           <label class="check-row">
             <input type="checkbox" id="f-wall-rotate">
             <span data-i18n="wall.rotate">Daily wallpaper auto-rotate</span>
           </label>
-          <p class="form-tip" data-i18n="wall.rotate_tip">When on, an image from the library is applied each calendar day. Manual picks are kept for the rest of that day.</p>
+          <p class="form-tip" data-i18n="wall.rotate_tip" hidden>When on, an image from the library is applied each calendar day. Manual picks are kept for the rest of that day.</p>
 <details class="settings-more"><summary data-i18n="wall.lib_title">Wallpaper library</summary>
           <div class="wall-lib">
             <div class="wall-lib-head">
@@ -371,235 +412,258 @@
             </label>
             <button class="btn ghost" id="btn-reset-wall" type="button" data-i18n="wall.reset">Reset to gradient</button>
           </div>
-          <p class="form-tip" data-i18n="wall.format_tip">Supports JPG / PNG / WebP / GIF; max 4MB; stored locally only.</p>
+          <p class="form-tip" data-i18n="wall.format_tip" hidden>Supports JPG / PNG / WebP / GIF; max 4MB; stored locally only.</p>
+          </section>
         </div>
-        <div class="tab-pane" data-pane="gen" hidden>
-
-          <label class="range-row">
-            <span data-i18n="gen.iconsize">Icon size</span>
-            <input type="range" id="f-iconsize" min="48" max="112" step="2" value="88">
-            <span class="range-val" id="f-iconsize-val">88px</span>
-          </label>
-          <label class="range-row">
-            <span data-i18n="gen.iconradius">Icon corner radius</span>
-            <input type="range" id="f-iconradius" min="20" max="50" step="1" value="28">
-            <span class="range-val" id="f-iconradius-val">28%</span>
-          </label>
-<details class="settings-more"><summary data-i18n="gen.avatar">Avatar</summary>
-          <label>
-            <span data-i18n="gen.name">Display name (used in greeting)</span>
-            <input id="f-name" type="text" maxlength="20" data-i18n-ph="gen.name_ph" placeholder="Leave empty to hide the name">
-          </label>
-          <div class="avatar-zone">
-            <span class="field-label" data-i18n="gen.avatar">Avatar</span>
-            <div class="avatar-row">
-              <span class="avatar-preview" id="avatar-preview" aria-hidden="true"></span>
-              <label class="btn ghost file-btn">
-                <input id="f-avatar" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
-                <span data-i18n="avatar.upload">Upload avatar</span>
-              </label>
-              <button type="button" class="btn ghost" id="f-avatar-remove" data-i18n="avatar.remove" hidden>Remove</button>
-            </div>
-            <p class="form-tip" data-i18n="avatar.tip">Optional: upload a square image as your top-right avatar (PNG/JPG/WebP/GIF, ≤4MB, auto-cropped round). Leave empty to show the name initial or a default icon.</p>
-          </div>
-</details>
-                    <label>
-            <span data-i18n="gen.engine">Default search engine</span>
-            <select id="f-engine"></select>
-          </label>
-          <label class="check-row">
-            <input type="checkbox" id="f-suggest" checked>
-            <span data-i18n="gen.suggest">Search suggestions</span>
-          </label>
-          <p class="form-tip" data-i18n="gen.suggest_tip">Suggestions are sent directly to your chosen search engine.</p>
-<details class="settings-more"><summary data-i18n="engm.title">Search engines</summary>
-          <div class="engm-zone">
-            <span class="field-label" data-i18n="engm.title">Search engines</span>
-            <div class="engm-list" id="engm-list"></div>
-            <div class="engm-add">
-              <input id="engm-name" type="text" maxlength="12" data-i18n-ph="engm.name_ph" placeholder="Name">
-              <input id="engm-url" type="text" spellcheck="false" data-i18n-ph="engm.url_ph" placeholder="https://example.com/search?q={q}">
-              <button type="button" class="btn ghost sm" id="engm-add" data-i18n="engm.add">Add</button>
-            </div>
-            <p class="form-tip" data-i18n="engm.tip">Custom URLs must contain {q} where the query goes. Removed built-ins can be restored at any time.</p>
-            <button type="button" class="btn ghost sm" id="engm-restore" data-i18n="engm.restore" hidden>Restore built-in engines</button>
-          </div>
-</details>
-                    <label>
-            <span data-i18n="gen.lang">Language</span>
-            <select id="f-lang">
-              <option value="zh">中文</option>
-              <option value="en">English</option>
-            </select>
-          </label>
-          <label>
-            <span data-i18n="gen.theme">Theme</span>
-            <select id="f-theme">
-              <option value="dark" data-i18n="theme.dark">Dark</option>
-              <option value="light" data-i18n="theme.light">Light</option>
-              <option value="system" data-i18n="theme.system">Follow system</option>
-            </select>
-          </label>
-          <label>
-            <span data-i18n="gen.accent">Accent colour</span>
-            <span class="accent-row">
-              <span id="accent-picks" class="accent-picks" role="radiogroup" aria-label="Accent colour"></span>
-              <input id="f-accent" type="color" value="#38bdf8" data-i18n-title="gen.accent_custom" title="Custom colour">
-            </span>
-          </label>
-<details class="settings-more"><summary data-i18n="settings.display">Clock and layout</summary>
-          <label class="check-row">
-            <input type="checkbox" id="f-clock12h">
-            <span data-i18n="gen.clock12h">12-hour clock</span>
-          </label>
-          <label class="check-row">
-            <input type="checkbox" id="f-clockseconds">
-            <span data-i18n="gen.clockseconds">Show seconds</span>
-          </label>
-          <label>
-            <span data-i18n="gen.clockfont">Clock font</span>
-            <select id="f-clockfont">
-              <option value="modern" data-i18n="clockfont.modern">Modern</option>
-              <option value="serif" data-i18n="clockfont.serif">Serif</option>
-              <option value="mono" data-i18n="clockfont.mono">Mono</option>
-            </select>
-          </label>
-          <label>
-            <span data-i18n="gen.tz2">Second timezone</span>
-            <input id="f-tz2" type="text" autocomplete="off" spellcheck="false" maxlength="64" data-i18n-ph="gen.tz2_ph" placeholder="e.g. Asia/Tokyo">
-          </label>
-          <label class="check-row">
-            <input type="checkbox" id="f-hidesearch">
-            <span data-i18n="gen.hidesearch">Hide search bar</span>
-          </label>
-          <label class="check-row">
-            <input type="checkbox" id="f-hideclock">
-            <span data-i18n="gen.hideclock">Hide clock</span>
-          </label>
-</details>
-          <details class="settings-more"><summary data-i18n="gen.widgets">Widgets</summary>
-          <div class="wgt-zone">
-            <span class="data-label" data-i18n="gen.widgets">Widgets</span>
-            <div class="wgt-rows">
-              <label class="wgt-row"><input type="checkbox" id="f-ai-enabled" checked><span class="wgt-name">AI 工具台 / AI assistant</span></label>
-              <label class="wgt-row">
-                <input type="checkbox" id="f-w-wclock" checked>
-                <span class="wgt-name" data-i18n="widget.clock">Clock</span>
-                <select id="f-pos-wclock" class="wgt-pos">
-                  <option value="top" data-i18n="wpos.top">Above search</option>
-                  <option value="left" data-i18n="wpos.left">Left column</option>
-                </select>
-              </label>
-              <label class="wgt-row">
-                <input type="checkbox" id="f-w-wcal" checked>
-                <span class="wgt-name" data-i18n="widget.calendar">Calendar</span>
-                <select id="f-pos-wcal" class="wgt-pos">
-                  <option value="top" data-i18n="wpos.top">Above search</option>
-                  <option value="left" data-i18n="wpos.left">Left column</option>
-                </select>
-              </label>
-              <label class="wgt-row">
-                <input type="checkbox" id="f-w-wtodo" checked>
-                <span class="wgt-name" data-i18n="widget.todo">To-dos</span>
-                <select id="f-pos-wtodo" class="wgt-pos">
-                  <option value="top" data-i18n="wpos.top">Above search</option>
-                  <option value="left" data-i18n="wpos.left">Left column</option>
-                </select>
-              </label>
-              <label class="wgt-row">
-                <input type="checkbox" id="f-w-wmovie" checked>
-                <span class="wgt-name" data-i18n="widget.movie">Movie of the day</span>
-                <select id="f-pos-wmovie" class="wgt-pos">
-                  <option value="top" data-i18n="wpos.top">Above search</option>
-                  <option value="left" data-i18n="wpos.left">Left column</option>
-                </select>
-              </label>
-              <label class="wgt-row">
-                <input type="checkbox" id="f-w-wweather">
-                <span class="wgt-name" data-i18n="widget.weather">Weather</span>
-                <select id="f-pos-wweather" class="wgt-pos">
-                  <option value="top" data-i18n="wpos.top">Above search</option>
-                  <option value="left" data-i18n="wpos.left">Left column</option>
-                </select>
-              </label>
-              <label class="wgt-row">
-                <input type="checkbox" id="f-w-wcount">
-                <span class="wgt-name" data-i18n="widget.countdown">Countdown</span>
-                <select id="f-pos-wcount" class="wgt-pos">
-                  <option value="top" data-i18n="wpos.top">Above search</option>
-                  <option value="left" data-i18n="wpos.left">Left column</option>
-                </select>
-              </label>
-              <label class="wgt-row">
-                <input type="checkbox" id="f-w-wpomodoro">
-                <span class="wgt-name" data-i18n="widget.pomodoro">Pomodoro</span>
-                <select id="f-pos-wpomodoro" class="wgt-pos">
-                  <option value="top" data-i18n="wpos.top">Above search</option>
-                  <option value="left" data-i18n="wpos.left">Left column</option>
-                </select>
-              </label>
-              <div class="wgt-city">
-                <input id="f-weather-city" type="text" maxlength="40" data-i18n-ph="weather.city_ph" data-i18n-aria="weather.city_ph" placeholder="Weather city (e.g. Beijing)" aria-label="Weather city">
-                <p class="data-tip" data-i18n="weather.city_tip">The city name is resolved to coordinates via Open-Meteo and stored locally; forecasts are fetched directly from Open-Meteo, no API key.</p>
+        <div class="tab-pane" data-pane="gen">
+          <section class="set-sec">
+            <div class="set-grid set-grid-solo">
+              <div class="set-col">
+                <h3 class="set-sec-title" data-i18n="set.sec_appear">Appearance</h3>
+                <div class="set-pair">
+                  <label>
+                    <span data-i18n="gen.lang">Language</span>
+                    <select id="f-lang">
+                      <option value="zh">中文</option>
+                      <option value="en">English</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span data-i18n="gen.theme">Theme</span>
+                    <select id="f-theme">
+                      <option value="dark" data-i18n="theme.dark">Dark</option>
+                      <option value="light" data-i18n="theme.light">Light</option>
+                      <option value="system" data-i18n="theme.system">Follow system</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <div class="set-col" hidden>
+                <h3 class="set-sec-title" data-i18n="gen.avatar">You</h3>
+                <label hidden>
+                  <span data-i18n="gen.name">Name</span>
+                  <input id="f-name" type="text" maxlength="20" data-i18n-ph="gen.name_ph" placeholder="Leave empty to hide the name">
+                </label>
+                <div class="avatar-zone">
+                  <div class="avatar-row">
+                    <span class="avatar-preview" id="avatar-preview" aria-hidden="true"></span>
+                    <label class="btn ghost file-btn">
+                      <input id="f-avatar" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                      <span data-i18n="avatar.upload">Upload avatar</span>
+                    </label>
+                    <button type="button" class="btn ghost" id="f-avatar-remove" data-i18n="avatar.remove" hidden>Remove</button>
+                  </div>
+                  <p class="form-tip" data-i18n="avatar.tip" hidden>Optional: upload a square image as your top-right avatar (PNG/JPG/WebP/GIF, ≤4MB, auto-cropped round). Leave empty to show the name initial or a default icon.</p>
+                </div>
               </div>
             </div>
-            <p class="data-tip" data-i18n-html="wpos.tip">The movie card's placement picks the layout engine: <b>Left column</b> tucks it into the icon grid, while <b>Above search</b> switches to a free canvas where every widget can be dragged anywhere.</p>
-          </div>
-</details>
-          <details class="settings-more"><summary data-i18n="gen.data">Data management</summary>
-          <div class="data-zone">
-            <span class="data-label" data-i18n="gen.data">Data management</span>
-            <div class="data-actions">
-              <button type="button" class="btn ghost sm" id="btn-export" data-i18n="gen.export">Export data</button>
-              <button type="button" class="btn ghost sm" id="btn-import" data-i18n="gen.import">Import data</button>
-              <button type="button" class="btn ghost sm" id="btn-import-merge" data-i18n="gen.import_merge">Merge shortcuts</button>
-              <button type="button" class="btn ghost sm" id="btn-import-bookmarks" data-i18n="gen.import_bookmarks">Import from bookmarks</button>
-              <input id="f-import" type="file" accept=".json,application/json" hidden>
+            <label hidden>
+              <span data-i18n="gen.accent">Accent colour</span>
+              <span class="accent-row">
+                <span id="accent-picks" class="accent-picks" role="radiogroup" aria-label="Accent colour"></span>
+                <input id="f-accent" type="color" value="#38bdf8" data-i18n-title="gen.accent_custom" title="Custom colour">
+              </span>
+            </label>
+            <div class="set-sliders">
+              <label class="range-row">
+                <span data-i18n="gen.iconsize">Icon size</span>
+                <input type="range" id="f-iconsize" min="48" max="112" step="2" value="88">
+                <span class="range-val" id="f-iconsize-val">88px</span>
+              </label>
+              <label class="range-row">
+                <span data-i18n="gen.iconradius">Icon corner radius</span>
+                <input type="range" id="f-iconradius" min="20" max="50" step="1" value="28">
+                <span class="range-val" id="f-iconradius-val">28%</span>
+              </label>
             </div>
-            <p class="data-tip" data-i18n="gen.data_tip">Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.</p>
-            <p class="data-tip" data-i18n="gen.import_merge_tip">Merge import only adds shortcuts that are not already saved (matched by URL); nothing else is overwritten.</p>
-            <label class="check-row backup-row">
-              <input type="checkbox" id="f-backup-remind">
-              <span data-i18n="gen.backup_remind">Remind me to export a backup</span>
-              <input type="number" id="f-backup-days" min="1" max="90" step="1" value="14" data-i18n-title="gen.backup_days" title="Every N days">
+          </section>
+
+          <section class="set-sec" hidden>
+            <h3 class="set-sec-title" data-i18n="set.sec_search">Search</h3>
+            <label>
+              <span data-i18n="gen.engine">Default search engine</span>
+              <select id="f-engine"></select>
             </label>
-            <details class="settings-more"><summary data-i18n="gen.diag">Local diagnostics</summary>
-            <label class="check-row diag-row">
-              <input type="checkbox" id="f-diag">
-              <span data-i18n="gen.diag">Record errors locally (off by default)</span>
+            <label class="check-row">
+              <input type="checkbox" id="f-suggest" checked>
+              <span data-i18n="gen.suggest">Search suggestions</span>
             </label>
-            <p class="form-tip" data-i18n="gen.diag_tip">When on, error messages are stored on this device only (no URLs, no stacks, no network).</p>
-            <button type="button" class="btn ghost sm" id="btn-diag-export" data-i18n="gen.diag_export" hidden>Export diagnostics</button>
+            <p class="form-tip" data-i18n="gen.suggest_tip">Suggestions are sent directly to your chosen search engine.</p>
+            <details class="settings-more" hidden>
+              <summary data-i18n="engm.title">Search engines</summary>
+              <div class="engm-zone">
+                <div class="engm-list" id="engm-list"></div>
+                <div class="engm-add">
+                  <input id="engm-name" type="text" maxlength="12" data-i18n-ph="engm.name_ph" placeholder="Name">
+                  <input id="engm-url" type="text" spellcheck="false" data-i18n-ph="engm.url_ph" placeholder="https://example.com/search?q={q}">
+                  <button type="button" class="btn ghost sm" id="engm-add" data-i18n="engm.add">Add</button>
+                </div>
+                <p class="form-tip" data-i18n="engm.tip">Custom URLs must contain {q} where the query goes. Removed built-ins can be restored at any time.</p>
+                <button type="button" class="btn ghost sm" id="engm-restore" data-i18n="engm.restore" hidden>Restore built-in engines</button>
+              </div>
             </details>
-            <p class="storage-use" id="storage-use" data-i18n-aria="store.used" hidden></p>
-          </div>
-</details>
-                    <div class="modal-actions">
-            <button type="button" class="btn ghost" id="btn-reset-all" data-i18n="gen.reset">Reset to defaults</button>
+          </section>
+
+          <section class="set-sec">
+            <h3 class="set-sec-title" data-i18n="gen.widgets">Widgets</h3>
+            <label class="check-row" hidden>
+              <input type="checkbox" id="f-clock12h">
+              <span data-i18n="gen.clock12h">12-hour clock</span>
+            </label>
+            <label class="check-row" hidden>
+              <input type="checkbox" id="f-clockseconds">
+              <span data-i18n="gen.clockseconds">Show seconds</span>
+            </label>
+            <label hidden>
+              <span data-i18n="gen.clockfont">Clock font</span>
+              <select id="f-clockfont">
+                <option value="modern" data-i18n="clockfont.modern">Modern</option>
+                <option value="serif" data-i18n="clockfont.serif">Serif</option>
+                <option value="mono" data-i18n="clockfont.mono">Mono</option>
+              </select>
+            </label>
+            <label hidden>
+              <span data-i18n="gen.tz2">Second timezone</span>
+              <input id="f-tz2" type="text" autocomplete="off" spellcheck="false" maxlength="64" data-i18n-ph="gen.tz2_ph" placeholder="e.g. Asia/Tokyo">
+            </label>
+            <label class="check-row" hidden>
+              <input type="checkbox" id="f-hidesearch">
+              <span data-i18n="gen.hidesearch">Hide search bar</span>
+            </label>
+            <label class="check-row" hidden>
+              <input type="checkbox" id="f-hideclock">
+              <span data-i18n="gen.hideclock">Hide clock</span>
+            </label>
+            <div class="wgt-zone">
+                <div class="wgt-rows">
+                  <label class="wgt-row"><input type="checkbox" id="f-ai-enabled" checked><span class="wgt-name" data-i18n="widget.ai">AI assistant</span></label>
+                  <label class="wgt-row">
+                    <input type="checkbox" id="f-w-wclock" checked>
+                    <span class="wgt-name" data-i18n="widget.clock">Clock</span>
+                    <select id="f-pos-wclock" class="wgt-pos">
+                      <option value="top" data-i18n="wpos.top">Above search</option>
+                      <option value="left" data-i18n="wpos.left">Left column</option>
+                    </select>
+                  </label>
+                  <label class="wgt-row" hidden>
+                    <input type="checkbox" id="f-w-wcal">
+                    <span class="wgt-name" data-i18n="widget.calendar">Calendar</span>
+                    <select id="f-pos-wcal" class="wgt-pos">
+                      <option value="top" data-i18n="wpos.top">Above search</option>
+                      <option value="left" data-i18n="wpos.left">Left column</option>
+                    </select>
+                  </label>
+                  <label class="wgt-row" hidden>
+                    <input type="checkbox" id="f-w-wtodo">
+                    <span class="wgt-name" data-i18n="widget.todo">To-dos</span>
+                    <select id="f-pos-wtodo" class="wgt-pos">
+                      <option value="top" data-i18n="wpos.top">Above search</option>
+                      <option value="left" data-i18n="wpos.left">Left column</option>
+                    </select>
+                  </label>
+                  <label class="wgt-row">
+                    <input type="checkbox" id="f-w-wmovie" checked>
+                    <span class="wgt-name" data-i18n="widget.movie">Movie of the day</span>
+                    <select id="f-pos-wmovie" class="wgt-pos">
+                      <option value="top" data-i18n="wpos.top">Above search</option>
+                      <option value="left" data-i18n="wpos.left">Left column</option>
+                    </select>
+                  </label>
+                  <label class="wgt-row">
+                    <input type="checkbox" id="f-w-wweather">
+                    <span class="wgt-name" data-i18n="widget.weather">Weather</span>
+                    <span class="wgt-row-end">
+                      <input id="f-weather-city" class="wgt-city-in" type="text" maxlength="40" data-i18n-ph="weather.city_ph" data-i18n-aria="weather.city_ph" placeholder="城市" aria-label="Weather city">
+                    </span>
+                    <select id="f-pos-wweather" class="wgt-pos" hidden>
+                      <option value="top" data-i18n="wpos.top">Above search</option>
+                      <option value="left" data-i18n="wpos.left">Left column</option>
+                    </select>
+                  </label>
+                  <label class="wgt-row" hidden>
+                    <input type="checkbox" id="f-w-wcount">
+                    <span class="wgt-name" data-i18n="widget.countdown">Countdown</span>
+                    <select id="f-pos-wcount" class="wgt-pos">
+                      <option value="top" data-i18n="wpos.top">Above search</option>
+                      <option value="left" data-i18n="wpos.left">Left column</option>
+                    </select>
+                  </label>
+                  <label class="wgt-row" hidden>
+                    <input type="checkbox" id="f-w-wpomodoro">
+                    <span class="wgt-name" data-i18n="widget.pomodoro">Pomodoro</span>
+                    <select id="f-pos-wpomodoro" class="wgt-pos">
+                      <option value="top" data-i18n="wpos.top">Above search</option>
+                      <option value="left" data-i18n="wpos.left">Left column</option>
+                    </select>
+                  </label>
+                  <div class="wgt-city" hidden>
+                    <p class="data-tip" data-i18n="weather.city_tip">The city name is resolved to coordinates via Open-Meteo and stored locally; forecasts are fetched directly from Open-Meteo, no API key.</p>
+                  </div>
+                </div>
+                <p class="data-tip" data-i18n-html="wpos.tip" hidden>The movie card's placement picks the layout engine: <b>Left column</b> tucks it into the icon grid, while <b>Above search</b> switches to a free canvas where every widget can be dragged anywhere.</p>
+              </div>
+          </section>
+
+          <section class="set-sec" hidden>
+            <h3 class="set-sec-title" data-i18n="gen.data">Data management</h3>
+            <div class="data-zone">
+              <div class="data-actions">
+                <button type="button" class="btn ghost sm" id="btn-export" data-i18n="gen.export">Export data</button>
+                <button type="button" class="btn ghost sm" id="btn-import" data-i18n="gen.import">Import data</button>
+                <button type="button" class="btn ghost sm" id="btn-import-merge" data-i18n="gen.import_merge">Merge shortcuts</button>
+                <button type="button" class="btn ghost sm" id="btn-import-bookmarks" data-i18n="gen.import_bookmarks">Import from bookmarks</button>
+                <input id="f-import" type="file" accept=".json,application/json" hidden>
+              </div>
+              <p class="data-tip" data-i18n="gen.data_tip">Back up / restore all data (shortcuts, to-dos, settings, wallpaper). Export file is portable across browsers.</p>
+              <p class="data-tip" data-i18n="gen.import_merge_tip">Merge import only adds shortcuts that are not already saved (matched by URL); nothing else is overwritten.</p>
+              <label class="check-row backup-row">
+                <input type="checkbox" id="f-backup-remind">
+                <span data-i18n="gen.backup_remind">Remind me to export a backup</span>
+                <input type="number" id="f-backup-days" min="1" max="90" step="1" value="14" data-i18n-title="gen.backup_days" title="Every N days">
+              </label>
+              <details class="settings-more"><summary data-i18n="gen.diag">Local diagnostics</summary>
+                <label class="check-row diag-row">
+                  <input type="checkbox" id="f-diag">
+                  <span data-i18n="gen.diag">Record errors locally (off by default)</span>
+                </label>
+                <p class="form-tip" data-i18n="gen.diag_tip">When on, error messages are stored on this device only (no URLs, no stacks, no network).</p>
+                <button type="button" class="btn ghost sm" id="btn-diag-export" data-i18n="gen.diag_export" hidden>Export diagnostics</button>
+              </details>
+              <p class="storage-use" id="storage-use" data-i18n-aria="store.used" hidden></p>
+            </div>
+          </section>
+
+          <div class="modal-actions">
+            <button type="button" class="btn ghost" id="btn-reset-all" data-i18n="gen.reset" hidden>Reset to defaults</button>
             <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
           </div>
-          <p class="form-tip ver-line" data-i18n="gen.version">LightTab v1.23.5 · Minimal new tab · Local-first, optional cloud sync</p>
         </div>
         <div class="tab-pane" data-pane="prompt" hidden>
           <div class="ptoolbar">
             <span class="data-label" data-i18n="prompt.title">Prompt templates · AI launcher</span>
             <button type="button" class="btn ghost sm" id="btn-prompt-add" data-i18n="prompt.add">＋ New template</button>
           </div>
-          <p class="form-tip" data-i18n-html="prompt.help">Press <b>/</b> to open the template panel: pick a template → type → Enter to launch to multiple AIs. <code>{q}</code> is the content slot; templates without <code>{q}</code> act as fixed commands and fire on selection.</p>
-          <p><a href="https://github.com/susunola/lighttab/issues/new" target="_blank" rel="noopener">反馈问题 / Feedback ↗</a></p>
+          <p class="form-tip" data-i18n-html="prompt.help">首页按 <b>/</b> 使用模板。</p>
           <div id="prompt-manage" class="prompt-manage"></div>
           <div class="modal-actions">
             <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
           </div>
         </div>
         <div class="tab-pane" data-pane="cal" hidden>
+          <section class="set-sec">
+            <h3 class="set-sec-title" data-i18n="cal.mine">My events</h3>
+            <p class="form-tip" data-i18n="cal.mine_help">导出后可导入其他日历应用。</p>
+            <button type="button" class="btn ghost sm" id="f-cal-export-mine" data-i18n="cal.mine_export">Export ICS</button>
+          </section>
           <span class="data-label" data-i18n="cal.sub_title">Subscribed calendars</span>
-          <p class="form-tip" data-i18n="cal.sub_help">Read-only. The events appear as coloured dots on the calendar above; click a day to see them.</p>
+          <p class="form-tip" id="cal-ext-note" data-i18n="cal.sub_help">粘贴公开 ICS 链接，或导入文件。</p>
           <div class="cal-add">
             <input id="f-cal-url" type="text" autocomplete="off" spellcheck="false"
                    data-i18n-ph="cal.url_ph" placeholder="https://… or webcal://…"
                    data-i18n-aria="cal.url_ph" aria-label="Calendar feed URL">
             <button type="button" class="btn primary sm" id="f-cal-add" data-i18n="cal.add">Subscribe</button>
+            <button type="button" class="btn ghost sm" id="f-cal-import" data-i18n="cal.import_file">Import ICS</button>
+            <input id="f-cal-file" type="file" accept=".ics,text/calendar" hidden>
           </div>
           <div class="cal-list" id="cal-list"></div>
           <div class="cal-list-foot">
@@ -616,6 +680,33 @@
         </div>
         <div class="tab-pane" data-pane="sync" hidden>
           <div id="sync-panel"></div>
+        </div>
+        <div class="tab-pane" data-pane="about" hidden>
+          <p class="ver-line" hidden data-i18n="gen.version">LightTab v1.24.0 · Minimal new tab · Local-first, optional cloud sync</p>
+          <div class="about-split">
+            <div class="about-copy">
+              <h2 class="about-name">LightTab</h2>
+              <p class="about-ver">v1.24.0</p>
+              <p class="about-tag" data-i18n="about.tag">Local-first new tab</p>
+              <a class="about-git" href="https://github.com/susunola/lighttab" target="_blank" rel="noopener" data-i18n="about.github">View source on GitHub</a>
+            </div>
+            <div class="about-pay-wrap">
+              <div class="about-pay">
+                <figure>
+                  <img src="assets/donate-wechat.jpg" alt="WeChat Pay" width="200" height="200">
+                  <figcaption data-i18n="about.wechat">WeChat</figcaption>
+                </figure>
+                <figure>
+                  <img src="assets/donate-alipay.jpg" alt="Alipay" width="200" height="200">
+                  <figcaption data-i18n="about.alipay">Alipay</figcaption>
+                </figure>
+              </div>
+              <p class="about-donate-note" data-i18n="about.donate_note">Building this takes time. Tips are welcome.</p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn primary" data-close data-i18n="gen.done">Done</button>
+          </div>
         </div>
       </div>
     </div>
