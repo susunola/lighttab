@@ -206,11 +206,11 @@ console.log('[4] pure functions');
       'iconGlyphHtml wordmark font size shrinks as length grows');
     // #60 Missing/dirty data uses the simple defaults; explicit booleans preserve user choices.
     const NW = P.normalizeWidgets;
-    const W_DEFAULTS = { wclock: true, wcal: false, wtodo: false, wmovie: true, wweather: false, wcount: false, wpomodoro: false };
+    const W_DEFAULTS = { wclock: true, wcal: true, wtodo: false, wmovie: true, wweather: false, wcount: false, wpomodoro: false };
     assert(JSON.stringify(NW(undefined)) === JSON.stringify(W_DEFAULTS),
-      'normalizeWidgets(undefined) → clock/movie visible by default, optional widgets off');
+      'normalizeWidgets(undefined) → clock/calendar/movie visible by default, other widgets off');
     assert(JSON.stringify(NW(null)) === JSON.stringify(W_DEFAULTS),
-      'normalizeWidgets(null) → clock/movie visible by default, optional widgets off');
+      'normalizeWidgets(null) → clock/calendar/movie visible by default, other widgets off');
     assert(NW({ wcal: false }).wcal === false && NW({ wcal: false }).wclock === true && NW({ wcal: false }).wweather === false,
       'normalizeWidgets partial object → missing keys get defaults');
     assert(NW({ wweather: true }).wweather === true && NW({ wweather: true }).wmovie === true,
@@ -1778,6 +1778,10 @@ console.log('[28] UI polish: dwell bar, reduced transparency, dialog semantics, 
   assert(/--ink-3: rgba\(17, 24, 39, 0\.62\);/.test(cssSrc), 'light-theme small text meets AA contrast (0.62 alpha)');
   assert(/role="dialog" aria-modal="true" aria-labelledby="site-modal-title"/.test(html)
     && /role="dialog" aria-modal="true"/.test(html), 'modals expose dialog semantics');
+  // The add/edit-shortcut modal holds typed input; a stray backdrop click must not destroy it.
+  const siteFormBlock = /function bindSiteForm\(\) \{([\s\S]{0,600})/.exec(appSrc);
+  assert(siteFormBlock && !siteFormBlock[1].includes('e.target === modal'),
+    'site modal does not close on backdrop click (typed input would be lost)');
   assert(/\.modal input:focus-visible,[\s\S]*border-color: rgba\(125, 211, 252, 0\.65\)/.test(cssSrc),
     'modal form controls get a visible keyboard focus ring');
   const i18nSandbox = { window: {}, document: { documentElement: {}, querySelectorAll: () => [] } };
@@ -1949,6 +1953,36 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   }
   assert(/\.cal-dots/.test(cssSrc) && /\.cal-day \{/.test(cssSrc) && /\.cal-item \{/.test(cssSrc),
     'calendar dot / popover / feed-list styles exist');
+
+  // 1.24.2: the bundled 港新马印泰假期 feed (HK/SG/MY/ID/TH 2026–2028, Simplified Chinese).
+  const seaPath = path.join(ROOT, 'assets/sea-holidays.ics');
+  assert(fs.existsSync(seaPath), 'assets/sea-holidays.ics exists (run scripts/build-sea-holidays.cjs)');
+  if (ICS && fs.existsSync(seaPath)) {
+    const seaText = fs.readFileSync(seaPath, 'utf8');
+    assert(ICS.parseCalendarName(seaText) === '港新马印泰假期', 'bundled ICS is named 港新马印泰假期');
+    const seaRaw = ICS.parseICS(seaText);
+    assert(seaRaw.length >= 100, 'bundled ICS carries 100+ events', `got ${seaRaw.length}`);
+    for (const y of [2026, 2027, 2028]) {
+      const occ = ICS.expandAll(seaRaw, Date.UTC(y, 0, 1), Date.UTC(y, 11, 31, 23, 59), 600);
+      assert(occ.length >= 40, `bundled ICS expands to 40+ days in ${y}`, `got ${occ.length}`);
+    }
+    const allOcc = ICS.expandAll(seaRaw, Date.UTC(2026, 0, 1), Date.UTC(2028, 11, 31, 23, 59), 600);
+    for (const tag of ['香港·', '新加坡·', '马来西亚·', '印尼·', '泰国·']) {
+      assert(allOcc.some(o => o.summary.startsWith(tag)), `bundled ICS covers ${tag} holidays`);
+    }
+  }
+  // Seeding: only when lt.calendars was never written, and sticky removal via lt.caldropped.
+  assert(/const SEA_FEED = \{ id: 'sea-holidays', url: 'local:\/\/ics\/sea-holidays'/.test(appSrc),
+    'app.js defines the bundled SEA feed (fixed id, local:// URL)');
+  assert(/async function maybeSeedSeaHolidays\(rawCals\)/.test(appSrc)
+    && /if \(rawCals != null/.test(appSrc) && /if \(calDropped\(\)\) return null/.test(appSrc)
+    && /fetch\(SEA_FEED\.asset\)/.test(appSrc),
+    'seeding runs only for a never-customised feed list and honours lt.caldropped');
+  assert(/localStorage\.getItem\('lt\.caldropped'\)/.test(appSrc)
+    && /localStorage\.setItem\('lt\.caldropped', '1'\)/.test(appSrc),
+    'deleting the bundled feed sets lt.caldropped (sticky on this device)');
+  assert(read('scripts/package-release.cjs').includes('assets/sea-holidays.ics'),
+    'package-release.cjs stages the bundled ICS');
 }
 
 // ---------- 38) self-applying updates ----------
