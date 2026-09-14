@@ -66,11 +66,13 @@ window.LT_CAL = (function () {
   // 'granted' | 'prompt' | 'unsupported'. 'unsupported' is the honest answer when the page is not
   // running as an extension (file:// preview, tests) — the caller should say so rather than fail later.
   function permissionState(url) {
+    if (isLocalFeed(url)) return Promise.resolve('granted');
     const api = permsApi(), p = originPattern(url);
     if (!api || !p) return Promise.resolve('unsupported');
     try {
       return Promise.resolve(api.contains({ origins: [p] })).then(v => (v ? 'granted' : 'prompt'));
-    } catch { return Promise.resolve('unsupported'); }
+    } catch { return Promise.resolve('unsupported');
+    }
   }
 
   // Must be called from a user gesture. A host outside optional_host_permissions simply cannot be
@@ -102,6 +104,7 @@ window.LT_CAL = (function () {
   // A host we cannot even ask about. Checking this up front turns Chrome's opaque "request rejected"
   // into an honest "that host isn't supported yet" message.
   function isDeclared(url) {
+    if (isLocalFeed(url)) return true;
     const p = originPattern(url);
     if (!p) return false;
     const api = permsApi();
@@ -148,8 +151,6 @@ window.LT_CAL = (function () {
       if (buf.byteLength > MAX_BYTES) return { ok: false, error: 'too_large' };
       return { ok: true, ics: new TextDecoder('utf-8').decode(buf), etag: res.headers.get('ETag') || '' };
     } catch (err) {
-      // A cross-origin feed with no CORS header and no granted permission surfaces as a bare
-      // TypeError, which is indistinguishable from a real network failure — hence 'network'.
       const aborted = err && err.name === 'AbortError';
       return { ok: false, error: aborted ? 'timeout' : 'network' };
     } finally {
@@ -159,8 +160,6 @@ window.LT_CAL = (function () {
 
   /* ---------- sync ---------- */
 
-  // Fetch (or reuse the cache), parse, and expand into the render window. Returns a cache entry
-  // shaped { fetchedAt, etag, events, error } — never throws, so a dead feed cannot break the page.
   async function syncFeed(feed, cached, nowMs) {
     const now = nowMs || Date.now();
     const prev = cached || {};
@@ -172,7 +171,6 @@ window.LT_CAL = (function () {
 
     const res = await fetchFeed(feed.url, prev.etag);
     if (!res.ok) {
-      // Keep the last good events: a flaky network should not blank out the user's calendar.
       return { fetchedAt: prev.fetchedAt || 0, etag: prev.etag || '', events: prev.events || [], error: res.error };
     }
     if (res.notModified) {
@@ -184,7 +182,6 @@ window.LT_CAL = (function () {
     catch { return { fetchedAt: prev.fetchedAt || 0, etag: prev.etag || '', events: prev.events || [], title: prev.title || '', error: 'parse' }; }
 
     const events = window.LT_ICS.expandAll(raw, now - WINDOW_BACK_MS, now + WINDOW_FORWARD_MS, 200);
-    // X-WR-CALNAME is the feed's own display name — nicer than showing the user a hostname.
     let title = '';
     try { title = window.LT_ICS.parseCalendarName(res.ics); } catch {}
     return {
@@ -199,7 +196,6 @@ window.LT_CAL = (function () {
     };
   }
 
-  // Feed events, indexed by local day key, so the month grid is a map lookup instead of a scan.
   function groupByDay(events, allDayFlags) {
     const map = new Map();
     for (const ev of events) {
