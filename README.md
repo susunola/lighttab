@@ -54,7 +54,7 @@ turn it on.
 - **Free canvas layout** — on wide screens, widgets and the icon grid can be dragged anywhere; cards snap and swap. The movie card's placement (*Settings → Widgets*) selects the layout engine: **Left column** integrates it into the grid, **Above search** switches to the free canvas — live, no reload. A refused drag explains why and offers a one-click fix
 - **Movie of the day** — a daily pick from a curated annual-best list with poster, rating and a short note; works fully offline, with an optional hot list when online
 - **Wallpapers** — bundled gradient/photo wallpapers, custom image upload, and an optional Bing daily wallpaper library with favorites and daily auto-rotate
-- **Weather** (opt-in) — current conditions and a 7-day outlook for a city you pick, powered by Open-Meteo (no API key); cached 30 minutes with a stale-data hint
+- **Weather** (opt-in) — current conditions for a city you pick, shown on the clock line (there is no separate weather card); powered by Open-Meteo (no API key), cached 30 minutes
 - **Bilingual UI (English / 中文)** — one switch in Settings re-renders everything instantly
 - **JSON backup / restore** and **optional cloud sync** — email sign-in syncs shortcuts, settings, wallpaper and templates over HTTPS; first-login differences and concurrent edits pause the affected document for an explicit choice, and local recovery backups are taken before any replacement
 

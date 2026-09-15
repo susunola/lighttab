@@ -623,11 +623,18 @@ assert(/\.widget\.wclock\.w-top \.clock-greet \{ display: none/.test(cssSrc)
 assert(/function normalizeWidgetPos/.test(appSrc), 'app.js defines normalizeWidgetPos()');
 assert(/function applyWidgetPos/.test(appSrc), 'app.js defines applyWidgetPos()');
 assert(/applyWidgetPos\(\);/.test(appSrc), 'applyWidgets drives applyWidgetPos');
-// widgetVisible() is the single switch for every widget: a hard-coded `return false` (shipped once,
-// it killed to-dos / weather / pomodoro / countdown while the store listing advertised them) or a
-// blanket `display:none !important` would silently disable a widget again.
-assert(!/function widgetVisible\(id\) \{\s*\n\s*if \(id === 'w/.test(appSrc),
-  'widgetVisible() has no hard-coded per-widget kill list');
+// widgetVisible() decides every widget. Weather is the one documented exception — the forecast
+// lives on the clock line (clockWeatherText() hands it over while the card stays hidden), and the
+// settings checkbox is that line's on/off switch. Everything else must follow the stored setting:
+// a hard-coded kill list for to-dos / pomodoro / countdown shipped once and silently disabled
+// three widgets while their settings rows still offered them.
+{
+  const wvBody = (appSrc.match(/function widgetVisible\(id\) \{([\s\S]*?)\n  \}/) || [])[1] || '';
+  assert(/if \(id === 'wweather'\) return false;/.test(wvBody),
+    'widgetVisible() retires the weather card (the forecast lives on the clock line)');
+  assert(!/id === '(?:wtodo|wpomodoro|wcount)'/.test(wvBody),
+    'widgetVisible() has no hard-coded kill list for the opt-in widgets');
+}
 assert(!/\.widget\.w(?:todo|weather|pomodoro|count)\s*\{ display: none !important/.test(cssSrc)
   && !/,\n\.widget\.w(?:todo|weather|pomodoro|count),\n/.test(cssSrc),
   'style.css does not blanket-hide the opt-in widgets');

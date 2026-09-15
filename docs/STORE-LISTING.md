@@ -18,11 +18,11 @@ Lead paragraph:
 
 Feature bullets (use plain HTML `<li>` in the store editor):
 
-- **Clock & date** – 24h/12h, seconds, three clock faces, Chinese lunar calendar (offline, 1900–2100).
+- **Clock & date** – 24h/12h, seconds, three clock faces, Chinese lunar calendar (offline, 1900–2100), plus an optional weather line for a city you pick.
 - **Search box = launcher** – search your saved sites, get engine suggestions, run quick math, or jump to an exact shortcut by name.
 - **Shortcuts grid** – folders, groups, drag to reorder (mouse *and* touch), bulk-add by pasting, brand icons baked in (no external icon requests).
 - **To-dos** – optional due dates shown on the month calendar.
-- **Widgets** – weather (optional, Open-Meteo, no key), countdown, pomodoro, movie-of-the-day, quote + wallpaper shuffle.
+- **Widgets** – countdown, pomodoro, movie-of-the-day, quote + wallpaper shuffle.
 - **Wallpapers** – bundled gradient art + your own uploads, plus an optional online library you opt into.
 - **Your style** – dark/light/system themes, custom accent colour, bilingual UI (English / 中文).
 - **Data** – export/import JSON, merge import, optional self-hosted cloud sync (off by default), backup reminders.
@@ -37,7 +37,7 @@ Close with:
 1. Default view (dark): clock left/top + search + grid.
 2. Search as launcher: local site row + suggestions + calculator row.
 3. Icon folders + group bar.
-4. Widgets: to-dos with due dates, weather, countdown, movie.
+4. Widgets: to-dos with due dates, countdown, movie; weather optionally on the clock line.
 5. Settings → Wallpaper / General (accent picker, engine manager, data panel).
 
 ## Permissions & data-safety form answers

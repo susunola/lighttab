@@ -29,7 +29,7 @@ Fill the Edge Add-ons submission from this sheet. The package itself is the same
 - **Free canvas layout** – on wide screens, drag every widget and the icon grid anywhere; cards snap and swap.
 - **Movie of the day** – a curated daily pick, works offline.
 - **Wallpapers** – bundled art + your own uploads, optional online library and daily auto-rotate.
-- **Weather** – optional, Open-Meteo, no API key.
+- **Weather** – optional current conditions on the clock line, Open-Meteo, no API key.
 - **Your style** – dark/light/system themes, custom accent colour, bilingual UI (English / 中文).
 - **Data** – export/import JSON, optional cloud sync (off by default), conflict previews and local recovery backups.
 

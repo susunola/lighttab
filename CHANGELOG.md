@@ -1,13 +1,18 @@
 # 1.24.4 — the opt-in widgets work again, release checks run in CI
 
-- Fix: To-dos, Weather, Pomodoro and the countdown were unreachable in 1.24.0–1.24.3. The
-  per-widget setting was overridden twice — `widgetVisible()` returned false for those ids no
-  matter what was stored, and `style.css` blanket-hid the same four with
-  `display:none !important`. Weather was the visible casualty: its settings row is not hidden, so
-  the checkbox flipped to "on" while the widget never appeared, and the calendar's due-date dots
-  (also keyed on `widgetVisible('wtodo')`) were dead with it. The stored setting is the single
-  switch again. The calendar / to-dos / countdown / pomodoro settings rows stay hidden for now, so
-  the only user-visible change is that the weather toggle does what it says.
+- Fix: To-dos, Pomodoro and the countdown were unreachable in 1.24.0–1.24.3. The per-widget
+  setting was overridden twice — `widgetVisible()` returned false for those ids no matter what was
+  stored, and `style.css` blanket-hid the same set with `display:none !important`. The calendar's
+  due-date dots (also keyed on `widgetVisible('wtodo')`) were dead with it. The stored setting is
+  the single switch again; those three settings rows stay hidden for now, as before.
+- Fix: the weather card is retired. It was never meant to be a card in this build — the forecast
+  belongs on the clock line, and `clockWeatherText()` deliberately returns nothing while a weather
+  card is visible, so the two could never coexist. The 1.24.0–1.24.3 kill switch hid the card and
+  left the (unhidden) settings row in place, which made the checkbox look broken; 1.24.4 briefly
+  made the card appear instead of the clock line. `widgetVisible('wweather')` is now the one
+  documented exception that returns false, the flag stays the on/off switch for the clock line and
+  the city field its data source. Docs, the bundled privacy page and the store sheets no longer
+  advertise a weather widget or a 7-day outlook.
 - Fix: `scripts/check-wallpapers.cjs` asserted exactly 7 wallpaper presets and had been failing
   since an 8th was added; it asserts a floor, so adding a preset cannot rot the check while
   dropping one below the floor still fails.

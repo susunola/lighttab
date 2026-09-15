@@ -18,7 +18,7 @@ default **no data leaves your device**, and LightTab has **no tracking, no analy
 | You type a search query | The query + your chosen engine's URL | Directly to that search engine, when you submit |
 | Search suggestions are enabled | The keystrokes you type | Directly to your chosen engine's suggestion endpoint (Baidu / Google / Bing). Off by default? **No — on by default; you can disable it in Settings → General.** |
 | You enable the optional online wallpaper library | Requests for wallpaper metadata/images | To the LightTab service `lighttab.atomwangnus.com` |
-| You enable the optional weather widget | Your city name + coordinates + weather requests | Open-Meteo (`api.open-meteo.com`, `geocoding-api.open-meteo.com`) |
+| You turn on the weather line next to the clock | Your city name + coordinates + weather requests | Open-Meteo (`api.open-meteo.com`, `geocoding-api.open-meteo.com`) |
 | You subscribe to a calendar (*Settings → Calendar*) | An anonymous read-only `GET` of the one published ICS link you pasted | To that calendar's own host (e.g. `*.icloud.com`, `*.google.com`, `*.outlook.com`). No cookies, no credentials, no write access |
 | You enable optional cloud sync | Email address, a password hash (never the password itself), and your synced documents | `lighttab.atomwangnus.com` over HTTPS |
 | You enable "Record errors locally" | Error **messages** only (no URLs, no stacks, no network) | Stored on your device; you can export the file yourself |

@@ -38,8 +38,9 @@ The only permission it asks for is <b>storage</b>.</p>
       icons are baked in — no favicon requests leave your browser.</li>
   <li><b>To-dos</b> — with optional due dates that show up on the month calendar, and
       overdue highlights.</li>
-  <li><b>Widgets you choose</b> — weather (Open-Meteo, no API key), countdown, pomodoro,
-      movie of the day, wallpapers with a quote shuffle. Hide any of them.</li>
+  <li><b>Widgets you choose</b> — countdown, pomodoro, movie of the day, wallpapers with a
+      quote shuffle. Hide any of them. Weather (Open-Meteo, no API key) is optional and
+      appears on the clock line.</li>
   <li><b>Wallpapers</b> — bundled gradient art plus your own uploads; optionally fetch a
       curated online library (off by default).</li>
   <li><b>Make it yours</b> — dark / light / follow-system themes, a custom accent colour,

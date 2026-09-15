@@ -6924,10 +6924,14 @@
     return out;
   }
   function widgetVisible(id) {
-    // The per-widget settings toggle is the only switch. To-dos, weather, pomodoro and the
-    // countdown ship off (DEFAULT_SETTINGS.widgets), so they stay hidden until the user turns
-    // them on — hard-coding them to false here left four store-listed widgets unreachable and
-    // made their settings checkboxes lie (weather even rendered as checked).
+    // The per-widget settings toggle is the only switch. To-dos, pomodoro and the countdown ship
+    // off (DEFAULT_SETTINGS.widgets), so they stay hidden until the user turns them on — hard-coding
+    // them to false here once left three listed widgets unreachable and made their rows lie.
+    //
+    // Weather is the one deliberate exception: there is no weather card. The forecast lives on the
+    // clock line, and clockWeatherText() hands it over precisely while this returns false. The
+    // settings checkbox stays the on/off switch for that line and the city input its data source.
+    if (id === 'wweather') return false;
     if (id === 'wcal') return document.documentElement.getAttribute('data-view') === 'calendar';
     return normalizeWidgets(state.settings && state.settings.widgets)[id];
   }
