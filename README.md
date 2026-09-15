@@ -11,7 +11,7 @@
 
 <p align="center">
   <img alt="Manifest V3" src="https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.24.3-0ea5e9">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.24.4-0ea5e9">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-7C3AED">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-0-10a37f">
   <img alt="Languages" src="https://img.shields.io/badge/UI-English%20%2F%20%E4%B8%AD%E6%96%87-A78BFA">

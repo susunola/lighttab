@@ -1,3 +1,28 @@
+# 1.24.4 — the opt-in widgets work again, release checks run in CI
+
+- Fix: To-dos, Weather, Pomodoro and the countdown were unreachable in 1.24.0–1.24.3. The
+  per-widget setting was overridden twice — `widgetVisible()` returned false for those ids no
+  matter what was stored, and `style.css` blanket-hid the same four with
+  `display:none !important`. Weather was the visible casualty: its settings row is not hidden, so
+  the checkbox flipped to "on" while the widget never appeared, and the calendar's due-date dots
+  (also keyed on `widgetVisible('wtodo')`) were dead with it. The stored setting is the single
+  switch again. The calendar / to-dos / countdown / pomodoro settings rows stay hidden for now, so
+  the only user-visible change is that the weather toggle does what it says.
+- Fix: `scripts/check-wallpapers.cjs` asserted exactly 7 wallpaper presets and had been failing
+  since an 8th was added; it asserts a floor, so adding a preset cannot rot the check while
+  dropping one below the floor still fails.
+- Fix: `scripts/check-upgrade.cjs` could not build its 1.18.0 fixture in a shallow clone (it
+  pinned `git archive ab52350`); it now resolves the newest commit whose manifest reads 1.18.0 and
+  prints the fix (`git fetch --unshallow`) when history is missing.
+- Fix: two launcher E2E assertions raced the async store write (~32 ms) and the page's resize
+  handler; both poll now. The suite is 29/29 again (it was 26/29).
+- CI: `node --check` covers every `js/*.js` and `scripts/*.cjs` (ics.js, calendar.js,
+  background.js and canvas.js were unchecked), and a new `browser` job runs the Playwright suite
+  plus the four real-extension checks on a full-history checkout.
+- `manifest.json` declares `minimum_chrome_version: 114` — the UI uses `color-mix()` and the
+  `popover` attribute, so older Chrome rendered broken layout with no warning.
+- Dev-only `package.json` pins Playwright and exposes `npm run check:all`; it is never packaged.
+
 # 1.24.3 — DeepSeek joins auto-send, Enter-first submission
 
 - AI launcher: DeepSeek is now a real injected target (was manual-paste-only) — the content script

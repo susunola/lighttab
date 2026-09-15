@@ -1,12 +1,12 @@
 # Microsoft Edge Add-ons submission kit (LightTab)
 
 Fill the Edge Add-ons submission from this sheet. The package itself is the same zip as Chrome:
-`dist/lighttab-1.24.3-chrome.zip` — no rebuild needed.
+`dist/lighttab-1.24.4-chrome.zip` — no rebuild needed.
 
 ## Basics
 - **Name**: LightTab – Minimal New Tab
 - **Category**: Productivity
-- **Version**: 1.24.3 (must match `manifest.json`; bump this line on every release)
+- **Version**: 1.24.4 (must match `manifest.json`; bump this line on every release)
 - **Logo**: `icons/icon128.png` (128×128)
 - **Support email / website**: fill in your Partner Center contact + the GitHub repo URL
   (https://github.com/susunola/lighttab). A **privacy policy URL is required** — privacy.html is in
