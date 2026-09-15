@@ -422,6 +422,7 @@
   let currentEngine = ENGINES[0];
   let activePrompt = null; // template picked and waiting to launch (session only, not persisted)
   let clockTimer = null;
+  let clockTickNow = null; // the running clock tick, replayed when a hidden tab becomes visible
   let pendingIcon = null; // unsaved custom card icon (dataURL) held by the shortcut modal until Save
   // True once the shortcut modal's Name field holds a name the user (or an explicit source such as
   // "Add current tab") chose, so typing in the URL field stops overwriting it. Cleared on open.
@@ -1081,6 +1082,10 @@
     let lastMinute = -1, lastHour = -1, lastDay = '';
 
     function tick() {
+      // A background new tab must not repaint every second. Nothing is lost: when the tab is shown
+      // again the visibility handler replays this tick, which also carries the midnight rollover
+      // (wallpaper rotation, calendar "today", movie of the day) that a background tab would miss.
+      if (document.hidden) return;
       const d = new Date();
       const hh = d.getHours();
       const mm = d.getMinutes();
@@ -1129,6 +1134,7 @@
     if (clockWidget) clockWidget.classList.toggle('clock-sec-on', state.settings.clockSeconds === true);
     if (clockTimer) clearInterval(clockTimer);
     clockTimer = setInterval(tick, 1000);
+    clockTickNow = tick;
   }
 
   // ---------- Search engines ----------
@@ -6193,6 +6199,7 @@
   // text is rewritten, with a full re-render when the mode flips or the calendar day rolls over.
   let countLastKey = '';
   function countTick() {
+    if (document.hidden) return; // pure repaint of clock-derived values; replayed on visibility
     if (!widgetVisible('wcount')) return;
     if (countEditing) return;
     const cd = countdownData();
@@ -6316,7 +6323,9 @@
       pomo = pomoAdvance(pomo);
       showToast(t(wasFocus ? 'pomo.toast_break' : 'pomo.toast_focus'));
     }
-    renderPomodoroState();
+    // The tick owns the countdown state, so it keeps running in a background tab; only the repaint
+    // is skipped (the visibility handler repaints once, so the card is never stale on return).
+    if (!document.hidden) renderPomodoroState();
   }
   function bindPomodoro() {
     const card = document.getElementById('pomo-card');
@@ -7191,6 +7200,15 @@
     renderPomodoro();
     setInterval(countTick, 1000);
     setInterval(pomoTick, 1000);
+    // The 1s tickers above skip DOM work while the tab is hidden (a new tab is often parked in the
+    // background for hours). One replay on return catches every widget up — including the clock's
+    // midnight rollover, which a background tab would otherwise never run.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      if (clockTickNow) clockTickNow();
+      countTick();
+      pomoTick();
+    });
 
     // Search
     const form = document.getElementById('search-form');

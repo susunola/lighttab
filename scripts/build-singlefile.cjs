@@ -38,6 +38,28 @@ html = html.replaceAll('assets/wallpaper-dusk.jpg', 'data:image/jpeg;base64,' + 
 const wbLogo = fs.readFileSync(path.join(ROOT, 'assets/engines/workbuddy.png'));
 html = html.replaceAll('assets/engines/workbuddy.png', 'data:image/png;base64,' + wbLogo.toString('base64'));
 
+// Movie posters live as separate assets so the extension parses only a small metadata file
+// (scripts/build-movie-posters.cjs). The split-file build fetches them on demand; the single file
+// has no assets/ next to it, so inline every one back by path.
+const movieDir = path.join(ROOT, 'assets/movies');
+if (fs.existsSync(movieDir)) {
+  for (const name of fs.readdirSync(movieDir).sort()) {
+    const kind = name.endsWith('.png') ? 'image/png' : name.endsWith('.webp') ? 'image/webp' : 'image/jpeg';
+    const bytes = fs.readFileSync(path.join(movieDir, name));
+    html = html.replaceAll('assets/movies/' + name, 'data:' + kind + ';base64,' + bytes.toString('base64'));
+  }
+}
+
+// Raster brand icons are separate assets for the same reason (scripts/build-brand-icons.cjs).
+const brandDir = path.join(ROOT, 'assets/brand-icons');
+if (fs.existsSync(brandDir)) {
+  for (const name of fs.readdirSync(brandDir).sort()) {
+    const kind = name.endsWith('.png') ? 'image/png' : name.endsWith('.webp') ? 'image/webp' : 'image/jpeg';
+    const bytes = fs.readFileSync(path.join(brandDir, name));
+    html = html.replaceAll('assets/brand-icons/' + name, 'data:' + kind + ';base64,' + bytes.toString('base64'));
+  }
+}
+
 // Same for the bundled variable font: the inlined <style> resolves relative URLs against the
 // document, not the stylesheet, so '../assets/…' would break outside the repo layout.
 const font = fs.readFileSync(path.join(ROOT, 'assets/fonts/inter-var-latin.woff2'));

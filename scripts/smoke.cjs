@@ -333,9 +333,18 @@ console.log('[4] pure functions');
   assert(!!DB, 'icondb.js exposes window.LT_ICONDB');
   if (DB) {
     const keys = Object.keys(DB);
-    // literal entry count === runtime key count, otherwise a duplicate host was silently overwritten by the later one
-    const literal = (src.match(/^ {2}"[^"]+":/gm) || []).length;
-    assert(literal === keys.length, `icon library has no duplicate hosts (${literal} literal / ${keys.length} runtime)`);
+    // No duplicate host may be silently overwritten by a later literal entry. Hosts that share a
+    // byte-identical mark are emitted by scripts/build-brand-icons.cjs as a generated alias block
+    // instead of a second copy, so the literal holds every host except those aliases.
+    const literalSrc = src.split(/^for \(const \[alias/m)[0];
+    const literal = (literalSrc.match(/"[^"]+":\s*\{/g) || []).length;
+    const aliasMatch = src.match(/Object\.entries\((\{[^}]*\})\)/);
+    const aliasMap = aliasMatch ? JSON.parse(aliasMatch[1]) : {};
+    assert(literal === keys.length - Object.keys(aliasMap).length,
+      `icon library has no duplicate hosts (${literal} literal + ${Object.keys(aliasMap).length} alias / ${keys.length} runtime)`);
+    for (const [alias, canonical] of Object.entries(aliasMap)) {
+      assert(DB[alias] && DB[canonical] && DB[alias] === DB[canonical], `alias ${alias} shares its mark with ${canonical}`);
+    }
     assert(keys.length >= 100, `icon library covers >=100 sites (currently ${keys.length})`);
 
     const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -372,11 +381,22 @@ console.log('[4] pure functions');
       } else if (e.d) {
         mono++;
       } else if (e.img) {
-        // Raster entries (bundled data-URI, e.g. the 小鹅通 goose): must be a local PNG or SVG
-        // data-URI with a sane hex tile colour — still zero network at runtime. High-definition
-        // 256px art is allowed, so the cap is generous (keeps accidental megabytes out).
-        if (e.img.length > 300000 || !/^data:image\/(?:png|jpeg|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(e.img)) {
-          bad.push(`${host}: img must be a bundled PNG/JPEG/SVG data URI (<=300k chars)`);
+        // Raster entries: either an inline data URI (small marks, inline SVG wordmarks) or a bundled
+        // asset file (scripts/build-brand-icons.cjs moves the heavy PNG/JPEG art to
+        // assets/brand-icons/ so the library parses as kilobytes, not megabytes). Zero network
+        // either way — a path must stay inside the package and must be a real image on disk.
+        const inlineOk = /^data:image\/(?:png|jpeg|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(e.img) && e.img.length <= 300000;
+        const asset = /^assets\/brand-icons\/[A-Za-z0-9._-]+\.(?:png|jpg|jpeg)$/.exec(e.img);
+        if (!inlineOk && !asset) {
+          bad.push(`${host}: img must be a bundled PNG/JPEG/SVG data URI or an assets/brand-icons file`);
+        } else if (asset) {
+          const file = path.join(ROOT, e.img);
+          const head = fs.existsSync(file) ? fs.readFileSync(file).subarray(0, 4) : null;
+          const isPng = head && head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
+          const isJpg = head && head[0] === 0xff && head[1] === 0xd8;
+          if (!head) bad.push(`${host}: ${e.img} is missing from the package`);
+          else if (!isPng && !isJpg) bad.push(`${host}: ${e.img} is not a PNG/JPEG`);
+          else if (fs.statSync(file).size > 300000) bad.push(`${host}: ${e.img} is larger than 300 KB`);
         }
       } else {
         bad.push(`${host}: matches none of the three shapes`);
@@ -785,6 +805,21 @@ assert(/function renderMovie/.test(appSrc) && /function movieIndexForToday/.test
   'app.js defines renderMovie / movieIndexForToday (deterministic pick by day of year)');
 assert(/movieCursor/.test(appSrc), 'app.js maintains the movieCursor manual-browsing cursor');
 assert(/renderMovie\(\);/.test(appSrc), 'boot / reset both call renderMovie');
+// Posters are packaged assets, not inline megabytes (scripts/build-movie-posters.cjs): the metadata
+// must point at files that really ship, or the card and its detail dialog render blank.
+{
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(read('js/movie-data.js'), sandbox, { filename: 'movie-data.js' });
+  const movies = sandbox.window.LT_MOVIE_DATA || {};
+  const titles = Object.keys(movies);
+  assert(titles.length >= 20, `movie library carries a usable set of films (${titles.length})`);
+  const inline = titles.filter((t) => /^data:image\//.test(movies[t].poster || ''));
+  assert(inline.length === 0, 'movie posters are not inlined into the parsed JS', inline.slice(0, 3).join(', '));
+  const bad = titles.filter((t) => !/^assets\/movies\/[A-Za-z0-9._-]+\.(?:png|jpg|jpeg|webp)$/.test(movies[t].poster || '')
+    || !fs.existsSync(path.join(ROOT, movies[t].poster)));
+  assert(bad.length === 0, 'every bundled movie poster exists in the package', bad.slice(0, 3).join(', '));
+}
 assert(/encodeURIComponent\(m\.zh\)/.test(appSrc), 'Douban jump link URL-encodes the title');
 assert(/esc\(m\.zh\)/.test(appSrc) && /esc\(m\.blurb\)/.test(appSrc) && /esc\(m\.genre\)/.test(appSrc),
   'title/blurb/genre are HTML-escaped via esc() before rendering');

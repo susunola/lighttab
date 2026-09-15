@@ -7,7 +7,7 @@ execFileSync(process.execPath,['scripts/smoke.cjs'],{stdio:'inherit'});
 execFileSync(process.execPath,['scripts/build-singlefile.cjs'],{stdio:'inherit'});
 const stage=fs.mkdtempSync(path.join(os.tmpdir(),'lighttab-package-'));
 try {
- for(const name of ['manifest.json','newtab.html','privacy.html','LICENSE','js','css','icons'])fs.cpSync(name,path.join(stage,name),{recursive:true});
+ for(const name of ['manifest.json','newtab.html','privacy.html','LICENSE','js','css','icons','assets/movies','assets/brand-icons'])fs.cpSync(name,path.join(stage,name),{recursive:true});
  for(const name of ['assets/wallpaper-dusk.jpg','assets/wallpaper-blue-hour-plum.jpg','assets/engines/workbuddy.png','assets/fonts/inter-var-latin.woff2','assets/fonts/OFL.txt','assets/sea-holidays.ics','assets/donate-alipay.jpg','assets/donate-wechat.jpg']){fs.mkdirSync(path.dirname(path.join(stage,name)),{recursive:true});fs.copyFileSync(name,path.join(stage,name));}
  fs.mkdirSync('dist',{recursive:true});const out=path.join(root,'dist',`lighttab-${version}-chrome.zip`);
  if(fs.existsSync(out))fs.unlinkSync(out);

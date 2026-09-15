@@ -154,10 +154,12 @@ lighttab/
 │   ├── i18n.js              # zh + en dictionary, t() runtime, static DOM pass
 │   ├── lunar.js             # Chinese lunar calendar (1900–2100)
 │   ├── holidays.js          # China statutory-holiday table (2026, refreshed yearly)
-│   ├── icondb.js            # built-in brand-icon library (simple-icons, CC0)
+│   ├── icondb.js            # built-in brand-icon library (vector paths + assets/brand-icons refs)
 │   └── prompts.js           # AI prompt templates
 ├── assets/
-│   └── sea-holidays.ics     # bundled HK/SG/MY/ID/TH holidays (scripts/build-sea-holidays.cjs)
+│   ├── sea-holidays.ics     # bundled HK/SG/MY/ID/TH holidays (scripts/build-sea-holidays.cjs)
+│   ├── movies/              # bundled movie posters, loaded per card (scripts/build-movie-posters.cjs)
+│   └── brand-icons/         # heavy raster brand marks, loaded on demand (scripts/build-brand-icons.cjs)
 ├── scripts/                 # smoke / e2e / packaging / ICS generator (node, no deps)
 ├── tests/e2e/               # local Playwright tests
 └── icons/                   # 16 / 48 / 128

@@ -22,6 +22,19 @@
 - `manifest.json` declares `minimum_chrome_version: 114` — the UI uses `color-mix()` and the
   `popover` attribute, so older Chrome rendered broken layout with no warning.
 - Dev-only `package.json` pins Playwright and exposes `npm run check:all`; it is never packaged.
+- Performance: the new-tab page no longer parses ~2 MB of base64 images on every open. The 32
+  bundled movie posters (1.07 MB) and the heavy raster brand marks (0.86 MB) moved into
+  `assets/movies/` and `assets/brand-icons/` as ordinary image files, fetched only when a card or
+  grid tile actually shows them — byte-for-byte copies, no re-encode, so the art is unchanged
+  (`scripts/build-movie-posters.cjs`, `scripts/build-brand-icons.cjs`, both idempotent). Marks that
+  were byte-identical (leetcode.com/.cn, the four Outlook hosts, geekbang, 小鹅通) now share one
+  entry instead of being stored twice (−197 KB). Measured on one machine, 3 runs each: first
+  contentful paint 124 → 57 ms, load event 331 → 256 ms, retained JS heap after GC 6.54 → 3.00 MB.
+  `dist/newtab.html` still inlines every asset, so the single-file preview is unaffected.
+- Performance: a new tab parked in the background no longer repaints the clock, countdown and
+  pomodoro every second; one replay on return catches every widget up, including the clock's
+  midnight rollover (wallpaper rotation, calendar "today", movie of the day) that a background tab
+  used to skip. The pomodoro keeps counting down — only its DOM work is skipped.
 
 # 1.24.3 — DeepSeek joins auto-send, Enter-first submission
 
