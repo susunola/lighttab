@@ -1,0 +1,23 @@
+{
+  "name": "lighttab",
+  "private": true,
+  "description": "LightTab — a fast, private new-tab dashboard. Zero runtime dependencies; Playwright is a dev-only dependency for the browser checks.",
+  "license": "MIT",
+  "scripts": {
+    "smoke": "node scripts/smoke.cjs",
+    "test": "node scripts/smoke.cjs",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.js",
+    "check:extension": "node scripts/check-extension.cjs",
+    "check:upgrade": "node scripts/check-upgrade.cjs",
+    "check:wallpapers": "node scripts/check-wallpapers.cjs",
+    "check:launcher": "node scripts/check-launcher-extension.cjs",
+    "check:all": "node scripts/smoke.cjs && node scripts/check-wallpapers.cjs && node scripts/check-extension.cjs && node scripts/check-launcher-extension.cjs && node scripts/check-upgrade.cjs && playwright test -c tests/e2e/playwright.config.js",
+    "package:release": "node scripts/package-release.cjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

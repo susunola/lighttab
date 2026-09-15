@@ -3591,12 +3591,12 @@ html[data-view="calendar"] .layout > .left {
   flex: none;
   position: static;
 }
+/* Home view hides the calendar widget (it owns the calendar page). The other widgets are NOT
+ * listed here: their per-widget setting decides, and a blanket `display:none !important` made the
+ * to-dos / weather / pomodoro / countdown toggles do nothing in home view. Calendar view is already
+ * covered by the `.left > :not(.wcal)` rule above. */
 html[data-view="home"] .widget.wcal,
-html:not([data-view]) .widget.wcal,
-.widget.wtodo,
-.widget.wweather,
-.widget.wpomodoro,
-.widget.wcount { display: none !important; }
+html:not([data-view]) .widget.wcal { display: none !important; }
 #btn-cal-page[aria-pressed="true"] { background: rgba(255,255,255,.12); }
 
 /* Wallpaper-first calendar: type floats on the photo, no solid card. */

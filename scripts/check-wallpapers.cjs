@@ -12,7 +12,9 @@ const { chromium } = require('playwright');
     await page.goto(pathToFileURL(path.resolve(process.argv[2] || path.join(__dirname, '../newtab.html'))).href);
     await page.locator('#btn-wall').click();
     const count = await page.locator('.swatch:not([data-i="img"])').count();
-    assert.equal(count, 7);
+    // A floor, not an exact number: presets are expected to be added, and the old exact count
+    // turned this release check red as soon as one was. Dropping below the floor still fails.
+    assert(count >= 7, `at least 7 built-in wallpaper presets are offered (found ${count})`);
     for (let index = 0; index < count; index++) {
       const tile = page.locator(`.swatch[data-i="${index}"]`);
       const expected = await tile.evaluate(el => el.style.backgroundImage);
@@ -35,6 +37,6 @@ const { chromium } = require('playwright');
     await page.locator('#btn-wall').click();
     await page.waitForFunction(() => document.querySelector('.swatch[data-i="0"]')?.classList.contains('active'));
     assert.equal(await page.locator('#wallpaper').evaluate(el => el.style.backgroundImage), expected, 'Image choice persists after reload');
-    console.log('PASS: all 7 presets switch; factory image decodes; factory choice persists after reload.');
+    console.log(`PASS: all ${count} presets switch; factory image decodes; factory choice persists after reload.`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

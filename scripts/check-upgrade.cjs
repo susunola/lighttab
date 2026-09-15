@@ -1,9 +1,24 @@
 'use strict';
 const fs=require('fs'),os=require('os'),path=require('path'),crypto=require('crypto'),assert=require('assert/strict'),cp=require('child_process');
 const {chromium}=require('playwright');
+// The old release is pinned by content, not by a bare hash: a shallow clone (CI's default
+// checkout, and any `git clone --depth=1`) does not contain the pinned commit, so look up the
+// newest commit whose manifest.json still reads 1.18.0 and fall back to the pin on full history.
+function resolveFixture(repo){
+  const pin='ab52350';
+  const has=h=>{try{cp.execFileSync('git',['cat-file','-e',h+'{commit}'],{cwd:repo,stdio:'ignore'});return true;}catch{return false;}};
+  if(has(pin))return pin;
+  let hashes=[];
+  try{hashes=cp.execFileSync('git',['log','--format=%H','--','manifest.json'],{cwd:repo,encoding:'utf8'}).split('\n').filter(Boolean);}catch(_){}
+  for(const h of hashes){
+    try{if(JSON.parse(cp.execFileSync('git',['show',h+':manifest.json'],{cwd:repo,encoding:'utf8'})).version==='1.18.0')return h;}catch(_){}
+  }
+  throw new Error(`Cannot locate the 1.18.0 upgrade fixture in this clone (git rev-parse --is-shallow-repository -> ${(()=>{try{return cp.execFileSync('git',['rev-parse','--is-shallow-repository'],{cwd:repo,encoding:'utf8'}).trim();}catch(_){return 'unknown';}})()}). Run: git fetch --unshallow`);
+}
 (async()=>{
 const repo=path.resolve(__dirname,'..'),tmp=fs.mkdtempSync(path.join(os.tmpdir(),'lighttab-upgrade-')),root=path.join(tmp,'extension'),profile=path.join(tmp,'profile');fs.mkdirSync(root);
-cp.execFileSync('git',['archive','ab52350'],{cwd:repo,stdio:['ignore',fs.openSync(path.join(tmp,'old.tar'),'w'),'pipe']});cp.execFileSync('tar',['-xf',path.join(tmp,'old.tar'),'-C',root]);
+const fixture=resolveFixture(repo);console.log('Upgrade fixture commit:',fixture);
+cp.execFileSync('git',['archive',fixture],{cwd:repo,stdio:['ignore',fs.openSync(path.join(tmp,'old.tar'),'w'),'pipe']});cp.execFileSync('tar',['-xf',path.join(tmp,'old.tar'),'-C',root]);
 assert.equal(JSON.parse(fs.readFileSync(path.join(root,'manifest.json'))).version,'1.18.0');
 const id=crypto.createHash('sha256').update(fs.realpathSync(root)).digest('hex').slice(0,32).replace(/[0-9a-f]/g,c=>String.fromCharCode(97+parseInt(c,16)));
 let context;

@@ -6915,7 +6915,10 @@
     return out;
   }
   function widgetVisible(id) {
-    if (id === 'wtodo' || id === 'wweather' || id === 'wpomodoro' || id === 'wcount') return false;
+    // The per-widget settings toggle is the only switch. To-dos, weather, pomodoro and the
+    // countdown ship off (DEFAULT_SETTINGS.widgets), so they stay hidden until the user turns
+    // them on — hard-coding them to false here left four store-listed widgets unreachable and
+    // made their settings checkboxes lie (weather even rendered as checked).
     if (id === 'wcal') return document.documentElement.getAttribute('data-view') === 'calendar';
     return normalizeWidgets(state.settings && state.settings.widgets)[id];
   }

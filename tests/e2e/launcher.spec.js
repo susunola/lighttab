@@ -74,8 +74,14 @@ test('AI entry drags without opening, persists and stays inside resized viewport
  await page.mouse.move(box.x+20,box.y+20);await page.mouse.down();await page.mouse.move(140,170,{steps:8});await page.mouse.up();
  await expect(page.locator('#ai-launcher')).toBeHidden();
  const moved=await button.boundingBox();expect(moved.x).toBeLessThan(150);expect(moved.y).toBeLessThan(180);
+ // The drop persists through the shared async store queue, so wait for the write to land before
+ // reloading — otherwise the reload wins the race and this asserts nothing about persistence.
+ await expect.poll(()=>page.evaluate(async()=>!!(await window.LT_APP.Store.getAll()).settings?.aiButtonPosition)).toBe(true);
  await page.reload();const restored=await button.boundingBox();expect(Math.abs(restored.x-moved.x)).toBeLessThan(2);
  await button.click();await expect(page.locator('#ai-launcher')).toBeVisible();await button.click();
  await page.mouse.move(restored.x+20,restored.y+20);await page.mouse.down();await page.mouse.move(1400,850,{steps:8});await page.mouse.up();
- await page.setViewportSize({width:600,height:500});const bounded=await button.boundingBox();expect(bounded.x+bounded.width).toBeLessThanOrEqual(600);expect(bounded.y+bounded.height).toBeLessThanOrEqual(500);
+ // The clamp runs from the page's resize handler, which can land after setViewportSize resolves —
+ // poll instead of reading a rect that may still be pre-resize.
+ await page.setViewportSize({width:600,height:500});
+ await expect.poll(async()=>{const r=await button.boundingBox();return Math.round(r.x+r.width)<=600&&Math.round(r.y+r.height)<=500;}).toBe(true);
 });

@@ -103,6 +103,8 @@ uninstalling clears local data unless cloud sync is on. A copy loaded with **Loa
 ## Tech
 
 - Chrome Extension Manifest V3
+- Chrome 114+ (`minimum_chrome_version` in `manifest.json`): the UI uses `color-mix()` and the
+  `popover` attribute, so older builds would render broken layout instead of degrading silently
 - Plain HTML / CSS / vanilla JS — zero dependencies, zero build step
 - `chrome.storage.local` with a `localStorage` fallback (so `file://` preview works)
 - Schema-versioned migrations
@@ -115,19 +117,20 @@ Kept out of the runtime (zero runtime dependencies):
 
 1. **Offline smoke** — `node scripts/smoke.cjs`: JS syntax, manifest/version consistency,
    pure-function assertions and static DOM/CSS guards. Runs in CI on every push.
-2. **Browser E2E (local)** — Playwright drives the page in `file://` preview mode:
+2. **Browser E2E** — Playwright drives the page in `file://` preview mode. Runs in CI, and locally:
 
    ```bash
-   npm i -D playwright   # first time only
+   npm install                    # dev-only dependency: playwright
    npx playwright install chromium
-   npx playwright test -c tests/e2e/playwright.config.js
+   npm run test:e2e               # or: npm run check:all  (smoke + every browser check)
    ```
 
 3. **Real extension installation** — `node scripts/check-extension.cjs` loads the actual MV3
    extension in an isolated profile, blocks external requests, and verifies boot, storage
    persistence, the sync conflict/backup/restore flow through the real settings UI, and the
    free-canvas layout. `node scripts/check-upgrade.cjs` upgrades a real 1.18.0 profile in place and
-   asserts data survives. Run both before publishing a release.
+   asserts data survives; it needs full git history (`git fetch --unshallow`) because it builds the
+   old release from an earlier commit. Both run in CI. Run all of them before publishing a release.
 4. **Sync safety scenarios** — `node scripts/check-sync.cjs` (also run by the smoke suite):
    first sign-in, two-device conflicts, stale choices, offline reconnect, deletion, malformed
    payloads and backup quota failures against mocked storage.

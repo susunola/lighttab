@@ -13,12 +13,42 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      - name: node --check all JS
+      - name: node --check every JS file
         run: |
-          node --check js/app.js
-          node --check js/sync.js
-          node --check js/inject-ai.js
-          node --check js/lunar.js
-          node --check js/icondb.js
+          for f in js/*.js scripts/*.cjs; do node --check "$f"; done
       - name: smoke
         run: node scripts/smoke.cjs
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      # Full history: the upgrade check builds its "old release" fixture from an earlier commit.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install Playwright
+        run: |
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Playwright E2E (file:// preview)
+        run: npx playwright test -c tests/e2e/playwright.config.js
+      - name: Wallpaper presets
+        run: node scripts/check-wallpapers.cjs
+      - name: Real MV3 extension (boot, storage, sync UI, free canvas)
+        run: node scripts/check-extension.cjs
+      - name: Real MV3 multi-target AI injection
+        run: node scripts/check-launcher-extension.cjs
+      - name: Real MV3 upgrade 1.18.0 -> current
+        run: node scripts/check-upgrade.cjs
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-failure-artifacts
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7

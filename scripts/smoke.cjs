@@ -603,6 +603,14 @@ assert(/\.widget\.wclock\.w-top \.clock-greet \{ display: none/.test(cssSrc)
 assert(/function normalizeWidgetPos/.test(appSrc), 'app.js defines normalizeWidgetPos()');
 assert(/function applyWidgetPos/.test(appSrc), 'app.js defines applyWidgetPos()');
 assert(/applyWidgetPos\(\);/.test(appSrc), 'applyWidgets drives applyWidgetPos');
+// widgetVisible() is the single switch for every widget: a hard-coded `return false` (shipped once,
+// it killed to-dos / weather / pomodoro / countdown while the store listing advertised them) or a
+// blanket `display:none !important` would silently disable a widget again.
+assert(!/function widgetVisible\(id\) \{\s*\n\s*if \(id === 'w/.test(appSrc),
+  'widgetVisible() has no hard-coded per-widget kill list');
+assert(!/\.widget\.w(?:todo|weather|pomodoro|count)\s*\{ display: none !important/.test(cssSrc)
+  && !/,\n\.widget\.w(?:todo|weather|pomodoro|count),\n/.test(cssSrc),
+  'style.css does not blanket-hide the opt-in widgets');
 assert(/normalizeWidgetPos/.test(appSrc.match(/window\.LT_PURE = \{[^}]*\}/)?.[0] || ''),
   'normalizeWidgetPos is exported to LT_PURE');
 assert(!/clockPos/.test(cssSrc) && !/wclock-top/.test(cssSrc), 'old wclock-top CSS is gone');
