@@ -21,12 +21,14 @@ behaviour changed.
 ## 2. Package
 
 ```bash
-node scripts/package-release.cjs
+node scripts/package-release.cjs              # Chrome Web Store
+node scripts/package-release.cjs --edge       # Microsoft Edge Add-ons
 ```
 
-Runs smoke, builds the single-file preview, stages the runtime files (plus the three bundled assets
-under `assets/`), zips to `dist/lighttab-<version>-chrome.zip`, and verifies the archive. The Chrome
-Web Store wants the zip with `manifest.json` at its **root** — that is what this produces.
+Runs smoke, builds the single-file preview, stages the runtime files (plus the bundled assets
+under `assets/`), zips to `dist/lighttab-<version>-<target>.zip`, and verifies the archive. Chrome
+Web Store and Microsoft Edge Add-ons both require `manifest.json` at the ZIP **root** — that is what
+both targets produce.
 
 ## 3. Upload
 
@@ -59,16 +61,10 @@ bypasses the idle rule and forces a fresh download of the published build.
 
 ### What the code does about it
 
-`js/background.js` listens for the update and applies it as soon as it has been downloaded:
-
-```js
-chrome.runtime.onUpdateAvailable.addListener(() => { chrome.runtime.reload(); });
-```
-
-`onUpdateAvailable` fires only once the new version is already on disk, so this is not a network
-check — it just skips the "wait until idle" step that LightTab can never satisfy. Every user setting
-is written to `chrome.storage` as it changes, so the reload cannot lose data; the worst case is a
-half-typed search being cleared, once per release.
+`js/background.js` notifies the open new-tab page when an update is ready. LightTab presents a
+**Reload now** action instead of reloading automatically, so an unfinished search, shortcut edit or
+AI draft is never discarded. If the user does nothing, Chrome applies the update when the extension
+eventually becomes idle or the browser restarts.
 
 ### Forcing it (for testing your own release)
 
