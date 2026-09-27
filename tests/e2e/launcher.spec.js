@@ -40,6 +40,7 @@ for(const mode of ['fill-only','existing-draft','slow-send'])test('injection '+m
   if(mode==='existing-draft')document.querySelector('textarea').value='Keep this draft';
   window.chrome={storage:{local:{get(k,cb){cb({[k]:{p:'New test prompt',t:Date.now(),autoSend:mode!=='fill-only'}});},set(){},remove(){}}}};
  },mode);
+ await page.addScriptTag({path:path.join(__dirname,'../..','js/ai-targets.js')});
  await page.addScriptTag({path:path.join(__dirname,'../..','js/inject-ai.js')});
  if(mode==='existing-draft'){await page.waitForTimeout(1500);await expect(page.locator('textarea')).toHaveValue('Keep this draft');expect(await page.evaluate(()=>window.sentCount)).toBe(0);}
  else{await expect(page.locator('textarea')).toHaveValue('New test prompt');await page.waitForTimeout(mode==='slow-send'?10000:500);expect(await page.evaluate(()=>window.sentCount)).toBe(mode==='slow-send'?1:0);}

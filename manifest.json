@@ -38,6 +38,7 @@
         "https://chat.deepseek.com/*"
       ],
       "js": [
+        "js/ai-targets.js",
         "js/inject-ai.js"
       ],
       "run_at": "document_start"

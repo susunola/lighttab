@@ -40,7 +40,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 // ---------- 1) JS syntax ----------
 console.log('[1] node --check');
-const JS_FILES = ['js/app.js', 'js/canvas.js', 'js/prompts.js', 'js/sync.js', 'js/inject-ai.js', 'js/lunar.js', 'js/holidays.js', 'js/icondb.js', 'js/i18n.js', 'js/ics.js', 'js/calendar.js', 'js/background.js'];
+const JS_FILES = ['js/app.js', 'js/canvas.js', 'js/prompts.js', 'js/sync.js', 'js/ai-targets.js', 'js/inject-ai.js', 'js/lunar.js', 'js/holidays.js', 'js/icondb.js', 'js/i18n.js', 'js/ics.js', 'js/calendar.js', 'js/background.js'];
 for (const f of JS_FILES) {
   try {
     execFileSync(process.execPath, ['--check', path.join(ROOT, f)], { stdio: 'pipe' });
@@ -1717,6 +1717,9 @@ assert(/\.weather-trend \.weather-trend-hi \{ stroke: #fbbf24/.test(cssSrc) && /
 // ---------- 24) AI auto-submit robustness (inject-ai.js v4) ----------
 console.log('[24] AI injection: dola.com match, tiered input pick, pointer fallback, verified send');
 const injectSrc = read('js/inject-ai.js');
+const aiTargetsSrc = read('js/ai-targets.js');
+assert(/LT_AI_TARGETS/.test(aiTargetsSrc) && /globalThis\.LT_AI_TARGETS/.test(injectSrc),
+  'AI site adapters are isolated from the injection transport');
 {
   const manifest = JSON.parse(read('manifest.json'));
   assert(manifest.content_scripts && manifest.content_scripts[0].matches.includes('https://www.dola.com/chat*'),
@@ -1744,12 +1747,11 @@ assert(/let autoSend = false;/.test(injectSrc) && !/let autoSend = true/.test(in
   'autoSend defaults off; only a real nonce record from extension storage can enable it');
 assert(/Date\.now\(\) - armedAt > 1800000/.test(injectSrc),
   'a background-tab armed run expires with the 30-minute nonce horizon');
-// Target behaviour is table-driven: a site redesign should only mean editing TARGET_CFG.
-assert(/const TARGET_CFG = \{/.test(injectSrc)
-  && /doubao:\s*\{ hosts: \['www\.doubao\.com', 'www\.dola\.com'\]/.test(injectSrc)
-  && /openai:\s*\{ hosts: \['chatgpt\.com', 'chat\.openai\.com'\], enterFirst: true/.test(injectSrc)
-  && /deepseek:\s*\{ hosts: \['chat\.deepseek\.com'\], enterFirst: true/.test(injectSrc),
-  'TARGET_CFG maps doubao/openai/deepseek hosts; ChatGPT & DeepSeek submit Enter-first');
+// Target behaviour is table-driven in the separately loaded adapter file.
+assert(/doubao: Object\.freeze\(\{ hosts: \['www\.doubao\.com', 'www\.dola\.com'\]/.test(aiTargetsSrc)
+  && /openai: Object\.freeze\(\{ hosts: \['chatgpt\.com', 'chat\.openai\.com'\], enterFirst: true/.test(aiTargetsSrc)
+  && /deepseek: Object\.freeze\(\{ hosts: \['chat\.deepseek\.com'\], enterFirst: true/.test(aiTargetsSrc),
+  'AI adapter table maps Doubao, ChatGPT and DeepSeek submission policy');
 assert(/Object\.entries\(TARGET_CFG\)\.find/.test(injectSrc),
   'targetId (incl. chat.openai.com → openai) is derived from TARGET_CFG, not hardcoded');
 assert(/cfg\.extraInputs\.length \? \[cfg\.extraInputs, \.\.\.INPUT_TIERS\]/.test(injectSrc),
@@ -2070,8 +2072,8 @@ console.log('[29] accent picker, storage meter, direct-launch, CSP, e2e scaffold
   // the update would wait for a browser restart — which is why upgrading appeared to require an
   // uninstall/reinstall. background.js has to apply the downloaded update itself.
   const bg = read('js/background.js');
-  assert(/chrome\.runtime\.onUpdateAvailable\.addListener/.test(bg) && /chrome\.runtime\.reload\(\)/.test(bg),
-    'a downloaded update is applied immediately (onUpdateAvailable → reload)');
+  assert(/chrome\.runtime\.onUpdateAvailable\.addListener/.test(bg) && /lt\.update\.ready/.test(bg) && !/onUpdateAvailable\.addListener\(\(\) => \{\s*chrome\.runtime\.reload/.test(bg),
+    'a downloaded update notifies the page rather than discarding active drafts');
   assert(fs.existsSync(path.join(ROOT, 'docs/RELEASING.md')), 'docs/RELEASING.md (release runbook) exists');
 }
 
@@ -2269,6 +2271,8 @@ console.log('[42] review fixes: doImport data loss, RRULE expansion, local feed 
     'normalizeFeedUrl rejects http:// feed URLs');
   assert(!JSON.stringify(JSON.parse(read('manifest.json')).optional_host_permissions || []).includes('http://'),
     'manifest optional_host_permissions contains no http pattern');
+  assert(/releaseAccessIfUnused/.test(read('js/calendar.js')) && /releaseAccessIfUnused\(removed\.url, state\.calendars\)/.test(appSrc),
+    'removing the final calendar feed releases its optional host permission');
 }
 
 console.log('');

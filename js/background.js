@@ -34,18 +34,28 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 chrome.runtime.onStartup.addListener(sweepTemps);
 
-// Apply a downloaded update right away.
-//
-// Chrome only *installs* a pending update while the extension is idle, and an open extension page
-// counts as "in use". LightTab overrides the new-tab page, so the extension is essentially never
-// idle — the update is downloaded, then sits unused until the browser restarts. That is why an
-// uninstall + reinstall (which bypasses the idle rule) used to be the only reliable way to upgrade.
-// onUpdateAvailable fires once the new version is already on disk; reload() applies it immediately.
-// All user state is written to chrome.storage as it changes, so the reload cannot lose data — at
-// worst it interrupts a half-typed search, once per release.
+// A new-tab page is commonly left open while the user is typing. Do not force-reload it: drafts in
+// forms and the AI launcher are deliberately in-memory. Tell extension pages an update is ready and
+// let the user decide when to refresh; Chrome will still apply it automatically once it is idle.
 chrome.runtime.onUpdateAvailable.addListener(() => {
-  chrome.runtime.reload();
+  chrome.runtime.sendMessage({ type: 'lt.update.ready' }).catch(() => {});
 });
+
+function isOwnExtensionPage(sender) {
+  return !!(sender && sender.id === chrome.runtime.id && typeof sender.url === 'string' &&
+    sender.url.startsWith(chrome.runtime.getURL('')));
+}
+
+async function isSavedCalendarUrl(raw) {
+  try {
+    const url = new URL(String(raw));
+    if (url.protocol !== 'https:') return false;
+    const data = await chrome.storage.local.get('lt.calendars');
+    return Array.isArray(data['lt.calendars']) && data['lt.calendars'].some(feed => feed && feed.url === url.toString());
+  } catch (_) {
+    return false;
+  }
+}
 
 chrome.contextMenus.onClicked.addListener(async info => {
   if (info.menuItemId !== 'lighttab-ai' || !info.selectionText) return;
@@ -63,6 +73,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || msg.type !== 'lt.cal.fetch' || !msg.url) return;
   (async () => {
     try {
+      // This is intentionally not a generic privileged fetch proxy. Only the new-tab page may
+      // request a URL, and it must be an exact, already-saved HTTPS calendar subscription.
+      if (!isOwnExtensionPage(_sender) || !(await isSavedCalendarUrl(msg.url))) {
+        sendResponse({ ok: false, error: 'forbidden' });
+        return;
+      }
       const headers = {};
       if (msg.etag) headers['If-None-Match'] = msg.etag;
       const ctrl = new AbortController();

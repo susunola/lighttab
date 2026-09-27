@@ -74,6 +74,8 @@
     'cal.holiday_today': { zh: '今天是{name}，好好享受', en: 'Today is {name} — enjoy it' },
     'cal.data_stale': { zh: '节假日安排数据更新至 {y} 年，官方发布新年安排后请更新扩展', en: 'Holiday schedule data covers {y} — update the extension once the new official schedule is out' },
     'boot.fatal':      { zh: '页面初始化失败，请刷新重试', en: 'Failed to initialize — please refresh' },
+    'update.ready':    { zh: '新版本已就绪；刷新后生效', en: 'An update is ready' },
+    'update.reload':   { zh: '立即刷新', en: 'Reload now' },
 
     // ---------- Weather widget (opt-in, Open-Meteo) ----------
     'weather.set_city':    { zh: '设置城市，查看天气', en: 'Set a city to see the weather' },

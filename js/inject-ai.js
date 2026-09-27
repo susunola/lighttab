@@ -35,18 +35,9 @@
   'use strict';
   const log = (...a) => { try { console.info('[LightTab]', ...a); } catch (_) {} };
 
-  // Per-target behaviour — a UI redesign on an AI site should only touch this table.
-  //   hosts:      hostnames this target owns (targetId is derived from it)
-  //   enterFirst: submit with a synthetic Enter before trying the send button — more stable than
-  //               button detection on composers that natively submit on Enter (ChatGPT, DeepSeek)
-  //   extraInputs: target-specific composer selectors, tried before the shared INPUT_TIERS
-  const TARGET_CFG = {
-    doubao:   { hosts: ['www.doubao.com', 'www.dola.com'], enterFirst: false, extraInputs: [] },
-    openai:   { hosts: ['chatgpt.com', 'chat.openai.com'], enterFirst: true,
-                extraInputs: ['#prompt-textarea', 'div.ProseMirror[contenteditable="true"]'] },
-    deepseek: { hosts: ['chat.deepseek.com'], enterFirst: true,
-                extraInputs: ['textarea#chat-input', 'textarea[placeholder]'] }
-  };
+  // Per-target selectors and submission policy live in ai-targets.js. The empty fallback retains
+  // manual-paste degradation if a partial/unpacked install omits the adapter file.
+  const TARGET_CFG = globalThis.LT_AI_TARGETS || {};
 
   // Snapshot the params immediately (we run at document_start, before the SPA takes over the URL).
   const qs = new URLSearchParams(location.search);

@@ -4510,6 +4510,16 @@
     const ms = ttl || (actionLabel ? 6000 : 2600);
     toastTimer = setTimeout(() => { box.hidden = true; toastTimer = 0; }, ms);
   }
+
+  // Updates are user-initiated so an open search, shortcut editor or AI draft cannot disappear.
+  function bindUpdateNotice() {
+    if (!(hasChromeStorage && chrome.runtime && chrome.runtime.onMessage)) return;
+    chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+      if (!msg || msg.type !== 'lt.update.ready') return;
+      showToast(t('update.ready'), t('update.reload'), () => chrome.runtime.reload(), 30000);
+      if (typeof reply === 'function') reply({ ok: true });
+    });
+  }
   async function copyText(text) {
     try { if(navigator.clipboard){await navigator.clipboard.writeText(text);return true;} } catch (_) {}
     return fallbackCopy(text);
@@ -5518,6 +5528,11 @@
         }
         delete calCache[id];
         await Store.set(K.calendars, state.calendars);
+        // Release an on-demand host grant when no remaining subscription needs it. The bundled and
+        // imported local feeds have no web origin, so this is a harmless no-op for them.
+        if (removed && window.LT_CAL && window.LT_CAL.releaseAccessIfUnused) {
+          await window.LT_CAL.releaseAccessIfUnused(removed.url, state.calendars);
+        }
         await localRawSet(K.calcache, calCache);
         rebuildCalIndex();
         renderCalendar();
@@ -7150,6 +7165,7 @@
 
   // ---------- Boot ----------
   async function boot() {
+    bindUpdateNotice();
     const { raw, data } = await loadDataIntoState();
     searchHistory = await loadHistory(); // lt.history: local-only, kept out of lt.settings and cloud sync
     setLangOnly(state.settings.lang);

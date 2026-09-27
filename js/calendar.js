@@ -85,6 +85,17 @@ window.LT_CAL = (function () {
     } catch { return Promise.resolve(false); }
   }
 
+  // A host grant is useful only while at least one subscribed feed uses that origin. Removing it
+  // when the final feed goes away keeps the extension's optional permissions genuinely temporary.
+  function releaseAccessIfUnused(url, remainingFeeds) {
+    const api = permsApi(), p = originPattern(url);
+    if (!api || !api.remove || !p) return Promise.resolve(false);
+    const stillUsed = (Array.isArray(remainingFeeds) ? remainingFeeds : []).some(feed => originPattern(feed && feed.url) === p);
+    if (stillUsed) return Promise.resolve(false);
+    try { return Promise.resolve(api.remove({ origins: [p] })).catch(() => false); }
+    catch { return Promise.resolve(false); }
+  }
+
   // Chrome match-pattern containment: does `pattern` (from the manifest) cover `target` (an origin
   // pattern)? Only the shapes we declare are handled — scheme, host, optional "*." prefix.
   function patternCovers(pattern, target) {
@@ -256,7 +267,7 @@ window.LT_CAL = (function () {
   }
 
   return {
-    normalizeFeedUrl, originPattern, permissionState, requestAccess, isDeclared, patternCovers,
+    normalizeFeedUrl, originPattern, permissionState, requestAccess, releaseAccessIfUnused, isDeclared, patternCovers,
     isLocalFeed, isExtensionPage, fetchFeed, syncFeed, groupByDay, colorFor,
     COLORS, MAX_FEEDS, REFRESH_AFTER_MS, WINDOW_BACK_MS, WINDOW_FORWARD_MS
   };
