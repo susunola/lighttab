@@ -136,7 +136,11 @@
     'todo.del':         { zh: '删除', en: 'Delete' },
     'todo.clear_done':  { zh: '清除已完成', en: 'Clear completed' },
     'todo.due':         { zh: '截止日期（可选）', en: 'Due date (optional)' },
-    'todo.due_clear':   { zh: '点击移除截止日期', en: 'Click to clear the due date' },
+    'todo.due_clear':   { zh: '清除日期', en: 'Clear date' },
+    'todo.due_edit':    { zh: '编辑截止日期', en: 'Edit due date' },
+    'todo.toggle':      { zh: '切换完成状态', en: 'Toggle completion' },
+    'todo.removed':     { zh: '已删除 {n} 项待办', en: 'Removed {n} tasks' },
+    'todo.more_undo':   { zh: '还可以撤销之前的删除', en: 'More task deletions can be undone' },
     'todo.overdue':     { zh: '已逾期', en: 'Overdue' },
     'todo.overdue_count': { zh: '{n} 项逾期', en: '{n} overdue' },
 
@@ -286,6 +290,8 @@
     // ---------- Shortcut modal ----------
     'site.add':    { zh: '添加快捷方式', en: 'Add shortcut' },
     'site.edit':   { zh: '编辑快捷方式', en: 'Edit shortcut' },
+    'site.saved_grid': { zh: '主页', en: 'the home grid' },
+    'site.duplicate': { zh: '这个网址已存在于「{place}」，仍然保留另一个吗？', en: 'This URL already exists in “{place}”. Keep another shortcut?' },
     'site.name':   { zh: '名称', en: 'Name' },
     'site.name_ph':{ zh: '例如 腾讯云', en: 'e.g. Tencent Cloud' },
     'site.url':    { zh: '网址', en: 'URL' },

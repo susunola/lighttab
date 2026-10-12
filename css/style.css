@@ -1735,6 +1735,14 @@ svg.logo-tx text { font-family: inherit; }
   transition: background .12s ease;
 }
 .fcard:hover { background: var(--tint-3); }
+.fcard { position: relative; }
+.fcard-shell { position: relative; min-width: 0; }
+.fcard-actions { position: absolute; top: 0; right: 0; display: flex; opacity: 0; pointer-events: none; }
+.fcard-shell:hover .fcard-actions, .fcard-shell:focus-within .fcard-actions { opacity: 1; pointer-events: auto; }
+.fcard-actions button { width: 23px; height: 23px; border: 1px solid var(--line); border-radius: 6px; background: var(--glass); color: var(--ink); cursor: pointer; }
+.fcard.drag-before { box-shadow: inset 3px 0 var(--accent); }
+.fcard.drag-after { box-shadow: inset -3px 0 var(--accent); }
+@media (hover: none) { .fcard-actions { opacity: 1; pointer-events: auto; } }
 .fcard.dragging { opacity: 0.4; }
 .fcard-ico {
   position: relative;
@@ -1832,6 +1840,7 @@ svg.logo-tx text { font-family: inherit; }
   transition: background .12s, color .12s;
 }
 .menu .item:hover { background: var(--tint-3); color: var(--ink); }
+#context-menu { z-index: 98; }
 .menu .item.danger:hover { color: var(--danger); }
 .menu .sep { height: 1px; background: var(--line); margin: 4px 6px; }
 
@@ -2871,6 +2880,19 @@ html[data-theme="light"] .todo-item.done .t-check::after { background: #fff; }
   transition: color .12s ease, background .12s ease;
 }
 .todo-item .t-due:hover { color: var(--ink); background: var(--tint-2); }
+.todo-item button { font: inherit; background: transparent; padding: 0; cursor: pointer; color: inherit; }
+.todo-item .t-due { border: 0; padding: 2px 6px; }
+.todo-item .t-date-add { border: 0; color: var(--ink-3); }
+.todo-item .t-del { border: 0; }
+.todo-item:focus-within .t-del { display: inline-flex; }
+.todo-date-dialog { width: min(360px, calc(100vw - 32px)); box-sizing: border-box; padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: #17233c; color: #f3f5fa; }
+.todo-date-dialog::backdrop { background: rgba(0,0,0,.5); }
+.todo-date-dialog h3 { margin: 0 0 12px; }
+.todo-date-dialog p { overflow-wrap: anywhere; }
+.todo-date-dialog label { display: block; margin-bottom: 8px; }
+.todo-date-dialog input { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid var(--line); color: inherit; background: transparent; color-scheme: dark; }
+[data-theme="light"] .todo-date-dialog { background: #fff; color: #1f2937; }
+[data-theme="light"] .todo-date-dialog input { color-scheme: light; }
 .todo-item .t-due.over { color: #f87171; background: rgba(248, 113, 113, .14); }
 .todo-item .t-due.over:hover { color: #f87171; }
 .todo-item.done .t-due { opacity: .5; }

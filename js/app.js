@@ -2299,6 +2299,15 @@
   // Children are plain shortcut objects nested inside the folder (the group lives on the folder);
   // existing plain shortcut items carry no `type` and load unchanged.
   function isFolder(it) { return !!it && it.type === 'folder'; }
+  function shortcutRecords() {
+    return state.items.flatMap(item => isFolder(item)
+      ? (item.children || []).map(child => ({ item: child, folder: item }))
+      : [{ item, folder: null }]);
+  }
+  function findShortcutRecord(id) { return shortcutRecords().find(rec => rec.item.id === id); }
+  function savedShortcutUrls() {
+    return new Set(shortcutRecords().map(rec => normalizeUrl(rec.item.url)).filter(Boolean));
+  }
   // The folder that groups two shortcuts: it takes the drop target's slot and group, dragged one last.
   function makeFolder(a, b, name) {
     const strip = (c) => { const k = { ...c }; delete k.group; return k; };
@@ -2376,7 +2385,7 @@
     const group = typeof it.group === 'string' ? it.group : '';
     const kids = (Array.isArray(it.children) ? it.children : [])
       .filter(c => c && typeof c.url === 'string')
-      .map(c => ({ id: c.id || nid(), title: String(c.title || '').slice(0, 32) || defName, url: c.url, icon: c.icon, color: c.color }));
+      .map(c => ({ id: c.id || nid(), shortTitle: String(c.shortTitle || '').slice(0, 16), title: String(c.title || '').slice(0, 32) || defName, url: c.url, icon: c.icon, color: c.color }));
     if (kids.length < 2) return kids.map(k => ({ ...k, group }));
     return [{ id: it.id || nid(), type: 'folder', name: String(it.name || '').slice(0, 32) || defName, group, children: kids }];
   }
@@ -2556,15 +2565,25 @@
           const p = cardIconParts(c);
           const bgStyle = p.bg ? `background:${p.bg};` : '';
           const safeTitle = escapeHtml(c.title);
+          const label = escapeHtml(c.shortTitle || c.title);
           const safeHref = /^https?:\/\//i.test(c.url || '') ? c.url : '#';
-          return `<a class="fcard" href="${escapeHtml(safeHref)}" data-id="${escapeHtml(c.id)}" draggable="true" target="${/^https:\/\/(www\.)?youtube\.com(?:\/|$)/i.test(safeHref) ? '_self' : '_blank'}" rel="noopener" title="${safeTitle}">
+          return `<div class="fcard-shell"><a class="fcard" href="${escapeHtml(safeHref)}" data-id="${escapeHtml(c.id)}" draggable="true" target="${/^https:\/\/(www\.)?youtube\.com(?:\/|$)/i.test(safeHref) ? '_self' : '_blank'}" rel="noopener" title="${safeTitle}">
             <span class="fcard-ico${p.customCls ? ' ' + p.customCls : ''}" style="${bgStyle}color:${p.ink}">${p.ico}</span>
-            <span class="fcard-title">${safeTitle}</span>
-          </a>`;
+            <span class="fcard-title">${label}</span>
+          </a><div class="fcard-actions">
+            <button type="button" data-child-edit="${escapeHtml(c.id)}" aria-label="${escapeHtml(t('ctx.edit'))}">✎</button>
+            <button type="button" data-child-delete="${escapeHtml(c.id)}" aria-label="${escapeHtml(t('ctx.del'))}">×</button>
+          </div></div>`;
         }).join('')}
       </div>
       <div class="folder-pop-hint">${escapeHtml(t('folder.hint'))}</div>`;
     pop.hidden = false;
+    pop.querySelectorAll('[data-child-edit]').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation(); openSiteModal(btn.dataset.childEdit);
+    }));
+    pop.querySelectorAll('[data-child-delete]').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation(); deleteItem(btn.dataset.childDelete);
+    }));
     // Rename: Enter/blur commits (empty falls back to the default name), Esc reverts.
     const nameInput = pop.querySelector('.folder-name-input');
     nameInput.addEventListener('keydown', e => {
@@ -2590,7 +2609,41 @@
         el.classList.add('dragging');
         try { e.dataTransfer.setData('text/plain', el.dataset.id); e.dataTransfer.effectAllowed = 'move'; } catch {}
       });
-      el.addEventListener('dragend', () => { el.classList.remove('dragging'); folderDrag = null; });
+      el.addEventListener('dragend', () => {
+        el.classList.remove('dragging'); folderDrag = null;
+        pop.querySelectorAll('.fcard').forEach(c => c.classList.remove('drag-before', 'drag-after'));
+      });
+      el.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        openContextMenu(e.clientX, e.clientY, [
+          { label: t('ctx.edit'), action: () => openSiteModal(el.dataset.id) },
+          { label: t('ctx.del'), danger: true, action: () => deleteItem(el.dataset.id) }
+        ]);
+      });
+      el.addEventListener('dragover', e => {
+        if (!folderDrag || folderDrag.folderId !== folder.id || folderDrag.childId === el.dataset.id) return;
+        e.preventDefault(); e.stopPropagation();
+        pop.querySelectorAll('.fcard').forEach(c => c.classList.remove('drag-before', 'drag-after'));
+        const r = el.getBoundingClientRect();
+        el.classList.add(e.clientX < r.left + r.width / 2 ? 'drag-before' : 'drag-after');
+      });
+      el.addEventListener('dragleave', e => {
+        if (!el.contains(e.relatedTarget)) el.classList.remove('drag-before', 'drag-after');
+      });
+      el.addEventListener('drop', async e => {
+        if (!folderDrag || folderDrag.folderId !== folder.id) return;
+        e.preventDefault(); e.stopPropagation();
+        const source = folderDrag.childId; folderDrag = null;
+        const f = state.items.find(it => it.id === folder.id);
+        if (!f || source === el.dataset.id) return;
+        const r = el.getBoundingClientRect(), before = e.clientX < r.left + r.width / 2;
+        const from = f.children.findIndex(c => c.id === source);
+        if (from < 0) return;
+        const [child] = f.children.splice(from, 1);
+        const to = f.children.findIndex(c => c.id === el.dataset.id);
+        f.children.splice(to + (before ? 0 : 1), 0, child);
+        await Store.set(K.items, state.items); renderGrid(); refreshFolderPopup();
+      });
     });
   }
   // Re-render the open popup after a mutation; closes itself when the folder is gone (dissolved).
@@ -2958,6 +3011,19 @@
   }
 
   async function deleteItem(id) {
+    const rec = findShortcutRecord(id);
+    if (rec?.folder) {
+      const folder = rec.folder;
+      const idx = state.items.findIndex(it => it.id === folder.id);
+      const childIndex = folder.children.findIndex(it => it.id === id);
+      const res = folderRemoveChild(state.items, folder.id, id);
+      state.items = res.items;
+      await Store.set(K.items, state.items); syncUI(); refreshFolderPopup();
+      deletedItems.push({ removed: rec.item, idx, folder: { ...folder, childIndex } });
+      if (deletedItems.length > 50) deletedItems.shift();
+      showToast(t('toast.deleted'), t('toast.undo'), undoDeletedItem, 10000);
+      return;
+    }
     const idx = state.items.findIndex(x => x.id === id);
     if (idx < 0) return;
     const removed = state.items.splice(idx, 1)[0];
@@ -2972,10 +3038,21 @@
   async function undoDeletedItem() {
     const entry = deletedItems.pop();
     if (!entry) return;
-    if (!state.items.some(x => x.id === entry.removed.id)) {
-      state.items.splice(Math.min(entry.idx, state.items.length), 0, entry.removed);
+    if (!findShortcutRecord(entry.removed.id) && !state.items.some(x => x.id === entry.removed.id)) {
+      const folder = entry.folder && state.items.find(it => it.id === entry.folder.id && isFolder(it));
+      if (folder) folder.children.splice(Math.min(entry.folder.childIndex, folder.children.length), 0, entry.removed);
+      else if (entry.folder) {
+        const survivors = entry.folder.children.filter(c => c.id !== entry.removed.id)
+          .map(c => state.items.find(it => it.id === c.id)).filter(Boolean);
+        if (survivors.length) {
+          state.items = state.items.filter(it => !survivors.some(c => c.id === it.id));
+          const children = [...survivors]; children.splice(Math.min(entry.folder.childIndex, children.length), 0, entry.removed);
+          state.items.splice(Math.min(entry.idx, state.items.length), 0, { id: entry.folder.id, type: 'folder', name: entry.folder.name, group: entry.folder.group || '', children });
+        } else state.items.splice(Math.min(entry.idx, state.items.length), 0, { ...entry.removed, group: entry.folder.group || '' });
+      } else state.items.splice(Math.min(entry.idx, state.items.length), 0, entry.removed);
       await Store.set(K.items, state.items);
       syncUI();
+      refreshFolderPopup();
     }
     if (deletedItems.length) showToast(isEn() ? 'More deletions can be undone' : '还可以撤销之前的删除', t('toast.undo'), undoDeletedItem, 10000);
   }
@@ -3132,8 +3209,12 @@
     row.hidden = state.settings.groups.length === 0;
     let it = null;
     if (id) {
-      it = state.items.find(x => x.id === id);
+      const record = findShortcutRecord(id);
+      it = record?.item;
       if (!it) return;
+      if (record.folder) form.dataset.folderId = record.folder.id;
+      else delete form.dataset.folderId;
+      row.hidden = !!record.folder || state.settings.groups.length === 0;
       titleEl.textContent = t('site.edit');
       form.elements['title'].value = it.title;
       form.elements['shortTitle'].value = it.shortTitle || '';
@@ -3142,6 +3223,7 @@
     } else {
       titleEl.textContent = t('site.add');
       delete form.dataset.editId;
+      delete form.dataset.folderId;
     }
     if (!row.hidden) {
       fillGroupSelect(sel);
@@ -3240,9 +3322,7 @@
     return seg.charAt(0).toUpperCase() + seg.slice(1);
   }
   function parseBatchText(text) {
-    const known = new Set();
-    const addKnown = (it) => { if (it && it.url) { const n = normalizeUrl(it.url); if (n) known.add(n); } };
-    for (const it of (state.items || [])) { if (isFolder(it)) (it.children || []).forEach(addKnown); else addKnown(it); }
+    const known = savedShortcutUrls();
     const list = [];
     const seen = new Set();
     let dup = 0, bad = 0;
@@ -3368,18 +3448,26 @@
       if (!url) return showToast(t('toast.url_invalid'));
       const group = document.getElementById('f-group').value || '';
       const editId = form.dataset.editId;
-      const same=state.items.find(x=>x.id!==editId&&x.url===url);
-      if(same&&!confirm(isEn()?'This URL already exists. Keep another shortcut?':'这个网址已有快捷方式，仍然保留另一个吗？'))return;
+      const same = shortcutRecords().find(rec => rec.item.id !== editId && normalizeUrl(rec.item.url) === url);
+      if (same) {
+        const place = same.folder?.name || t('site.saved_grid');
+        if (!confirm(t('site.duplicate', { place }))) return;
+      }
       const icon = sanitizeIconDataUrl(pendingIcon) || undefined;
       if (editId) {
-        const it = state.items.find(x => x.id === editId);
-        if (it) { it.title = title; it.shortTitle = shortTitle; it.url = url; it.group = group; it.icon = icon; }
+        const record = findShortcutRecord(editId);
+        const it = record?.item;
+        if (it) {
+          it.title = title; it.shortTitle = shortTitle; it.url = url; it.icon = icon;
+          if (!record.folder) it.group = group;
+        }
       } else {
         state.items.push({ id: nid(), title, shortTitle, url, group, icon });
       }
       await Store.set(K.items, state.items);
       hideModal(modal);
       syncUI();
+      if (form.dataset.folderId) openFolderPopup(form.dataset.folderId);
     });
   }
 
@@ -3623,7 +3711,7 @@
             const fgroup = gids.has(it.group) ? it.group : '';
             const kids = (Array.isArray(it.children) ? it.children : [])
               .filter(c => c && typeof c.url === 'string' && /^https?:\/\//i.test(c.url))
-              .map(c => ({ id: c.id || nid(), title: String(c.title || '').slice(0, 32) || t('toast.unnamed'), url: c.url, icon: sanitizeIconDataUrl(c.icon) || undefined, color: safeColor(c.color) || undefined }));
+              .map(c => ({ id: c.id || nid(), shortTitle: String(c.shortTitle || '').slice(0, 16), title: String(c.title || '').slice(0, 32) || t('toast.unnamed'), url: c.url, icon: sanitizeIconDataUrl(c.icon) || undefined, color: safeColor(c.color) || undefined }));
             if (kids.length < 2) return kids.map(k => ({ ...k, group: fgroup }));
             return [{ id: it.id || nid(), type: 'folder', name: String(it.name || '').slice(0, 32) || t('folder.default_name'), group: fgroup, children: kids }];
           }
@@ -3698,9 +3786,7 @@
     const items = Array.isArray(data.items) ? data.items : [];
     if (!items.length) return showToast(t('toast.import_merge_empty'));
     const gids = new Set(state.settings.groups.map(g => g.id));
-    const seen = new Set();
-    const addSeen = (it) => { if (it && it.url) { const u = normalizeUrl(it.url); if (u) seen.add(u); } };
-    for (const it of (state.items || [])) { if (isFolder(it)) (it.children || []).forEach(addSeen); else addSeen(it); }
+    const seen = savedShortcutUrls();
     let added = 0, dup = 0;
     for (const it of items) {
       if (!it || typeof it !== 'object' || it.type === 'folder' || typeof it.url !== 'string') continue;
@@ -3711,6 +3797,7 @@
       state.items.push({
         id: nid(),
         title: String(it.title || '').trim().slice(0, 32) || batchHostTitle(url),
+        shortTitle: String(it.shortTitle || '').trim().slice(0, 16),
         url,
         group: gids.has(it.group) ? it.group : '',
         icon: sanitizeIconDataUrl(it.icon) || undefined
@@ -3764,7 +3851,7 @@
     if (!granted) { showToast(t('toast.bookmarks_denied')); return; }
     const tree = await chrome.bookmarks.getTree();
     const targetGroup = (state.view !== VIEW_ALL && state.view !== VIEW_NONE) ? state.view : '';
-    const seen = new Set(state.items.map(it => normalizeUrl(it.url) || it.url));
+    const seen = savedShortcutUrls();
     const hits = [];
     let dup = 0;
     (function walk(nodes) {
@@ -4601,7 +4688,7 @@
 
   // ---------- To-do widget ----------
   // Optional due-date chip: shows M/D (M月D日 in zh) beside the text, turns red once the date has
-  // passed while the item is still open, and clicking it clears the deadline (no separate editor).
+  // passed while the item is still open. Clicking edits the date; clearing is explicit.
   function dueDateLabel(due) {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(due || '');
     if (!m) return '';
@@ -4612,8 +4699,8 @@
     const due = /^\d{4}-\d{2}-\d{2}$/.test(it && it.due) ? it.due : '';
     if (!due) return '';
     const overdue = !it.done && due < todayStr();
-    const tip = overdue ? t('todo.overdue') : t('todo.due_clear');
-    return `<span class="t-due${overdue ? ' over' : ''}" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">${escapeHtml(dueDateLabel(due))}</span>`;
+    const tip = (overdue ? t('todo.overdue') + ' · ' : '') + t('todo.due_edit');
+    return `<button type="button" class="t-due${overdue ? ' over' : ''}" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">${escapeHtml(dueDateLabel(due))}</button>`;
   }
   function renderTodos() {
     const list = document.getElementById('todo-list');
@@ -4631,10 +4718,11 @@
     const delLabel = escapeHtml(t('todo.del'));
     list.innerHTML = state.todos.map(it => `
       <li class="todo-item ${it.done ? 'done' : ''}" data-id="${escapeHtml(it.id)}">
-        <span class="t-check"></span>
+        <button type="button" class="t-check" aria-label="${escapeHtml(t('todo.toggle'))}" aria-pressed="${!!it.done}"></button>
         <span class="t-text">${escapeHtml(it.text)}</span>
         ${dueChipHtml(it)}
-        <span class="t-del" title="${delLabel}">×</span>
+        ${it.due ? '' : `<button type="button" class="t-date-add" aria-label="${escapeHtml(t('todo.due_edit'))}" title="${escapeHtml(t('todo.due_edit'))}">＋</button>`}
+        <button type="button" class="t-del" title="${delLabel}" aria-label="${delLabel}">×</button>
       </li>
     `).join('');
   }
@@ -4644,6 +4732,55 @@
   async function updateTodos(change) {
     state.todos = await window.LT_SYNC.writeLocal(K.todos, raw => change(sanitizeTodos(raw) || []));
     renderTodos(); renderCalendar();
+  }
+  function openTodoDateEditor(id) {
+    const todo = state.todos.find(it => it.id === id);
+    if (!todo) return;
+    let dialog = document.getElementById('todo-date-dialog');
+    if (!dialog) {
+      dialog = document.createElement('dialog'); dialog.id = 'todo-date-dialog';
+      dialog.className = 'todo-date-dialog'; document.body.appendChild(dialog);
+    }
+    dialog.innerHTML = `<form><h3 id="todo-date-title">${escapeHtml(t('todo.due_edit'))}</h3>
+      <p>${escapeHtml(todo.text)}</p><label for="todo-date-value">${escapeHtml(t('todo.due'))}</label>
+      <input id="todo-date-value" type="date" value="${escapeHtml(todo.due || '')}">
+      <div class="modal-actions"><button type="button" class="btn ghost" data-clear ${todo.due ? '' : 'disabled'}>${escapeHtml(t('todo.due_clear'))}</button>
+        <button type="button" class="btn ghost" data-cancel>${escapeHtml(t('site.cancel'))}</button>
+        <button type="submit" class="btn primary">${escapeHtml(t('site.save'))}</button></div></form>`;
+    dialog.setAttribute('aria-labelledby', 'todo-date-title');
+    const save = async due => {
+      await updateTodos(todos => todos.map(it => {
+        if (it.id !== id) return it;
+        const next = { ...it }; if (due) next.due = due; else delete next.due; return next;
+      }));
+      dialog.close();
+    };
+    dialog.querySelector('form').onsubmit = e => { e.preventDefault(); save(dialog.querySelector('input').value); };
+    dialog.querySelector('[data-clear]').onclick = () => save('');
+    dialog.querySelector('[data-cancel]').onclick = () => dialog.close();
+    dialog.showModal(); dialog.querySelector('input').focus();
+  }
+  const todoUndo = [];
+  async function removeTodos(predicate) {
+    const removed = [];
+    await updateTodos(todos => todos.filter((todo, index) => {
+      if (!predicate(todo)) return true;
+      removed.push({ todo, index }); return false;
+    }));
+    if (!removed.length) return;
+    todoUndo.push(removed); if (todoUndo.length > 50) todoUndo.shift();
+    showToast(t('todo.removed', { n: removed.length }), t('toast.undo'), undoTodos, 10000);
+  }
+  async function undoTodos() {
+    const removed = todoUndo.pop(); if (!removed) return;
+    await updateTodos(todos => {
+      const next = [...todos];
+      for (const { todo, index } of removed) {
+        if (!next.some(it => it.id === todo.id)) next.splice(Math.min(index, next.length), 0, todo);
+      }
+      return next;
+    });
+    if (todoUndo.length) showToast(t('todo.more_undo'), t('toast.undo'), undoTodos, 10000);
   }
   function bindTodo() {
     const form = document.getElementById('todo-form');
@@ -4667,12 +4804,11 @@
       const todo = state.todos.find(it => it.id === item.dataset.id);
       if (!todo) return;
       const remove = !!e.target.closest('.t-del');
-      const clearDue = !!e.target.closest('.t-due');
+      if (e.target.closest('.t-due, .t-date-add')) { openTodoDateEditor(todo.id); return; }
+      if (remove) { await removeTodos(it => it.id === todo.id); return; }
       const done = !todo.done;
       await updateTodos(todos => todos.flatMap(t => {
         if (t.id !== todo.id) return [t];
-        if (remove) return [];
-        if (clearDue) { const next = { ...t }; delete next.due; return [next]; }
         return [{ ...t, done }];
       }));
       renderTodos();
@@ -4680,7 +4816,7 @@
     });
     const clearDoneBtn = document.getElementById('todo-clear-done');
     if (clearDoneBtn) clearDoneBtn.addEventListener('click', async () => {
-      await updateTodos(todos => todos.filter(it => !it.done));
+      await removeTodos(it => it.done);
       renderTodos();
       renderCalendar();
     });
@@ -6531,7 +6667,7 @@
       if (!c || typeof c !== 'object') return null;
       const url = normUrl(c.url);
       if (!url) return null;
-      return { id: (typeof c.id === 'string' && c.id) ? c.id : nid(), title: normTitle(c.title) || t('toast.unnamed'), url, icon: sanitizeIconDataUrl(c.icon) || undefined, color: safeColor(c.color) || undefined };
+      return { id: (typeof c.id === 'string' && c.id) ? c.id : nid(), shortTitle: String(c.shortTitle || '').slice(0, 16), title: normTitle(c.title) || t('toast.unnamed'), url, icon: sanitizeIconDataUrl(c.icon) || undefined, color: safeColor(c.color) || undefined };
     };
     const out = [];
     for (const it of raw) {
