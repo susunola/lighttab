@@ -2,6 +2,14 @@
    Source: simple-icons (CC0, https://simpleicons.org) - monochrome brand paths + brand colours.
    Static local data, so rendering makes zero network requests; unknown sites fall back to a brand-coloured letter tile. */
 window.LT_ICONDB = {
+ "avtechcn.com": {
+  "img": "assets/brand-icons/avtechcn.com.jpg",
+  "c": "#FFFFFF"
+ },
+ "avtechcn.cn": {
+  "img": "assets/brand-icons/avtechcn.com.jpg",
+  "c": "#FFFFFF"
+ },
  "flex.woa.com": {
   "img": "assets/brand-icons/flex.woa.com.jpg",
   "c": "#ffffff"
