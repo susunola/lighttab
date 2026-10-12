@@ -1,3 +1,12 @@
+# 1.24.5 — sharper built-in icons and more predictable everyday interactions
+
+- Bundle AVTECH and 44 additional domestic/international website brands, with common domain aliases and improved vector artwork.
+- Add explicit before/after drag insertion zones and position markers in grid and canvas layouts. Grid-center dwell still creates folders; mixed tile sizes are laid out without overlap.
+- Unify duplicate URL checks across manual add, bulk add, bookmark import and merge import, including shortcuts inside folders.
+- Support direct folder-child editing, deletion with undo and internal drag sorting. Preserve display short names through reload and import.
+- Edit task due dates in a dedicated dialog with explicit clear/cancel/save actions. Task deletion and clearing completed tasks support undo.
+- Fix brand-mark fitting in folder tiles and shortcut previews; add browser regression coverage for these interactions.
+
 # 1.24.4 — the opt-in widgets work again, release checks run in CI
 
 - Fix: To-dos, Pomodoro and the countdown were unreachable in 1.24.0–1.24.3. The per-widget
