@@ -2042,6 +2042,8 @@ html[data-view="calendar"] .quote { display: none !important; }
 }
 .icon-preview svg.logo { width: 60%; height: 60%; }
 .icon-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.icon-preview.has-brand-icon img { object-fit: contain; }
+.icon-preview.brand-vector-mark img { width: 72%; height: 72%; }
 .modal-actions {
   display: flex; justify-content: flex-end; gap: 8px;
   margin-top: 8px;
@@ -3231,7 +3233,11 @@ html[data-theme="light"] .card .title { text-shadow: 0 1px 3px rgba(255,255,255,
 #grid .card .logo-img { object-fit: contain; }
 #grid .card .ico .logo { width: 72%; height: 72%; max-width: calc(var(--icon-size) * .78); max-height: calc(var(--icon-size) * .78); }
 #grid .card .ico .logo-tx { width: 86%; height: 86%; max-width: none; max-height: none; }
-#grid .card .ico.brand-vector-mark .logo-img { inset: 14%; width: 72%; height: 72%; }
+#grid .card .ico.brand-vector-mark .logo-img,
+.folder-mini.brand-vector-mark .logo-img,
+.fcard-ico.brand-vector-mark .logo-img {
+  inset: 14%; width: 72%; height: 72%; object-fit: contain;
+}
 
 .tile-size-label { padding: 8px 12px 4px; font-size: 12px; opacity: .65; }
 .tile-size-options { display:flex; gap:5px; padding: 6px 10px 12px; }

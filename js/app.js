@@ -2274,7 +2274,7 @@
         // language as the vector glyphs (the PNG ships its own rounded-square artwork).
         bg = safeColor(icon.c) || '#1f2937';
         // Standalone vector marks need breathing room; app artwork already includes its own inset.
-        if (icon.img.startsWith('data:image/svg+xml')) customCls = 'brand-vector-mark';
+        if (icon.img.startsWith('data:image/svg+xml') || icon.fit === 'contain') customCls = 'brand-vector-mark';
         ico = `<img class="logo-img" src="${icon.img}" alt="" draggable="false">`;
       } else {
         bg = icon.c;
@@ -3134,6 +3134,7 @@
     if (!box) return;
     box.style.background = '';
     box.style.color = '';
+    box.classList.remove('has-brand-icon', 'brand-vector-mark');
     if (pendingIcon) {
       box.innerHTML = `<img src="${pendingIcon}" alt="" draggable="false">`;
       if (rmBtn) rmBtn.hidden = false;
@@ -3143,6 +3144,10 @@
     const host = url ? hostnameOf(url) : '';
     const icon = url ? iconFor(url) : null;
     if (icon) {
+      box.classList.add('has-brand-icon');
+      if (icon.img && (icon.img.startsWith('data:image/svg+xml') || icon.fit === 'contain')) {
+        box.classList.add('brand-vector-mark');
+      }
       box.innerHTML = iconGlyphHtml(icon);
       box.style.background = icon.c;
       box.style.color = inkOn(icon.c);
