@@ -346,16 +346,73 @@
       ny = Math.max(0, ny);
       active.card.style.left = nx + 'px';
       active.card.style.top = ny + 'px';
+      active.insertion = null;
+      A().clearCardDropHints();
+      // Hit test stationary cards rather than the dragged card, which covers the pointer.
+      for (const target of grid.querySelectorAll('.card:not(.card-add)')) {
+        if (target.dataset.id === active.id) continue;
+        const r = target.getBoundingClientRect();
+        if (e.clientY < r.top || e.clientY > r.bottom || e.clientX < r.left - 8 || e.clientX > r.right + 8) continue;
+        const intent = A().cardDropIntent(r, e.clientX);
+        if (intent !== 'center') {
+          active.insertion = { id: target.dataset.id, before: intent === 'before' };
+          A().showCardDropHint(target, intent);
+        }
+        break;
+      }
     }
 
-    function onPointerUp(e) {
+    async function onPointerUp(e) {
       if (!active || e.pointerId !== active.pointerId) return;
-      const { card, id, moved } = active;
+      const { card, id, moved, insertion } = active;
       active = null;
+      A().clearCardDropHints();
       card.classList.remove('card-dragging');
       try { card.releasePointerCapture(e.pointerId); } catch {}
       if (!moved) { dragMoved = false; return; }
       e.preventDefault();
+      if (e.type === 'pointercancel') { applyCardCanvas(); return; }
+
+      if (insertion) {
+        const map = getCardLayout();
+        const ids = [...grid.querySelectorAll('.card:not(.card-add)')].map(c => c.dataset.id)
+          .filter(key => map[key]).sort((a, b) => map[a].row - map[b].row || map[a].col - map[b].col);
+        const slots = ids.map(key => ({ ...map[key] }));
+        const next = ids.filter(key => key !== id);
+        const index = next.indexOf(insertion.id);
+        if (ids.includes(id) && index >= 0) {
+          next.splice(index + (insertion.before ? 0 : 1), 0, id);
+          const cards = new Map([...grid.querySelectorAll('.card:not(.card-add)')].map(c => [c.dataset.id, c]));
+          if ([...cards.values()].some(c => c.dataset.size && c.dataset.size !== '1x1')) {
+            // Unequal tile footprints cannot simply trade slots: lay them out in insertion order
+            // while advancing over occupied cells so larger cards neither overlap nor jump ahead.
+            const cols = getCardCols(grid.clientWidth), occupied = new Set();
+            let cursor = slots[0].row * cols + slots[0].col;
+            for (const key of next) {
+              const parts = (cards.get(key).dataset.size || '1x1').split('x').map(Number);
+              const w = Math.min(parts[0], cols), h = parts[1];
+              let col, row, fits;
+              do {
+                col = cursor % cols; row = Math.floor(cursor / cols);
+                fits = col + w <= cols;
+                for (let y = row; fits && y < row + h; y++) for (let x = col; x < col + w; x++) {
+                  if (occupied.has(`${x},${y}`)) { fits = false; break; }
+                }
+                if (!fits) cursor++;
+              } while (!fits);
+              map[key] = { col, row };
+              for (let y = row; y < row + h; y++) for (let x = col; x < col + w; x++) occupied.add(`${x},${y}`);
+              cursor += w;
+            }
+          } else next.forEach((key, i) => { map[key] = slots[i]; });
+          setCardLayoutMap(map);
+          const lay = getLayout();
+          if (lay) lay.auto = false;
+          await A().Store.set(A().K.settings, A().state.settings);
+          await A().reorderVisibleItems(id, insertion.id, insertion.before, ids);
+          return;
+        }
+      }
 
       const cell = getCardCellSize();
       if (!cell) return;

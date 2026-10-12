@@ -291,7 +291,7 @@
     'site.url':    { zh: '网址', en: 'URL' },
     'site.url_ph': { zh: 'https://cloud.tencent.com', en: 'https://cloud.tencent.com' },
     'site.group':  { zh: '分组', en: 'Group' },
-    'site.tip':    { zh: '知名站点自动匹配内置品牌图标；未收录站点显示首字图标。拖拽卡片可重新排序。', en: 'Known sites get brand icons automatically; others show an initial. Drag cards to reorder.' },
+    'site.tip':    { zh: '知名站点自动匹配内置图标。拖到卡片左右边缘可插入到前后；普通网格中，停留在中央可合并文件夹。', en: 'Known sites get built-in icons. Drag to a card’s left or right edge to insert before or after; hold in its center to group in grid mode.' },
     'site.cancel': { zh: '取消', en: 'Cancel' },
     'site.save':   { zh: '保存', en: 'Save' },
     'site.add_current_tab': { zh: '添加当前标签页', en: 'Add current tab' },

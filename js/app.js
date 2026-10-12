@@ -2431,6 +2431,31 @@
   let mergeCardId = null;      // card the dwell is currently armed on
   let openFolderId = null;     // folder whose popup is open (session only)
 
+  // The outside thirds are insertion zones; only the middle third can arm a folder merge.
+  function cardDropIntent(rect, x) {
+    const fraction = (x - rect.left) / rect.width;
+    return fraction < 1 / 3 ? 'before' : fraction > 2 / 3 ? 'after' : 'center';
+  }
+  function clearCardDropHints() {
+    document.querySelectorAll('.card.drag-over, .card.drag-before, .card.drag-after')
+      .forEach(n => n.classList.remove('drag-over', 'drag-before', 'drag-after'));
+  }
+  function showCardDropHint(card, intent) {
+    clearCardDropHints();
+    if (card) card.classList.add(intent === 'center' ? 'drag-over' : `drag-${intent}`);
+  }
+  function nearestGridDropTarget(e, excludeId = gridDragId) {
+    let pick = null, distance = 24;
+    for (const card of document.querySelectorAll('#grid .card:not(.card-add)')) {
+      if (card.dataset.id === excludeId) continue;
+      const r = card.getBoundingClientRect();
+      if (e.clientY < r.top || e.clientY > r.bottom) continue;
+      const dx = Math.max(r.left - e.clientX, e.clientX - r.right, 0);
+      if (dx < distance) { pick = card; distance = dx; }
+    }
+    return pick;
+  }
+
   function clearMergeArmed() {
     clearTimeout(mergeTimer);
     mergeTimer = 0;
@@ -2599,13 +2624,30 @@
     // Empty grid space accepts a child dragged out of the popup (appended at the end of the view).
     const grid = document.getElementById('grid');
     grid.addEventListener('dragover', e => {
-      if (!folderDrag || e.target.closest('.card')) return; // card-level handlers take card drops
+      if ((!folderDrag && !gridDragId) || e.target.closest('.card')) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
+      const target = nearestGridDropTarget(e);
+      if (target) updateCardDropTarget(target, e);
+      else { clearCardDropHints(); clearMergeArmed(); }
+    });
+    grid.addEventListener('dragleave', e => {
+      if (e.relatedTarget && grid.contains(e.relatedTarget)) return;
+      const r = grid.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return;
+      clearCardDropHints(); clearMergeArmed();
     });
     grid.addEventListener('drop', async e => {
-      if (!folderDrag || e.target.closest('.card')) return;
+      if ((!folderDrag && !gridDragId) || e.target.closest('.card')) return;
       e.preventDefault();
+      const target = nearestGridDropTarget(e);
+      if (target) { await dropOnCard(target, e); return; }
+      clearCardDropHints(); clearMergeArmed();
+      if (!folderDrag) {
+        const last = visibleGridCards().filter(c => c.dataset.id !== gridDragId).at(-1);
+        if (last) await reorderVisibleItems(gridDragId, last.dataset.id, false);
+        return;
+      }
       const fd = folderDrag;
       folderDrag = null;
       const res = folderRemoveChild(state.items, fd.folderId, fd.childId);
@@ -2623,6 +2665,97 @@
       closeFolderPopup();
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFolderPopup(); });
+  }
+
+  function updateCardDropTarget(a, e) {
+    if (!gridDragId && !folderDrag) return;
+    if (gridDragId && gridDragId === a.dataset.id) {
+      clearCardDropHints(); clearMergeArmed(); return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const intent = cardDropIntent(a.getBoundingClientRect(), e.clientX);
+    showCardDropHint(a, intent);
+    if (intent !== 'center') { clearMergeArmed(); return; }
+    // Hover dwell: lingering on a tile arms folder mode — a stronger highlight plus a 550ms
+    // progress bar under the tile, and the drop merges instead of reordering. Moving on to
+    // another tile disarms it. Impossibly-mergeable combos (folder onto shortcut) skip the
+    // dwell affordance and stay a plain reorder.
+    if (mergeCardId !== a.dataset.id) {
+      clearMergeArmed();
+      // Children dragged out of a folder popup can merge onto any card; grid cards cannot
+      // merge a folder onto a plain shortcut (that combination is a plain reorder).
+      const mergeable = folderDrag ? true : dwellMergeable(gridDragId, a.dataset.id);
+      if (!mergeable) return;
+      mergeCardId = a.dataset.id;
+      const el = a;
+      armDwellBar(el);
+      mergeTimer = setTimeout(() => {
+        if (mergeCardId === el.dataset.id) {
+          el.classList.remove('dwell'); // the bar finished filling
+          el.classList.add('drag-merge');
+        }
+      }, FOLDER_DWELL_MS);
+    }
+  }
+
+  async function dropOnCard(a, e) {
+    e.preventDefault();
+    e.stopPropagation(); // keep the grid-level folder-child drop handler out of card drops
+    const intent = cardDropIntent(a.getBoundingClientRect(), e.clientX);
+    const mergeArmed = intent === 'center' && a.classList.contains('drag-merge');
+    clearMergeArmed();
+    clearCardDropHints();
+    const rect = a.getBoundingClientRect();
+    // The grid flows horizontally across columns, so use the horizontal midpoint to pick insert-before vs insert-after.
+    const before = (e.clientX - rect.left) < rect.width / 2;
+    // A child dragged out of the open folder popup lands here (insert, or dwell-merge onto the target).
+    if (folderDrag) {
+      const fd = folderDrag;
+      folderDrag = null;
+      const res = folderRemoveChild(state.items, fd.folderId, fd.childId);
+      if (res) {
+        state.items = res.items;
+        if (mergeArmed) {
+          // Dropping a folder child onto a shortcut creates a new folder — name it after both.
+          const tgtItem = state.items.find(x => x.id === a.dataset.id);
+          const merged = folderMergeItems([...state.items, res.child], res.child.id, a.dataset.id,
+            defaultFolderName(res.child, tgtItem));
+          if (merged) state.items = merged;
+        } else {
+          insertIntoView(res.child, a.dataset.id, before);
+        }
+        await Store.set(K.items, state.items);
+        syncUI();
+        refreshFolderPopup();
+      }
+      return;
+    }
+    if (!gridDragId || gridDragId === a.dataset.id) return;
+    // Dwell-armed drop: create a folder (two shortcuts), add to a folder, or merge two folders.
+    if (mergeArmed) {
+      const src = state.items.find(x => x.id === gridDragId);
+      const tgt = state.items.find(x => x.id === a.dataset.id);
+      // Fresh folders (shortcut + shortcut) get a name made from both titles.
+      const madeName = src && tgt && !isFolder(src) && !isFolder(tgt) ? defaultFolderName(src, tgt) : t('folder.default_name');
+      const merged = folderMergeItems(state.items, gridDragId, a.dataset.id, madeName);
+      if (merged) {
+        const created = src && tgt && !isFolder(src) && !isFolder(tgt);
+        const dragId0 = gridDragId;
+        state.items = merged;
+        await Store.set(K.items, state.items);
+        syncUI();
+        if (created) {
+          showToast(t('toast.folder_created'));
+          // Like iOS: a freshly created folder opens right away so it can be renamed.
+          const f = state.items.find(x => isFolder(x) && (x.children || []).some(c => c.id === dragId0));
+          if (f) openFolderPopup(f.id);
+        }
+        return;
+      }
+      // Folders cannot nest into a new folder: fall through to a plain reorder.
+    }
+    return reorderVisibleItems(gridDragId, a.dataset.id, before);
   }
 
   function bindCardEvents() {
@@ -2679,103 +2812,30 @@
       });
       a.addEventListener('dragend', () => {
         a.classList.remove('dragging');
-        document.querySelectorAll('.card.drag-over').forEach(n => n.classList.remove('drag-over'));
+        clearCardDropHints();
         clearMergeArmed();
         gridDragId = null;
       });
-      a.addEventListener('dragover', e => {
-        if (!gridDragId && !folderDrag) return;
-        if (gridDragId && gridDragId === a.dataset.id) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        document.querySelectorAll('.card.drag-over').forEach(n => n.classList.remove('drag-over'));
-        a.classList.add('drag-over');
-        // Hover dwell: lingering on a tile arms folder mode — a stronger highlight plus a 550ms
-        // progress bar under the tile, and the drop merges instead of reordering. Moving on to
-        // another tile disarms it. Impossibly-mergeable combos (folder onto shortcut) skip the
-        // dwell affordance and stay a plain reorder.
-        if (mergeCardId !== a.dataset.id) {
-          clearMergeArmed();
-          // Children dragged out of a folder popup can merge onto any card; grid cards cannot
-          // merge a folder onto a plain shortcut (that combination is a plain reorder).
-          const mergeable = folderDrag ? true : dwellMergeable(gridDragId, a.dataset.id);
-          if (!mergeable) return;
-          mergeCardId = a.dataset.id;
-          const el = a;
-          armDwellBar(el);
-          mergeTimer = setTimeout(() => {
-            if (mergeCardId === el.dataset.id) {
-              el.classList.remove('dwell'); // the bar finished filling
-              el.classList.add('drag-merge');
-            }
-          }, FOLDER_DWELL_MS);
-        }
+      a.addEventListener('dragover', e => updateCardDropTarget(a, e));
+      a.addEventListener('dragleave', e => {
+        if (e.relatedTarget && a.contains(e.relatedTarget)) return;
+        a.classList.remove('drag-over', 'drag-before', 'drag-after');
+        if (mergeCardId === a.dataset.id) clearMergeArmed();
+        const target = nearestGridDropTarget(e);
+        if (target && (gridDragId || folderDrag)) updateCardDropTarget(target, e);
       });
-      a.addEventListener('dragleave', () => a.classList.remove('drag-over'));
-      a.addEventListener('drop', async e => {
-        e.preventDefault();
-        e.stopPropagation(); // keep the grid-level folder-child drop handler out of card drops
-        const mergeArmed = a.classList.contains('drag-merge');
-        clearMergeArmed();
-        a.classList.remove('drag-over');
-        const rect = a.getBoundingClientRect();
-        // The grid flows horizontally across columns, so use the horizontal midpoint to pick insert-before vs insert-after.
-        const before = (e.clientX - rect.left) < rect.width / 2;
-        // A child dragged out of the open folder popup lands here (insert, or dwell-merge onto the target).
-        if (folderDrag) {
-          const fd = folderDrag;
-          folderDrag = null;
-          const res = folderRemoveChild(state.items, fd.folderId, fd.childId);
-          if (res) {
-            state.items = res.items;
-            if (mergeArmed) {
-              // Dropping a folder child onto a shortcut creates a new folder — name it after both.
-              const tgtItem = state.items.find(x => x.id === a.dataset.id);
-              const merged = folderMergeItems([...state.items, res.child], res.child.id, a.dataset.id,
-                defaultFolderName(res.child, tgtItem));
-              if (merged) state.items = merged;
-            } else {
-              insertIntoView(res.child, a.dataset.id, before);
-            }
-            await Store.set(K.items, state.items);
-            syncUI();
-            refreshFolderPopup();
-          }
-          return;
-        }
-        if (!gridDragId || gridDragId === a.dataset.id) return;
-        // Dwell-armed drop: create a folder (two shortcuts), add to a folder, or merge two folders.
-        if (mergeArmed) {
-          const src = state.items.find(x => x.id === gridDragId);
-          const tgt = state.items.find(x => x.id === a.dataset.id);
-          // Fresh folders (shortcut + shortcut) get a name made from both titles.
-          const madeName = src && tgt && !isFolder(src) && !isFolder(tgt) ? defaultFolderName(src, tgt) : t('folder.default_name');
-          const merged = folderMergeItems(state.items, gridDragId, a.dataset.id, madeName);
-          if (merged) {
-            const created = src && tgt && !isFolder(src) && !isFolder(tgt);
-            const dragId0 = gridDragId;
-            state.items = merged;
-            await Store.set(K.items, state.items);
-            syncUI();
-            if (created) {
-              showToast(t('toast.folder_created'));
-              // Like iOS: a freshly created folder opens right away so it can be renamed.
-              const f = state.items.find(x => isFolder(x) && (x.children || []).some(c => c.id === dragId0));
-              if (f) openFolderPopup(f.id);
-            }
-            return;
-          }
-          // Folders cannot nest into a new folder: fall through to a plain reorder.
-        }
-        return reorderVisibleItems(gridDragId, a.dataset.id, before);
-      });
+      a.addEventListener('drop', e => dropOnCard(a, e));
     });
   }
 
   // Move a card within the visible scope of the current view (shortcuts & folders alike). Shared
   // by the HTML5 drop path above and the touch long-press reorder below, so both stay in sync.
-  async function reorderVisibleItems(dragId, tgtId, before) {
+  async function reorderVisibleItems(dragId, tgtId, before, visualOrder) {
     const scope = state.items.filter(inView);
+    if (visualOrder) {
+      const rank = new Map(visualOrder.map((id, i) => [id, i]));
+      scope.sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity));
+    }
     const fromIdx = scope.findIndex(x => x.id === dragId);
     const toIdx0 = scope.findIndex(x => x.id === tgtId);
     if (fromIdx < 0 || toIdx0 < 0) return;
@@ -2815,6 +2875,7 @@
       if (touchDrag.timer) clearTimeout(touchDrag.timer);
       if (touchDrag.card) { touchDrag.card.classList.remove('t-dragging'); touchDrag.card.style.transform = ''; touchDrag.card.style.zIndex = ''; }
       setGridTouchAction(false);
+      clearCardDropHints();
       touchDrag = null;
     };
     grid.addEventListener('pointerdown', (e) => {
@@ -2854,13 +2915,18 @@
       e.preventDefault();
       d.px = e.clientX; d.py = e.clientY;
       d.card.style.transform = `translate(${dx}px, ${dy}px) scale(1.04)`;
+      const target = nearestGridDropTarget(e, d.id);
+      if (target) {
+        const r = target.getBoundingClientRect();
+        showCardDropHint(target, e.clientX < r.left + r.width / 2 ? 'before' : 'after');
+      } else clearCardDropHints();
     });
     const finish = async (e) => {
       const d = touchDrag;
       if (!d || d.pointerId !== e.pointerId) return;
       const armed = d.armed && d.live;
       cancel();
-      if (!armed) return;
+      if (!armed || e.type === 'pointercancel') return;
       // Where did we let go? Prefer the card under the pointer, else the closest visible card.
       let target = null;
       try { target = document.elementFromPoint(e.clientX, e.clientY); } catch (_) {}
@@ -7429,6 +7495,7 @@
   // They load before this file (see newtab.html) and only touch this object at call time.
   window.LT_APP = {
     state, Store, K, ENGINES, allEngines, WIDGETS,
+    cardDropIntent, showCardDropHint, clearCardDropHints, reorderVisibleItems,
     t, engName, escapeHtml, nid, showToast,
     launchPrompt, setEngine, normalizeWidgets, normalizeWidgetPos,
     getCurrentEngine: () => currentEngine,
